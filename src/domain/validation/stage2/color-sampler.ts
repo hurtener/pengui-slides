@@ -1,3 +1,5 @@
+/// <reference lib="dom" />
+
 /**
  * Color Sampler (Stage 2)
  *

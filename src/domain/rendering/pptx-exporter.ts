@@ -5,7 +5,15 @@
  * Each slide is a full-bleed image with speaker notes from metadata.
  */
 
-import PptxGenJS from 'pptxgenjs';
+// PptxGenJS CJS/ESM interop: Node16 module resolution exposes the module namespace
+// rather than the class constructor. Use dynamic import to get the constructor.
+type PptxInstance = import('pptxgenjs').default;
+
+async function createPptx(): Promise<PptxInstance> {
+  const mod = await import('pptxgenjs');
+  const Ctor = mod.default as unknown as new () => PptxInstance;
+  return new Ctor();
+}
 import type { Logger } from '../../infrastructure/logger.js';
 import type { SlideRenderer } from './slide-renderer.js';
 import type { Slide } from '../../types/deck.js';
@@ -52,10 +60,10 @@ export class PptxExporter {
       imageFormat: opts.imageFormat,
     });
 
-    const pptx = new PptxGenJS();
+    const pptx = await createPptx();
 
     // Define widescreen layout
-    pptx.defineLayout('WIDE', { width: WIDE_WIDTH, height: WIDE_HEIGHT });
+    pptx.defineLayout({ name: 'WIDE', width: WIDE_WIDTH, height: WIDE_HEIGHT });
     pptx.layout = 'WIDE';
     pptx.title = deckTitle;
 

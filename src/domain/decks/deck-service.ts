@@ -6,7 +6,7 @@
  * entry via the RevisionTracker.
  */
 
-import type { DeckId, SlideId, SoulId, ISOTimestamp } from '../../types/common.js';
+import type { DeckId, SlideId } from '../../types/common.js';
 import { deckId, slideId, soulId } from '../../types/common.js';
 import type {
   Deck,
@@ -441,7 +441,7 @@ export class DeckService {
    */
   private async reindexPositions(
     slideIds: SlideId[],
-    did: DeckId,
+    _did: DeckId,
     startIndex: number,
   ): Promise<void> {
     for (let i = startIndex; i < slideIds.length; i++) {
@@ -458,7 +458,7 @@ export class DeckService {
    * Collect the HTML of all slides for a deck in order, for content hashing.
    */
   private async collectSlideHtmls(
-    did: DeckId,
+    _did: DeckId,
     slideIds: SlideId[],
   ): Promise<string[]> {
     const htmls: string[] = [];

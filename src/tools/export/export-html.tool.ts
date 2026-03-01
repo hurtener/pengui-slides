@@ -1,0 +1,54 @@
+/**
+ * MCP Tool: export_html
+ *
+ * Exports a deck as a self-contained HTML file.
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import type { ServiceContainer } from '../../container.js';
+import { textResponse } from '../_shared/responses.js';
+import { handleToolError } from '../_shared/error-handler.js';
+
+export function registerExportHtmlTool(server: McpServer, container: ServiceContainer): void {
+  server.registerTool(
+    'export_html',
+    {
+      title: 'Export HTML',
+      description: 'Export a deck as a self-contained HTML file with optional slide navigation.',
+      inputSchema: z.object({
+        deck_id: z.string().describe('The deck to export.'),
+        include_navigation: z.boolean().optional().describe('Whether to include slide navigation controls. Defaults to false.'),
+      }),
+    },
+    async ({ deck_id, include_navigation }) => {
+      try {
+        // Get deck info and all slides
+        const summary = await container.deckService.getDeckSummary(deck_id);
+        const slides = await Promise.all(
+          summary.slides.map((s) => container.deckService.getSlide(s.id as string)),
+        );
+
+        const result = await container.renderService.exportHtml(
+          slides,
+          summary.title,
+          include_navigation ?? false,
+        );
+
+        // Write to output directory
+        const outputDir = container.config.outputDir;
+        fs.mkdirSync(outputDir, { recursive: true });
+        const filePath = path.join(outputDir, result.filename);
+        fs.writeFileSync(filePath, result.data);
+
+        return textResponse({
+          file_path: filePath,
+        });
+      } catch (error) {
+        return handleToolError(error);
+      }
+    },
+  );
+}

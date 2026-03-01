@@ -1,3 +1,5 @@
+/// <reference lib="dom" />
+
 /**
  * Legibility Check (Stage 2)
  *

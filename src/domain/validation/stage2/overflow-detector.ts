@@ -1,3 +1,5 @@
+/// <reference lib="dom" />
+
 /**
  * Overflow Detector (Stage 2)
  *
