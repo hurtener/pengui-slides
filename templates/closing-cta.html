@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      /* Tokens are injected here by skeleton-generator */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .slide {
+      width: 1920px;
+      height: 1080px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-normal);
+      line-height: var(--line-height-body);
+      letter-spacing: var(--letter-spacing-body);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .cta-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      text-align: center;
+    }
+
+    .cta-icon {
+      width: var(--space-xxl);
+      height: var(--space-xxl);
+      background: var(--color-surface-alt);
+      border-radius: var(--radius-full);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--text-h1);
+      color: var(--color-accent-primary);
+      margin-bottom: var(--space-lg);
+    }
+
+    .cta-heading {
+      font-family: var(--font-display);
+      font-size: var(--text-h1);
+      font-weight: var(--weight-bold);
+      line-height: var(--line-height-heading);
+      letter-spacing: var(--letter-spacing-heading);
+      color: var(--color-text-primary);
+      margin-bottom: var(--space-md);
+    }
+
+    .cta-description {
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      line-height: var(--line-height-body);
+      max-width: 60%;
+      margin-bottom: var(--space-xl);
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: var(--space-md);
+    }
+
+    .btn {
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-medium);
+      padding: var(--button-padding-y) var(--button-padding-x);
+      border-radius: var(--radius-button);
+      border: none;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--easing-default);
+    }
+
+    .btn-primary {
+      background: var(--color-accent-primary);
+      color: var(--color-text-inverse);
+    }
+
+    .btn-secondary {
+      background: var(--color-surface);
+      color: var(--color-text-primary);
+      border: var(--border-width) solid var(--color-border);
+    }
+  </style>
+</head>
+<body>
+  <!-- @slide-meta -->
+  <div class="slide">
+    <div class="cta-wrapper">
+      <div class="cta-icon"><!-- @slot:icon -->&rarr;<!-- @endslot --></div>
+      <h2 class="cta-heading"><!-- @slot:heading -->Ready to Get Started?<!-- @endslot --></h2>
+      <p class="cta-description"><!-- @slot:description -->Take the next step and see how we can help you achieve your goals.<!-- @endslot --></p>
+      <div class="cta-buttons">
+        <button class="btn btn-primary"><!-- @slot:primaryButton -->Get Started<!-- @endslot --></button>
+        <button class="btn btn-secondary"><!-- @slot:secondaryButton -->Learn More<!-- @endslot --></button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

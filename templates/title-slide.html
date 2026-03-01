@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      /* Tokens are injected here by skeleton-generator */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .slide {
+      width: 1920px;
+      height: 1080px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-normal);
+      line-height: var(--line-height-body);
+      letter-spacing: var(--letter-spacing-body);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .slide-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      text-align: center;
+    }
+
+    .tag {
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      font-weight: var(--weight-medium);
+      color: var(--color-accent-primary);
+      letter-spacing: var(--letter-spacing-heading);
+      text-transform: uppercase;
+      margin-bottom: var(--space-md);
+    }
+
+    .title {
+      font-family: var(--font-display);
+      font-size: var(--text-hero);
+      font-weight: var(--weight-bold);
+      line-height: var(--line-height-heading);
+      letter-spacing: var(--letter-spacing-heading);
+      color: var(--color-text-primary);
+      margin-bottom: var(--space-lg);
+      max-width: 80%;
+    }
+
+    .subtitle {
+      font-size: var(--text-h3);
+      font-weight: var(--weight-normal);
+      color: var(--color-text-secondary);
+      max-width: 60%;
+      margin-bottom: var(--space-xxl);
+    }
+
+    .bottom-bar {
+      position: absolute;
+      bottom: var(--space-safe-area);
+      left: var(--space-safe-area);
+      right: var(--space-safe-area);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--color-text-tertiary);
+      font-size: var(--text-caption);
+    }
+  </style>
+</head>
+<body>
+  <!-- @slide-meta -->
+  <div class="slide">
+    <div class="slide-inner">
+      <div class="tag"><!-- @slot:tag -->Category<!-- @endslot --></div>
+      <h1 class="title"><!-- @slot:title -->Presentation Title<!-- @endslot --></h1>
+      <p class="subtitle"><!-- @slot:subtitle -->A compelling subtitle that sets the context for your presentation.<!-- @endslot --></p>
+    </div>
+    <div class="bottom-bar">
+      <span><!-- @slot:author -->Author Name<!-- @endslot --></span>
+      <span><!-- @slot:date -->March 2026<!-- @endslot --></span>
+    </div>
+  </div>
+</body>
+</html>

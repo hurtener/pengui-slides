@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      /* Tokens are injected here by skeleton-generator */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .slide {
+      width: 1920px;
+      height: 1080px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-normal);
+      line-height: var(--line-height-body);
+      letter-spacing: var(--letter-spacing-body);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .header {
+      margin-bottom: var(--space-xl);
+    }
+
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      font-weight: var(--weight-medium);
+      color: var(--color-accent-primary);
+      text-transform: uppercase;
+      letter-spacing: var(--letter-spacing-heading);
+      margin-bottom: var(--space-sm);
+    }
+
+    .heading {
+      font-family: var(--font-display);
+      font-size: var(--text-h2);
+      font-weight: var(--weight-bold);
+      line-height: var(--line-height-heading);
+      letter-spacing: var(--letter-spacing-heading);
+      color: var(--color-text-primary);
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-lg);
+    }
+
+    .feature-card {
+      background: var(--color-surface);
+      border-radius: var(--radius-card);
+      padding: var(--card-padding);
+      border: var(--border-width) solid var(--color-border);
+      box-shadow: var(--shadow-soft);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+    }
+
+    .feature-icon {
+      width: var(--space-xl);
+      height: var(--space-xl);
+      background: var(--color-surface-alt);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--text-h3);
+      color: var(--color-accent-primary);
+    }
+
+    .feature-title {
+      font-family: var(--font-display);
+      font-size: var(--text-h3);
+      font-weight: var(--weight-bold);
+      color: var(--color-text-primary);
+      line-height: var(--line-height-heading);
+    }
+
+    .feature-description {
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      line-height: var(--line-height-body);
+    }
+
+    .feature-pill {
+      display: inline-block;
+      align-self: flex-start;
+      background: var(--color-surface-alt);
+      color: var(--color-accent-primary);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      padding: var(--badge-padding-y) var(--badge-padding-x);
+      border-radius: var(--radius-badge);
+    }
+  </style>
+</head>
+<body>
+  <!-- @slide-meta -->
+  <div class="slide">
+    <div class="header">
+      <div class="section-label"><!-- @slot:sectionLabel -->Features<!-- @endslot --></div>
+      <h2 class="heading"><!-- @slot:heading -->What We Offer<!-- @endslot --></h2>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon"><!-- @slot:feature1Icon -->#<!-- @endslot --></div>
+        <div class="feature-title"><!-- @slot:feature1Title -->Feature One<!-- @endslot --></div>
+        <p class="feature-description"><!-- @slot:feature1Description -->A short description of this feature and its value.<!-- @endslot --></p>
+        <span class="feature-pill"><!-- @slot:feature1Tag -->Tag<!-- @endslot --></span>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><!-- @slot:feature2Icon -->#<!-- @endslot --></div>
+        <div class="feature-title"><!-- @slot:feature2Title -->Feature Two<!-- @endslot --></div>
+        <p class="feature-description"><!-- @slot:feature2Description -->A short description of this feature and its value.<!-- @endslot --></p>
+        <span class="feature-pill"><!-- @slot:feature2Tag -->Tag<!-- @endslot --></span>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><!-- @slot:feature3Icon -->#<!-- @endslot --></div>
+        <div class="feature-title"><!-- @slot:feature3Title -->Feature Three<!-- @endslot --></div>
+        <p class="feature-description"><!-- @slot:feature3Description -->A short description of this feature and its value.<!-- @endslot --></p>
+        <span class="feature-pill"><!-- @slot:feature3Tag -->Tag<!-- @endslot --></span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

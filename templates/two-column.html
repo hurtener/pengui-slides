@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      /* Tokens are injected here by skeleton-generator */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .slide {
+      width: 1920px;
+      height: 1080px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-normal);
+      line-height: var(--line-height-body);
+      letter-spacing: var(--letter-spacing-body);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .columns {
+      display: flex;
+      gap: var(--space-xl);
+      height: 100%;
+    }
+
+    .col-left {
+      flex: 0 0 60%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .col-right {
+      flex: 0 0 calc(40% - var(--space-xl));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      font-weight: var(--weight-medium);
+      color: var(--color-accent-primary);
+      text-transform: uppercase;
+      letter-spacing: var(--letter-spacing-heading);
+      margin-bottom: var(--space-sm);
+    }
+
+    .heading {
+      font-family: var(--font-display);
+      font-size: var(--text-h1);
+      font-weight: var(--weight-bold);
+      line-height: var(--line-height-heading);
+      letter-spacing: var(--letter-spacing-heading);
+      color: var(--color-text-primary);
+      margin-bottom: var(--space-md);
+    }
+
+    .description {
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      line-height: var(--line-height-body);
+      max-width: 90%;
+    }
+
+    .content-area {
+      width: 100%;
+      height: 80%;
+      background: var(--color-surface);
+      border-radius: var(--radius-card);
+      border: var(--border-width) solid var(--color-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-text-tertiary);
+      font-size: var(--text-label);
+    }
+  </style>
+</head>
+<body>
+  <!-- @slide-meta -->
+  <div class="slide">
+    <div class="columns">
+      <div class="col-left">
+        <div class="section-label"><!-- @slot:sectionLabel -->Section<!-- @endslot --></div>
+        <h2 class="heading"><!-- @slot:heading -->Main Heading<!-- @endslot --></h2>
+        <p class="description"><!-- @slot:description -->A detailed description that explains this section of the presentation. This area supports longer-form text content.<!-- @endslot --></p>
+      </div>
+      <div class="col-right">
+        <div class="content-area">
+          <!-- @slot:content -->Content Area<!-- @endslot -->
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

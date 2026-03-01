@@ -8,9 +8,9 @@ import type { PenguiConfig } from './config.js';
 import { Logger, systemClock, type Clock } from './infrastructure/index.js';
 
 // Storage
-import { MemorySoulStore } from './storage/memory/soul-store.js';
-import { MemoryDeckStore } from './storage/memory/deck-store.js';
-import { MemorySlideStore } from './storage/memory/slide-store.js';
+import { InMemorySoulStore } from './storage/memory/soul-store.js';
+import { InMemoryDeckStore } from './storage/memory/deck-store.js';
+import { InMemorySlideStore } from './storage/memory/slide-store.js';
 import type { ISoulStore, IDeckStore, ISlideStore } from './storage/interfaces.js';
 
 // Domain services
@@ -47,9 +47,9 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
   const clock = systemClock;
 
   // Storage layer
-  const soulStore = new MemorySoulStore();
-  const deckStore = new MemoryDeckStore();
-  const slideStore = new MemorySlideStore();
+  const soulStore = new InMemorySoulStore();
+  const deckStore = new InMemoryDeckStore();
+  const slideStore = new InMemorySlideStore();
 
   // Domain services
   const soulService = new SoulService(soulStore, clock, logger.child('souls'));

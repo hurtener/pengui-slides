@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      /* Tokens are injected here by skeleton-generator */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .slide {
+      width: 1920px;
+      height: 1080px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-normal);
+      line-height: var(--line-height-body);
+      letter-spacing: var(--letter-spacing-body);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .page-number {
+      position: absolute;
+      bottom: var(--space-md);
+      right: var(--space-safe-area);
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      color: var(--color-text-tertiary);
+    }
+  </style>
+</head>
+<body>
+  <!-- @slide-meta -->
+  <div class="slide">
+    <div class="page-number"><!-- @slot:pageNumber -->1<!-- @endslot --></div>
+  </div>
+</body>
+</html>

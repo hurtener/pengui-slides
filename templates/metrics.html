@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      /* Tokens are injected here by skeleton-generator */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .slide {
+      width: 1920px;
+      height: 1080px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-normal);
+      line-height: var(--line-height-body);
+      letter-spacing: var(--letter-spacing-body);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .header {
+      margin-bottom: var(--space-xl);
+    }
+
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      font-weight: var(--weight-medium);
+      color: var(--color-accent-primary);
+      text-transform: uppercase;
+      letter-spacing: var(--letter-spacing-heading);
+      margin-bottom: var(--space-sm);
+    }
+
+    .heading {
+      font-family: var(--font-display);
+      font-size: var(--text-h2);
+      font-weight: var(--weight-bold);
+      line-height: var(--line-height-heading);
+      letter-spacing: var(--letter-spacing-heading);
+      color: var(--color-text-primary);
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-lg);
+      flex: 1;
+    }
+
+    .metric-card {
+      background: var(--color-surface);
+      border-radius: var(--radius-card);
+      padding: var(--card-padding);
+      border: var(--border-width) solid var(--color-border);
+      box-shadow: var(--shadow-soft);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .metric-number {
+      font-family: var(--font-display);
+      font-size: var(--text-hero);
+      font-weight: var(--weight-bold);
+      line-height: var(--line-height-heading);
+      color: var(--color-accent-primary);
+      margin-bottom: var(--space-xs);
+    }
+
+    .metric-label {
+      font-size: var(--text-h3);
+      font-weight: var(--weight-medium);
+      color: var(--color-text-primary);
+      margin-bottom: var(--space-xs);
+    }
+
+    .metric-description {
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      line-height: var(--line-height-body);
+    }
+  </style>
+</head>
+<body>
+  <!-- @slide-meta -->
+  <div class="slide">
+    <div class="header">
+      <div class="section-label"><!-- @slot:sectionLabel -->Metrics<!-- @endslot --></div>
+      <h2 class="heading"><!-- @slot:heading -->Key Performance Indicators<!-- @endslot --></h2>
+    </div>
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-number"><!-- @slot:metric1Number -->99%<!-- @endslot --></div>
+        <div class="metric-label"><!-- @slot:metric1Label -->Metric One<!-- @endslot --></div>
+        <p class="metric-description"><!-- @slot:metric1Description -->Description of this metric and what it means.<!-- @endslot --></p>
+      </div>
+      <div class="metric-card">
+        <div class="metric-number"><!-- @slot:metric2Number -->2.5x<!-- @endslot --></div>
+        <div class="metric-label"><!-- @slot:metric2Label -->Metric Two<!-- @endslot --></div>
+        <p class="metric-description"><!-- @slot:metric2Description -->Description of this metric and what it means.<!-- @endslot --></p>
+      </div>
+      <div class="metric-card">
+        <div class="metric-number"><!-- @slot:metric3Number -->10M+<!-- @endslot --></div>
+        <div class="metric-label"><!-- @slot:metric3Label -->Metric Three<!-- @endslot --></div>
+        <p class="metric-description"><!-- @slot:metric3Description -->Description of this metric and what it means.<!-- @endslot --></p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
