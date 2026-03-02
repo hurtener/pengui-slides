@@ -56,7 +56,10 @@ export class SlideRenderer {
         height: opts.height,
       });
 
-      await page.setContent(html, { waitUntil: 'networkidle' });
+      await page.setContent(html, { waitUntil: 'load' });
+
+      // Allow CSS custom properties, fonts, and layout to fully resolve
+      await page.waitForTimeout(100);
 
       const screenshotOptions: Record<string, unknown> = {
         type: opts.format,

@@ -34,6 +34,9 @@ export interface PenguiConfig {
 
   /** Playwright headless mode */
   headless: boolean;
+
+  /** If set, uses file-based persistence at this directory. Otherwise, in-memory. */
+  persistDir?: string;
 }
 
 export const defaultConfig: PenguiConfig = {

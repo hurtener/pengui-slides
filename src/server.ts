@@ -5,12 +5,12 @@
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { defaultConfig } from './config.js';
+import { loadConfig, type PenguiConfig } from './config.js';
 import { createContainer } from './container.js';
 import { registerAllTools } from './tools/index.js';
 
-export function createServer(): McpServer {
-  const config = defaultConfig;
+export function createServer(overrides?: Partial<PenguiConfig>): McpServer {
+  const config = loadConfig(overrides);
 
   const server = new McpServer({
     name: config.serverName,
