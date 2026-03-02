@@ -2,7 +2,7 @@
  * approve_design_soul MCP tool.
  *
  * Approves a draft Design Soul, transitioning it to 'approved' status
- * and generating skeleton templates that can be used for slide creation.
+ * and generating layout recipes that can be used for slide creation.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -22,7 +22,7 @@ export function registerApproveDesignSoulTool(
     {
       title: 'Approve Design Soul',
       description:
-        'Approve a draft Design Soul. This generates skeleton templates and transitions the ' +
+        'Approve a draft Design Soul. This generates layout recipes and transitions the ' +
         'soul to "approved" status. Only draft souls can be approved.',
       inputSchema: z.object({
         soul_id: SoulIdSchema,
@@ -30,13 +30,13 @@ export function registerApproveDesignSoulTool(
     },
     async ({ soul_id }) => {
       try {
-        const { soul, skeletons } = await container.soulService.approve(soulId(soul_id));
+        const { soul, recipes } = await container.soulService.approve(soulId(soul_id));
 
         return textResponse({
           soul_id: soul.id,
           status: soul.status,
-          skeleton_count: skeletons.length,
-          skeleton_types: skeletons.map((s) => s.type),
+          recipe_count: recipes.length,
+          recipe_types: recipes.map((r) => r.type),
         });
       } catch (error) {
         return handleToolError(error);

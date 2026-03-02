@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ValidationService } from '../../../../src/domain/validation/validation-service.js';
 import { InMemorySoulStore } from '../../../../src/storage/memory/soul-store.js';
+import { InMemorySlideStore } from '../../../../src/storage/memory/slide-store.js';
 import { Logger } from '../../../../src/infrastructure/logger.js';
 import { defaultConfig } from '../../../../src/config.js';
 import { SoulService } from '../../../../src/domain/souls/soul-service.js';
@@ -19,7 +20,8 @@ describe('ValidationService', () => {
     const clock = new FixedClock('2026-01-15T12:00:00.000Z');
     const logger = new Logger('test', 'error');
 
-    const soulService = new SoulService(soulStore, clock, logger);
+    const slideStore = new InMemorySlideStore();
+    const soulService = new SoulService(soulStore, slideStore, clock, logger);
     const soul = await soulService.register(sampleSoulInput);
     await soulService.approve(soul.id);
     soulId = soul.id;

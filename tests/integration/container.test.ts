@@ -32,9 +32,9 @@ describe('createContainer', () => {
     expect(soul.status).toBe('draft');
 
     // Approve it
-    const { soul: approved, skeletons } = await container.soulService.approve(soul.id);
+    const { soul: approved, recipes } = await container.soulService.approve(soul.id);
     expect(approved.status).toBe('approved');
-    expect(skeletons.length).toBe(6);
+    expect(recipes.length).toBe(6);
 
     // Retrieve it
     const { soul: retrieved } = await container.soulService.get(soul.id);

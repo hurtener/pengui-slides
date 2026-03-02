@@ -6,7 +6,7 @@
  * components, and motion/tone.
  */
 
-import type { SoulId, TemplateId, ISOTimestamp } from './common.js';
+import type { SoulId, SlideId, TemplateId, ISOTimestamp } from './common.js';
 
 // ── Soul Status ───────────────────────────────────────────────────
 
@@ -176,13 +176,37 @@ export interface DesignSoul {
   /** Allowed font families (extracted from typography layer) */
   allowedFonts: string[];
 
+  /** Generated CSS utility class library */
+  utilityCss: string;
+
+  /** Generated style guide for LLM consumption */
+  styleGuide: string;
+
   createdAt: ISOTimestamp;
   updatedAt: ISOTimestamp;
   approvedAt?: ISOTimestamp;
 }
 
-// ── Skeleton Templates ────────────────────────────────────────────
+// ── Layout Recipes ────────────────────────────────────────────────
 
+export type RecipeSource = 'built-in' | 'user-saved';
+
+export interface LayoutRecipe {
+  id: TemplateId;
+  soulId: SoulId;
+  type: string;
+  name: string;
+  description: string;
+  tags: string[];
+  source: RecipeSource;
+  html: string;
+  createdAt: ISOTimestamp;
+  savedFromSlideId?: SlideId;
+}
+
+// ── Backward-compat aliases (deprecated) ─────────────────────────
+
+/** @deprecated Use `string` (extensible) instead */
 export type SkeletonTemplateType =
   | 'title-slide'
   | 'two-column'
@@ -191,15 +215,8 @@ export type SkeletonTemplateType =
   | 'closing-cta'
   | 'blank-themed';
 
-export interface SkeletonTemplate {
-  id: TemplateId;
-  soulId: SoulId;
-  type: SkeletonTemplateType;
-  name: string;
-  description: string;
-  html: string;
-  createdAt: ISOTimestamp;
-}
+/** @deprecated Use `LayoutRecipe` instead */
+export type SkeletonTemplate = LayoutRecipe;
 
 // ── Input types for registration ──────────────────────────────────
 

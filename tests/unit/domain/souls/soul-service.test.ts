@@ -1,23 +1,28 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SoulService } from '../../../../src/domain/souls/soul-service.js';
 import { InMemorySoulStore } from '../../../../src/storage/memory/soul-store.js';
+import { InMemorySlideStore } from '../../../../src/storage/memory/slide-store.js';
 import { FixedClock } from '../../../../src/infrastructure/clock.js';
 import { Logger } from '../../../../src/infrastructure/logger.js';
 import { sampleSoulInput } from '../../../helpers/fixtures.js';
-import type { SoulId } from '../../../../src/types/common.js';
+import type { SoulId, SlideId, DeckId } from '../../../../src/types/common.js';
+import type { Slide } from '../../../../src/types/deck.js';
+import type { ValidationResult } from '../../../../src/types/validation.js';
 import { SoulNotFoundError, PenguiError, ErrorCode } from '../../../../src/types/errors.js';
 
 describe('SoulService', () => {
   let service: SoulService;
   let store: InMemorySoulStore;
+  let slideStore: InMemorySlideStore;
   let clock: FixedClock;
   let logger: Logger;
 
   beforeEach(() => {
     store = new InMemorySoulStore();
+    slideStore = new InMemorySlideStore();
     clock = new FixedClock('2026-01-15T12:00:00.000Z');
     logger = new Logger('test', 'error'); // suppress log output
-    service = new SoulService(store, clock, logger);
+    service = new SoulService(store, slideStore, clock, logger);
   });
 
   describe('register', () => {
@@ -72,6 +77,20 @@ describe('SoulService', () => {
       expect(retrieved).toBeDefined();
       expect(retrieved!.name).toBe('Test Soul');
     });
+
+    it('generates non-empty utilityCss', async () => {
+      const soul = await service.register(sampleSoulInput);
+
+      expect(typeof soul.utilityCss).toBe('string');
+      expect(soul.utilityCss.length).toBeGreaterThan(0);
+    });
+
+    it('generates non-empty styleGuide', async () => {
+      const soul = await service.register(sampleSoulInput);
+
+      expect(typeof soul.styleGuide).toBe('string');
+      expect(soul.styleGuide.length).toBeGreaterThan(0);
+    });
   });
 
   describe('approve', () => {
@@ -89,20 +108,20 @@ describe('SoulService', () => {
       expect(result.soul.approvedAt).toBe('2026-01-15T12:00:00.000Z');
     });
 
-    it('generates skeleton templates', async () => {
+    it('generates layout recipes', async () => {
       const soul = await service.register(sampleSoulInput);
       const result = await service.approve(soul.id);
 
-      expect(result.skeletons).toHaveLength(6);
-      expect(result.skeletons[0].soulId).toBe(soul.id);
+      expect(result.recipes).toHaveLength(6);
+      expect(result.recipes[0].soulId).toBe(soul.id);
     });
 
-    it('persists skeletons to the store', async () => {
+    it('persists recipes to the store', async () => {
       const soul = await service.register(sampleSoulInput);
       await service.approve(soul.id);
 
-      const skeletons = await store.getSkeletons(soul.id);
-      expect(skeletons).toHaveLength(6);
+      const recipes = await store.getRecipes(soul.id);
+      expect(recipes).toHaveLength(6);
     });
 
     it('throws SoulNotFoundError for non-existent soul', async () => {
@@ -140,20 +159,20 @@ describe('SoulService', () => {
       ).rejects.toThrow(SoulNotFoundError);
     });
 
-    it('includes skeletons when requested', async () => {
+    it('includes recipes when requested', async () => {
       const soul = await service.register(sampleSoulInput);
       await service.approve(soul.id);
 
       const result = await service.get(soul.id, true);
-      expect(result.skeletons).toBeDefined();
-      expect(result.skeletons).toHaveLength(6);
+      expect(result.recipes).toBeDefined();
+      expect(result.recipes).toHaveLength(6);
     });
 
-    it('omits skeletons when not requested', async () => {
+    it('omits recipes when not requested', async () => {
       const soul = await service.register(sampleSoulInput);
       const result = await service.get(soul.id);
 
-      expect(result.skeletons).toBeUndefined();
+      expect(result.recipes).toBeUndefined();
     });
   });
 
@@ -192,6 +211,131 @@ describe('SoulService', () => {
 
       const all = await service.list('all');
       expect(all).toHaveLength(2);
+    });
+  });
+
+  describe('saveAsTemplate', () => {
+    function makePassingValidation(): ValidationResult {
+      return {
+        passed: true,
+        issues: [],
+        styleScore: {
+          overall: 0.95,
+          tokenCompliance: 1,
+          typographyConsistency: 0.9,
+          spacingConsistency: 0.9,
+          contrastAccessibility: 1,
+          structuralIntegrity: 1,
+        },
+        errorCount: 0,
+        warningCount: 0,
+        infoCount: 0,
+        stage1ElapsedMs: 10,
+        stage2Skipped: true,
+        validatedAt: '2026-01-15T12:00:00.000Z',
+      };
+    }
+
+    function makeSlide(soulId: SoulId, passed: boolean): Slide {
+      return {
+        id: 'slide-1' as SlideId,
+        deckId: 'deck-1' as DeckId,
+        position: 0,
+        html: '<div>test slide</div>',
+        metadata: {
+          title: 'Test Slide',
+          type: 'content',
+          narrative: 'Test narrative',
+          keyPoints: [],
+          dataPoints: [],
+          tags: [],
+          generatedAt: '2026-01-15T12:00:00.000Z',
+          soulId: soulId as string,
+          deckId: 'deck-1',
+          metaVersion: '1.0',
+        },
+        lastValidation: passed ? makePassingValidation() : undefined,
+        createdAt: '2026-01-15T12:00:00.000Z',
+        updatedAt: '2026-01-15T12:00:00.000Z',
+      };
+    }
+
+    it('creates a recipe with source "user-saved"', async () => {
+      const soul = await service.register(sampleSoulInput);
+      await service.approve(soul.id);
+
+      const slide = makeSlide(soul.id, true);
+      await slideStore.save(slide);
+
+      const recipe = await service.saveAsTemplate(
+        soul.id,
+        slide.id,
+        'My Template',
+        ['custom', 'test'],
+        'Saved from test',
+      );
+
+      expect(recipe.source).toBe('user-saved');
+      expect(recipe.name).toBe('My Template');
+      expect(recipe.tags).toEqual(['custom', 'test']);
+      expect(recipe.description).toBe('Saved from test');
+      expect(recipe.soulId).toBe(soul.id);
+      expect(recipe.savedFromSlideId).toBe(slide.id);
+      expect(recipe.html).toBe(slide.html);
+    });
+
+    it('throws for non-existent soul', async () => {
+      const slide = makeSlide('non-existent' as SoulId, true);
+      await slideStore.save(slide);
+
+      await expect(
+        service.saveAsTemplate(
+          'non-existent' as SoulId,
+          slide.id,
+          'Template',
+          [],
+          'desc',
+        ),
+      ).rejects.toThrow(SoulNotFoundError);
+    });
+
+    it('throws for non-existent slide', async () => {
+      const soul = await service.register(sampleSoulInput);
+      await service.approve(soul.id);
+
+      await expect(
+        service.saveAsTemplate(
+          soul.id,
+          'non-existent' as SlideId,
+          'Template',
+          [],
+          'desc',
+        ),
+      ).rejects.toThrow(PenguiError);
+    });
+
+    it('throws for slide without passing validation', async () => {
+      const soul = await service.register(sampleSoulInput);
+      await service.approve(soul.id);
+
+      const slide = makeSlide(soul.id, false);
+      await slideStore.save(slide);
+
+      await expect(
+        service.saveAsTemplate(
+          soul.id,
+          slide.id,
+          'Template',
+          [],
+          'desc',
+        ),
+      ).rejects.toThrow(PenguiError);
+
+      try {
+        await service.saveAsTemplate(soul.id, slide.id, 'Template', [], 'desc');
+      } catch (err) {
+        expect((err as PenguiError).code).toBe(ErrorCode.VALIDATION_FAILED);
+      }
     });
   });
 });

@@ -15,9 +15,9 @@ describe('End-to-end flow (no MCP)', () => {
     expect(soul.cssTokens).toContain(':root {');
 
     // 2. Approve Design Soul
-    const { soul: approved, skeletons } = await container.soulService.approve(soul.id);
+    const { soul: approved, recipes } = await container.soulService.approve(soul.id);
     expect(approved.status).toBe('approved');
-    expect(skeletons).toHaveLength(6);
+    expect(recipes).toHaveLength(6);
 
     // 3. Create Deck
     const deck = await container.deckService.createDeck({
@@ -55,6 +55,28 @@ describe('End-to-end flow (no MCP)', () => {
     expect(validation.stage2Skipped).toBe(true);
     expect(validation.styleScore.overall).toBeGreaterThanOrEqual(0);
     expect(validation.styleScore.overall).toBeLessThanOrEqual(1);
+
+    // 5b. Save as template — update slide with passing validation, then save
+    const slideWithValidation = {
+      ...slide,
+      lastValidation: { ...validation, passed: true },
+    };
+    await container.slideStore.save(slideWithValidation);
+
+    const savedRecipe = await container.soulService.saveAsTemplate(
+      soul.id,
+      slide.id,
+      'My Template',
+      ['custom'],
+      'Saved from test',
+    );
+    expect(savedRecipe.source).toBe('user-saved');
+    expect(savedRecipe.name).toBe('My Template');
+    expect(savedRecipe.savedFromSlideId).toBe(slide.id);
+
+    // Verify recipe count is now 7 (6 built-in + 1 user-saved)
+    const { recipes: allRecipes } = await container.soulService.get(soul.id, true);
+    expect(allRecipes).toHaveLength(7);
 
     // 6. Get Deck Summary
     const summary = await container.deckService.getDeckSummary(deck.id as string);

@@ -27,7 +27,7 @@ describe('DeckService', () => {
     clock = new FixedClock('2026-01-15T12:00:00.000Z');
     logger = new Logger('test', 'error');
 
-    soulService = new SoulService(soulStore, clock, logger);
+    soulService = new SoulService(soulStore, slideStore, clock, logger);
     deckService = new DeckService(deckStore, slideStore, soulStore, clock, logger);
 
     // Create and approve a soul for deck creation

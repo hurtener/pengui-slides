@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design Soul — Slide Deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/gitbrent/PptxGenJS@3.12.0/dist/pptxgen.bundle.js"></script>
+<style>
+  :root {
+    /* Design Soul — Color Language */
+    --canvas: #FAF7F2;
+    --surface: #F3EDE4;
+    --surface-2: #EBE5DA;
+    --surface-3: #E2DACF;
+    --border: rgba(180, 168, 150, 0.25);
+    --border-strong: rgba(180, 168, 150, 0.45);
+
+    /* Text */
+    --text-primary: #2C2825;
+    --text-secondary: #6B6259;
+    --text-tertiary: #9A9087;
+    --text-inverse: #FAF7F2;
+
+    /* Accents */
+    --accent-mint: #5B9E8F;
+    --accent-mint-soft: rgba(91, 158, 143, 0.12);
+    --accent-mint-medium: rgba(91, 158, 143, 0.25);
+    --accent-sky: #6B8FA8;
+    --accent-coral: #C4816A;
+    --accent-coral-soft: rgba(196, 129, 106, 0.12);
+    --accent-amber: #C4A24E;
+
+    /* Typography */
+    --font-display: 'Fraunces', serif;
+    --font-body: 'Plus Jakarta Sans', sans-serif;
+
+    /* Shadows */
+    --shadow-soft: 0 2px 20px rgba(44, 40, 37, 0.04), 0 1px 4px rgba(44, 40, 37, 0.03);
+    --shadow-medium: 0 4px 32px rgba(44, 40, 37, 0.07), 0 2px 8px rgba(44, 40, 37, 0.04);
+    --shadow-elevated: 0 8px 48px rgba(44, 40, 37, 0.10), 0 4px 12px rgba(44, 40, 37, 0.05);
+
+    /* Slide dimensions (16:9) */
+    --slide-w: 1280px;
+    --slide-h: 720px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #E8E2D8;
+    font-family: var(--font-body);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 40px 20px;
+  }
+
+  /* ── Controls bar ── */
+  .controls {
+    max-width: 1320px;
+    margin: 0 auto 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .controls h1 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1.25rem;
+    color: var(--text-secondary);
+    letter-spacing: -0.01em;
+  }
+
+  .controls h1 span {
+    color: var(--accent-mint);
+    font-weight: 600;
+  }
+
+  .export-btn {
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--text-inverse);
+    background: var(--accent-mint);
+    border: none;
+    padding: 12px 28px;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    box-shadow: var(--shadow-soft);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .export-btn:hover {
+    background: #4E8B7E;
+    box-shadow: var(--shadow-medium);
+    transform: translateY(-1px);
+  }
+
+  .export-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .export-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* ── Slide container ── */
+  .slides-wrapper {
+    max-width: 1320px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  .slide-frame {
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: var(--shadow-elevated);
+    background: var(--canvas);
+  }
+
+  /* ── Base slide styling ── */
+  .slide {
+    width: var(--slide-w);
+    height: var(--slide-h);
+    position: relative;
+    overflow: hidden;
+    transform-origin: top left;
+    display: flex;
+  }
+
+  .slide-frame {
+    width: fit-content;
+    transform-origin: top left;
+  }
+
+  /* ── Responsive scaling ── */
+  @media (max-width: 1400px) {
+    .slide-frame { transform: scale(0.75); margin-bottom: -180px; }
+  }
+  @media (max-width: 1060px) {
+    .slide-frame { transform: scale(0.55); margin-bottom: -324px; }
+  }
+  @media (max-width: 780px) {
+    .slide-frame { transform: scale(0.4); margin-bottom: -432px; }
+  }
+
+  /* ══════════════════════════════════════════
+     SLIDE 1 — Title / Hero
+     ══════════════════════════════════════════ */
+  .slide-1 {
+    background: var(--canvas);
+    flex-direction: column;
+    justify-content: center;
+    padding: 80px 100px;
+  }
+
+  .slide-1::before {
+    content: '';
+    position: absolute;
+    top: -120px;
+    right: -80px;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, var(--accent-mint-soft) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  .slide-1::after {
+    content: '';
+    position: absolute;
+    bottom: -100px;
+    left: -60px;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, var(--accent-coral-soft) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  .slide-1 .tag {
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-mint);
+    background: var(--accent-mint-soft);
+    padding: 8px 18px;
+    border-radius: 100px;
+    display: inline-block;
+    margin-bottom: 32px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .slide-1 h1 {
+    font-family: var(--font-display);
+    font-size: 3.8rem;
+    font-weight: 300;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+    color: var(--text-primary);
+    max-width: 700px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .slide-1 h1 em {
+    font-style: italic;
+    color: var(--accent-mint);
+    font-weight: 400;
+  }
+
+  .slide-1 .subtitle {
+    margin-top: 28px;
+    font-size: 1.15rem;
+    font-weight: 400;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    max-width: 520px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .slide-1 .bottom-bar {
+    position: absolute;
+    bottom: 48px;
+    left: 100px;
+    right: 100px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 1;
+  }
+
+  .slide-1 .bottom-bar .date {
+    font-size: 0.85rem;
+    color: var(--text-tertiary);
+    font-weight: 500;
+  }
+
+  .slide-1 .bottom-bar .logo-mark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-display);
+    font-size: 1rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+  }
+
+  .slide-1 .bottom-bar .logo-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent-mint);
+  }
+
+  /* Decorative shapes */
+  .slide-1 .deco-grid {
+    position: absolute;
+    top: 60px;
+    right: 80px;
+    display: grid;
+    grid-template-columns: repeat(3, 48px);
+    gap: 12px;
+    z-index: 1;
+    opacity: 0.45;
+  }
+
+  .deco-grid .dot {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    border: 1.5px solid var(--border-strong);
+  }
+
+  .deco-grid .dot:nth-child(5) {
+    background: var(--accent-mint-medium);
+    border-color: transparent;
+  }
+
+  .deco-grid .dot:nth-child(2) {
+    background: var(--accent-coral-soft);
+    border-color: transparent;
+  }
+
+  /* ══════════════════════════════════════════
+     SLIDE 2 — The Problem
+     ══════════════════════════════════════════ */
+  .slide-2 {
+    background: var(--surface);
+    flex-direction: row;
+  }
+
+  .slide-2 .left-col {
+    width: 45%;
+    padding: 72px 60px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .slide-2 .right-col {
+    width: 55%;
+    background: var(--canvas);
+    padding: 60px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 24px;
+  }
+
+  .slide-2 .section-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent-coral);
+    margin-bottom: 20px;
+  }
+
+  .slide-2 h2 {
+    font-family: var(--font-display);
+    font-size: 2.6rem;
+    font-weight: 300;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+
+  .slide-2 h2 em {
+    font-style: italic;
+    color: var(--accent-coral);
+  }
+
+  .slide-2 .desc {
+    margin-top: 20px;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    max-width: 380px;
+  }
+
+  .slide-2 .pain-card {
+    background: var(--surface);
+    border-radius: 18px;
+    padding: 28px 32px;
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    border: 1px solid var(--border);
+  }
+
+  .slide-2 .pain-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: var(--accent-coral-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 1.2rem;
+  }
+
+  .slide-2 .pain-card h4 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+
+  .slide-2 .pain-card p {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+
+  /* ══════════════════════════════════════════
+     SLIDE 3 — Key Metrics / Numbers
+     ══════════════════════════════════════════ */
+  .slide-3 {
+    background: var(--text-primary);
+    flex-direction: column;
+    justify-content: center;
+    padding: 72px 100px;
+    position: relative;
+  }
+
+  .slide-3::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background:
+      radial-gradient(ellipse 60% 50% at 20% 50%, rgba(91, 158, 143, 0.12) 0%, transparent 100%),
+      radial-gradient(ellipse 40% 60% at 85% 30%, rgba(107, 143, 168, 0.08) 0%, transparent 100%);
+  }
+
+  .slide-3 .section-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent-mint);
+    margin-bottom: 12px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .slide-3 h2 {
+    font-family: var(--font-display);
+    font-size: 2.4rem;
+    font-weight: 300;
+    color: var(--text-inverse);
+    letter-spacing: -0.02em;
+    margin-bottom: 56px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .slide-3 .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .slide-3 .metric-card {
+    background: rgba(250, 247, 242, 0.06);
+    border: 1px solid rgba(250, 247, 242, 0.08);
+    border-radius: 22px;
+    padding: 36px 32px;
+    backdrop-filter: blur(8px);
+  }
+
+  .slide-3 .metric-number {
+    font-family: var(--font-display);
+    font-size: 3.2rem;
+    font-weight: 300;
+    color: var(--accent-mint);
+    line-height: 1;
+    margin-bottom: 12px;
+    letter-spacing: -0.03em;
+  }
+
+  .slide-3 .metric-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: rgba(250, 247, 242, 0.85);
+    margin-bottom: 8px;
+  }
+
+  .slide-3 .metric-desc {
+    font-size: 0.78rem;
+    color: rgba(250, 247, 242, 0.45);
+    line-height: 1.55;
+  }
+
+  .slide-3 .metric-card:nth-child(2) .metric-number {
+    color: var(--accent-sky);
+  }
+
+  .slide-3 .metric-card:nth-child(3) .metric-number {
+    color: var(--accent-coral);
+  }
+
+  /* ══════════════════════════════════════════
+     SLIDE 4 — Solution / Features
+     ══════════════════════════════════════════ */
+  .slide-4 {
+    background: var(--canvas);
+    flex-direction: column;
+    padding: 64px 100px;
+  }
+
+  .slide-4 .top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 48px;
+  }
+
+  .slide-4 .section-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent-mint);
+    margin-bottom: 12px;
+  }
+
+  .slide-4 h2 {
+    font-family: var(--font-display);
+    font-size: 2.4rem;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    max-width: 480px;
+  }
+
+  .slide-4 h2 em {
+    font-style: italic;
+    color: var(--accent-mint);
+  }
+
+  .slide-4 .top-desc {
+    max-width: 320px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    padding-top: 20px;
+  }
+
+  .slide-4 .features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    flex: 1;
+  }
+
+  .slide-4 .feature-card {
+    background: var(--surface);
+    border-radius: 22px;
+    padding: 36px 32px;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+  }
+
+  .slide-4 .feature-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 24px;
+    font-size: 1.4rem;
+  }
+
+  .slide-4 .feature-card:nth-child(1) .feature-icon {
+    background: var(--accent-mint-soft);
+  }
+  .slide-4 .feature-card:nth-child(2) .feature-icon {
+    background: var(--accent-coral-soft);
+  }
+  .slide-4 .feature-card:nth-child(3) .feature-icon {
+    background: rgba(107, 143, 168, 0.12);
+  }
+
+  .slide-4 .feature-card h4 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+  }
+
+  .slide-4 .feature-card p {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    flex: 1;
+  }
+
+  .slide-4 .feature-pill {
+    margin-top: 20px;
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 100px;
+    background: var(--canvas);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    width: fit-content;
+  }
+
+  /* ══════════════════════════════════════════
+     SLIDE 5 — CTA / Closing
+     ══════════════════════════════════════════ */
+  .slide-5 {
+    background: var(--canvas);
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 80px 120px;
+    position: relative;
+  }
+
+  .slide-5::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, var(--accent-mint-soft) 0%, transparent 65%);
+    border-radius: 50%;
+  }
+
+  .slide-5 .closing-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 20px;
+    background: var(--accent-mint-soft);
+    border: 1px solid var(--accent-mint-medium);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 36px;
+    font-size: 1.6rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .slide-5 h2 {
+    font-family: var(--font-display);
+    font-size: 3rem;
+    font-weight: 300;
+    line-height: 1.2;
+    letter-spacing: -0.025em;
+    color: var(--text-primary);
+    max-width: 600px;
+    margin-bottom: 20px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .slide-5 h2 em {
+    font-style: italic;
+    color: var(--accent-mint);
+  }
+
+  .slide-5 .closing-text {
+    font-size: 1.05rem;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    max-width: 460px;
+    margin-bottom: 40px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .slide-5 .cta-row {
+    display: flex;
+    gap: 16px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .slide-5 .cta-primary {
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-inverse);
+    background: var(--accent-mint);
+    border: none;
+    padding: 14px 36px;
+    border-radius: 14px;
+    cursor: pointer;
+  }
+
+  .slide-5 .cta-secondary {
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    padding: 14px 36px;
+    border-radius: 14px;
+    cursor: pointer;
+  }
+
+  .slide-5 .bottom-info {
+    position: absolute;
+    bottom: 44px;
+    left: 100px;
+    right: 100px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+    z-index: 1;
+  }
+
+  /* ── Progress indicator ── */
+  .slide-number {
+    position: absolute;
+    bottom: 28px;
+    right: 40px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    letter-spacing: 0.05em;
+    z-index: 2;
+  }
+
+  .slide-3 .slide-number {
+    color: rgba(250, 247, 242, 0.3);
+  }
+
+  /* ── Toast / Progress ── */
+  .toast {
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--text-primary);
+    color: var(--text-inverse);
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 14px 28px;
+    border-radius: 14px;
+    box-shadow: var(--shadow-elevated);
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 100;
+  }
+
+  .toast.visible {
+    transform: translateX(-50%) translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<!-- Controls -->
+<div class="controls">
+  <h1><span>●</span>&nbsp; Design Soul — Proof of Concept</h1>
+  <button class="export-btn" id="exportBtn" onclick="exportToPptx()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Export to .pptx
+  </button>
+</div>
+
+<div class="slides-wrapper">
+
+  <!-- ═══ SLIDE 1: Title ═══ -->
+  <div class="slide-frame">
+    <div class="slide slide-1" id="slide-1">
+      <div class="deco-grid">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      </div>
+      <div class="tag">Quarterly Review</div>
+      <h1>Building calm tools for a <em>noisy world</em></h1>
+      <p class="subtitle">A design-led approach to productivity software that respects your attention and rewards your focus.</p>
+      <div class="bottom-bar">
+        <span class="date">Q1 2026 · Product Strategy</span>
+        <span class="logo-mark"><span class="logo-dot"></span> Pengui Studio</span>
+      </div>
+      <span class="slide-number">01 / 05</span>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 2: Problem ═══ -->
+  <div class="slide-frame">
+    <div class="slide slide-2" id="slide-2">
+      <div class="left-col">
+        <div class="section-label">The challenge</div>
+        <h2>Productivity tools became the <em>problem</em></h2>
+        <p class="desc">Modern software drowns us in notifications, dashboards, and context switches. We spend more time managing tools than doing the work itself.</p>
+      </div>
+      <div class="right-col">
+        <div class="pain-card">
+          <div class="pain-icon">⚡</div>
+          <div>
+            <h4>Context fragmentation</h4>
+            <p>Teams juggle 12+ apps daily, losing 45 minutes to switching between tools and searching for information.</p>
+          </div>
+        </div>
+        <div class="pain-card">
+          <div class="pain-icon">🔔</div>
+          <div>
+            <h4>Notification overload</h4>
+            <p>The average knowledge worker receives 120+ notifications per day, creating perpetual anxiety and shallow work patterns.</p>
+          </div>
+        </div>
+        <div class="pain-card">
+          <div class="pain-icon">📊</div>
+          <div>
+            <h4>Dashboard fatigue</h4>
+            <p>Complexity is confused with capability. Teams are over-instrumented and under-informed about what matters.</p>
+          </div>
+        </div>
+      </div>
+      <span class="slide-number">02 / 05</span>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 3: Metrics ═══ -->
+  <div class="slide-frame">
+    <div class="slide slide-3" id="slide-3">
+      <div class="section-label">By the numbers</div>
+      <h2>The cost of noisy software</h2>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-number">68%</div>
+          <div class="metric-label">Deep work disruption</div>
+          <div class="metric-desc">Of workers report they can't focus for more than 20 minutes without a tool-generated interruption.</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-number">3.2h</div>
+          <div class="metric-label">Daily tool management</div>
+          <div class="metric-desc">Average time spent navigating, configuring, and switching between productivity applications.</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-number">$9.4k</div>
+          <div class="metric-label">Annual cost per employee</div>
+          <div class="metric-desc">Lost productivity attributed to unnecessary complexity in workplace software stacks.</div>
+        </div>
+      </div>
+      <span class="slide-number">03 / 05</span>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 4: Solution ═══ -->
+  <div class="slide-frame">
+    <div class="slide slide-4" id="slide-4">
+      <div class="top-row">
+        <div>
+          <div class="section-label">Our approach</div>
+          <h2>Software that feels like <em>quiet morning light</em></h2>
+        </div>
+        <p class="top-desc">Three design principles guide every feature we build — clarity, calm, and intentional simplicity.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🧭</div>
+          <h4>One focus at a time</h4>
+          <p>Every view surfaces a single primary action. Context builds naturally through gentle layers — nothing competes for attention.</p>
+          <span class="feature-pill">Clarity over chrome</span>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🌿</div>
+          <h4>Ambient awareness</h4>
+          <p>Information arrives when needed, not when it's generated. Smart batching and contextual surfacing replace the notification stream.</p>
+          <span class="feature-pill">Calm confidence</span>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">✨</div>
+          <h4>Soft structure</h4>
+          <p>Rounded surfaces, warm tones, and generous spacing create an environment that feels human and trustworthy at every touchpoint.</p>
+          <span class="feature-pill">Cozy tactility</span>
+        </div>
+      </div>
+      <span class="slide-number">04 / 05</span>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 5: Closing / CTA ═══ -->
+  <div class="slide-frame">
+    <div class="slide slide-5" id="slide-5">
+      <div class="closing-icon">🤝</div>
+      <h2>Let's build something <em>worth focusing on</em></h2>
+      <p class="closing-text">We're looking for partners who believe great software should feel as good as it works. Join us in designing calm.</p>
+      <div class="cta-row">
+        <button class="cta-primary">Start a conversation</button>
+        <button class="cta-secondary">View our roadmap</button>
+      </div>
+      <div class="bottom-info">
+        <span>hello@penguistudio.com</span>
+        <span>Confidential — Q1 2026</span>
+      </div>
+      <span class="slide-number">05 / 05</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">Generating slides…</div>
+
+<script>
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('visible');
+  }
+
+  function hideToast() {
+    document.getElementById('toast').classList.remove('visible');
+  }
+
+  async function exportToPptx() {
+    const btn = document.getElementById('exportBtn');
+    btn.disabled = true;
+    btn.textContent = 'Rendering…';
+    showToast('Capturing slides as high-res images…');
+
+    const slideIds = ['slide-1', 'slide-2', 'slide-3', 'slide-4', 'slide-5'];
+    const images = [];
+
+    for (let i = 0; i < slideIds.length; i++) {
+      showToast(`Rendering slide ${i + 1} of ${slideIds.length}…`);
+      const el = document.getElementById(slideIds[i]);
+
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: null,
+        width: 1280,
+        height: 720,
+        logging: false,
+      });
+
+      images.push(canvas.toDataURL('image/png'));
+    }
+
+    showToast('Assembling .pptx file…');
+
+    const pptx = new PptxGenJS();
+    pptx.defineLayout({ name: 'WIDE', width: 13.333, height: 7.5 });
+    pptx.layout = 'WIDE';
+
+    for (const imgData of images) {
+      const slide = pptx.addSlide();
+      slide.addImage({
+        data: imgData,
+        x: 0, y: 0,
+        w: '100%', h: '100%',
+      });
+    }
+
+    showToast('Downloading .pptx…');
+    await pptx.writeFile({ fileName: 'design-soul-deck.pptx' });
+
+    hideToast();
+    btn.disabled = false;
+    btn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export to .pptx
+    `;
+  }
+</script>
+</body>
+</html>

@@ -48,7 +48,7 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
   const { soulStore, deckStore, slideStore } = createStorage(config.persistDir);
 
   // Domain services
-  const soulService = new SoulService(soulStore, clock, logger.child('souls'));
+  const soulService = new SoulService(soulStore, slideStore, clock, logger.child('souls'));
   const deckService = new DeckService(deckStore, slideStore, soulStore, clock, logger.child('decks'));
   const validationService = new ValidationService(soulStore, config, logger.child('validation'));
   const metadataParser = new MetadataParser();

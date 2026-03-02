@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { InMemorySoulStore } from '../../../src/storage/memory/soul-store.js';
-import type { DesignSoul, SkeletonTemplate } from '../../../src/types/design-soul.js';
+import type { DesignSoul, LayoutRecipe } from '../../../src/types/design-soul.js';
 import type { SoulId, TemplateId } from '../../../src/types/common.js';
 
 function makeSoul(overrides: Partial<DesignSoul> = {}): DesignSoul {
@@ -13,20 +13,24 @@ function makeSoul(overrides: Partial<DesignSoul> = {}): DesignSoul {
     cssTokens: ':root { --color-canvas: #fff; }',
     tokenNames: ['--color-canvas'],
     allowedFonts: ['Inter'],
+    utilityCss: '.card { background: var(--color-surface); }',
+    styleGuide: '# Style Guide\n\nTest guide content.',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
   };
 }
 
-function makeSkeleton(soulId: SoulId, type: string = 'title-slide'): SkeletonTemplate {
+function makeRecipe(soulId: SoulId, type: string = 'title-slide'): LayoutRecipe {
   return {
     id: `tpl-${type}` as TemplateId,
     soulId,
-    type: type as SkeletonTemplate['type'],
+    type,
     name: `${type} template`,
     description: `A ${type} template`,
-    html: '<div>skeleton</div>',
+    tags: ['test'],
+    source: 'built-in' as const,
+    html: '<div>recipe</div>',
     createdAt: '2026-01-01T00:00:00.000Z',
   };
 }
@@ -131,48 +135,61 @@ describe('InMemorySoulStore', () => {
       expect(result).toBe(false);
     });
 
-    it('also deletes associated skeletons', async () => {
+    it('also deletes associated recipes', async () => {
       const soulId = 'soul-1' as SoulId;
       await store.save(makeSoul({ id: soulId }));
-      await store.saveSkeletons(soulId, [makeSkeleton(soulId)]);
+      await store.saveRecipes(soulId, [makeRecipe(soulId)]);
 
       await store.delete(soulId);
 
-      const skeletons = await store.getSkeletons(soulId);
-      expect(skeletons).toEqual([]);
+      const recipes = await store.getRecipes(soulId);
+      expect(recipes).toEqual([]);
     });
   });
 
-  describe('skeletons', () => {
-    it('saves and retrieves skeletons for a soul', async () => {
+  describe('recipes', () => {
+    it('saves and retrieves recipes for a soul', async () => {
       const soulId = 'soul-1' as SoulId;
       const templates = [
-        makeSkeleton(soulId, 'title-slide'),
-        makeSkeleton(soulId, 'two-column'),
+        makeRecipe(soulId, 'title-slide'),
+        makeRecipe(soulId, 'two-column'),
       ];
 
-      await store.saveSkeletons(soulId, templates);
+      await store.saveRecipes(soulId, templates);
 
-      const retrieved = await store.getSkeletons(soulId);
+      const retrieved = await store.getRecipes(soulId);
       expect(retrieved).toHaveLength(2);
       expect(retrieved[0].type).toBe('title-slide');
       expect(retrieved[1].type).toBe('two-column');
     });
 
-    it('returns empty array for non-existent soul skeletons', async () => {
-      const result = await store.getSkeletons('non-existent' as SoulId);
+    it('returns empty array for non-existent soul recipes', async () => {
+      const result = await store.getRecipes('non-existent' as SoulId);
       expect(result).toEqual([]);
     });
 
-    it('deep-clones skeletons on read', async () => {
+    it('deep-clones recipes on read', async () => {
       const soulId = 'soul-1' as SoulId;
-      await store.saveSkeletons(soulId, [makeSkeleton(soulId)]);
+      await store.saveRecipes(soulId, [makeRecipe(soulId)]);
 
-      const retrieved1 = await store.getSkeletons(soulId);
+      const retrieved1 = await store.getRecipes(soulId);
       retrieved1[0].name = 'MUTATED';
 
-      const retrieved2 = await store.getSkeletons(soulId);
+      const retrieved2 = await store.getRecipes(soulId);
       expect(retrieved2[0].name).not.toBe('MUTATED');
+    });
+
+    it('addRecipe appends a recipe to existing ones', async () => {
+      const soulId = 'soul-1' as SoulId;
+      await store.saveRecipes(soulId, [makeRecipe(soulId, 'title-slide')]);
+
+      const newRecipe = makeRecipe(soulId, 'metrics');
+      await store.addRecipe(soulId, newRecipe);
+
+      const recipes = await store.getRecipes(soulId);
+      expect(recipes).toHaveLength(2);
+      expect(recipes[0].type).toBe('title-slide');
+      expect(recipes[1].type).toBe('metrics');
     });
   });
 });

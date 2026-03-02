@@ -2,7 +2,7 @@
  * Token Generator for Design Souls.
  *
  * Converts SoulLayers into CSS custom properties (:root block)
- * for use in skeleton templates and rendered slides.
+ * for use in layout recipes and rendered slides.
  */
 
 import type { SoulLayers } from '../../types/design-soul.js';

@@ -7,7 +7,7 @@
  */
 
 import type { DeckId, SlideId, SoulId } from '../types/common.js';
-import type { DesignSoul, SkeletonTemplate, SoulStatus } from '../types/design-soul.js';
+import type { DesignSoul, LayoutRecipe, SoulStatus } from '../types/design-soul.js';
 import type { Deck, DeckRevision, Slide } from '../types/deck.js';
 
 // ── Soul Store ───────────────────────────────────────────────────
@@ -17,8 +17,9 @@ export interface ISoulStore {
   get(id: SoulId): Promise<DesignSoul | undefined>;
   list(statusFilter?: SoulStatus | 'all'): Promise<DesignSoul[]>;
   delete(id: SoulId): Promise<boolean>;
-  saveSkeletons(soulId: SoulId, templates: SkeletonTemplate[]): Promise<void>;
-  getSkeletons(soulId: SoulId): Promise<SkeletonTemplate[]>;
+  saveRecipes(soulId: SoulId, recipes: LayoutRecipe[]): Promise<void>;
+  getRecipes(soulId: SoulId): Promise<LayoutRecipe[]>;
+  addRecipe(soulId: SoulId, recipe: LayoutRecipe): Promise<void>;
 }
 
 // ── Deck Store ───────────────────────────────────────────────────

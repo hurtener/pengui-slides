@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { FileSoulStore } from '../../../src/storage/file/soul-store.js';
 import type { SoulId } from '../../../src/types/common.js';
-import type { DesignSoul, SkeletonTemplate, SoulLayers } from '../../../src/types/design-soul.js';
+import type { DesignSoul, LayoutRecipe, SoulLayers } from '../../../src/types/design-soul.js';
 
 function makeSoulId(id: string): SoulId {
   return id as SoulId;
@@ -61,6 +61,8 @@ function makeSoul(id: string, status: 'draft' | 'approved' | 'archived' = 'draft
     cssTokens: ':root { --color-canvas: #fff; }',
     tokenNames: ['--color-canvas'],
     allowedFonts: ['Inter', 'Fira Code'],
+    utilityCss: '.card { background: var(--color-surface); }',
+    styleGuide: '# Style Guide\n\nTest guide content.',
     createdAt: '2024-01-01T00:00:00Z',
     updatedAt: '2024-01-01T00:00:00Z',
   };
@@ -156,6 +158,29 @@ describe('FileSoulStore', () => {
       const all = await store.list();
       expect(all).toEqual([]);
     });
+
+    it('should skip .recipes.json files in listing', async () => {
+      await store.save(makeSoul('s1'));
+      const soulId = makeSoulId('s1');
+      await store.saveRecipes(soulId, [
+        {
+          id: 'tmpl-1' as any,
+          soulId,
+          type: 'title-slide',
+          name: 'Title',
+          description: 'A title slide',
+          tags: ['test'],
+          source: 'built-in' as const,
+          html: '<div>Title</div>',
+          createdAt: '2024-01-01T00:00:00Z',
+        },
+      ]);
+
+      const all = await store.list();
+      // Should only return 1 soul, not count the .recipes.json file
+      expect(all).toHaveLength(1);
+      expect(all[0].id).toBe('s1');
+    });
   });
 
   describe('delete', () => {
@@ -173,16 +198,18 @@ describe('FileSoulStore', () => {
       expect(result).toBe(false);
     });
 
-    it('should also delete associated skeletons file', async () => {
+    it('should also delete associated recipes file', async () => {
       const soulId = makeSoulId('soul-1');
       await store.save(makeSoul('soul-1'));
-      await store.saveSkeletons(soulId, [
+      await store.saveRecipes(soulId, [
         {
           id: 'tmpl-1' as any,
           soulId,
           type: 'title-slide',
           name: 'Title',
           description: 'A title slide',
+          tags: ['test'],
+          source: 'built-in' as const,
           html: '<div>Title</div>',
           createdAt: '2024-01-01T00:00:00Z',
         },
@@ -190,21 +217,23 @@ describe('FileSoulStore', () => {
 
       await store.delete(soulId);
 
-      const skeletons = await store.getSkeletons(soulId);
-      expect(skeletons).toEqual([]);
+      const recipes = await store.getRecipes(soulId);
+      expect(recipes).toEqual([]);
     });
   });
 
-  describe('saveSkeletons and getSkeletons', () => {
-    it('should save and retrieve skeleton templates', async () => {
+  describe('saveRecipes and getRecipes', () => {
+    it('should save and retrieve recipes', async () => {
       const soulId = makeSoulId('soul-1');
-      const templates: SkeletonTemplate[] = [
+      const templates: LayoutRecipe[] = [
         {
           id: 'tmpl-1' as any,
           soulId,
           type: 'title-slide',
           name: 'Title Slide',
           description: 'A title slide template',
+          tags: ['opening', 'hero'],
+          source: 'built-in' as const,
           html: '<div class="title">Hello</div>',
           createdAt: '2024-01-01T00:00:00Z',
         },
@@ -214,41 +243,135 @@ describe('FileSoulStore', () => {
           type: 'two-column',
           name: 'Two Column',
           description: 'A two-column template',
+          tags: ['split', 'content'],
+          source: 'built-in' as const,
           html: '<div class="columns">...</div>',
           createdAt: '2024-01-02T00:00:00Z',
         },
       ];
 
-      await store.saveSkeletons(soulId, templates);
-      const retrieved = await store.getSkeletons(soulId);
+      await store.saveRecipes(soulId, templates);
+      const retrieved = await store.getRecipes(soulId);
       expect(retrieved).toEqual(templates);
     });
 
-    it('should return empty array when no skeletons exist', async () => {
-      const result = await store.getSkeletons(makeSoulId('no-such-soul'));
+    it('should return empty array when no recipes exist', async () => {
+      const result = await store.getRecipes(makeSoulId('no-such-soul'));
       expect(result).toEqual([]);
     });
 
-    it('should overwrite skeletons on second save', async () => {
+    it('should overwrite recipes on second save', async () => {
       const soulId = makeSoulId('soul-1');
-      await store.saveSkeletons(soulId, [
+      await store.saveRecipes(soulId, [
         {
           id: 'tmpl-1' as any, soulId, type: 'title-slide',
-          name: 'Old', description: 'old', html: '<div>old</div>', createdAt: '2024-01-01T00:00:00Z',
+          name: 'Old', description: 'old', tags: ['old'], source: 'built-in' as const,
+          html: '<div>old</div>', createdAt: '2024-01-01T00:00:00Z',
         },
       ]);
 
-      const newTemplates: SkeletonTemplate[] = [
+      const newTemplates: LayoutRecipe[] = [
         {
           id: 'tmpl-2' as any, soulId, type: 'metrics',
-          name: 'New', description: 'new', html: '<div>new</div>', createdAt: '2024-01-02T00:00:00Z',
+          name: 'New', description: 'new', tags: ['new'], source: 'built-in' as const,
+          html: '<div>new</div>', createdAt: '2024-01-02T00:00:00Z',
         },
       ];
-      await store.saveSkeletons(soulId, newTemplates);
+      await store.saveRecipes(soulId, newTemplates);
 
-      const retrieved = await store.getSkeletons(soulId);
+      const retrieved = await store.getRecipes(soulId);
       expect(retrieved).toHaveLength(1);
       expect(retrieved[0].name).toBe('New');
+    });
+  });
+
+  describe('addRecipe', () => {
+    it('should append a recipe to existing ones', async () => {
+      const soulId = makeSoulId('soul-1');
+      await store.saveRecipes(soulId, [
+        {
+          id: 'tmpl-1' as any, soulId, type: 'title-slide',
+          name: 'First', description: 'first', tags: ['test'], source: 'built-in' as const,
+          html: '<div>first</div>', createdAt: '2024-01-01T00:00:00Z',
+        },
+      ]);
+
+      const newRecipe: LayoutRecipe = {
+        id: 'tmpl-2' as any, soulId, type: 'metrics',
+        name: 'Second', description: 'second', tags: ['user'], source: 'user-saved' as const,
+        html: '<div>second</div>', createdAt: '2024-01-02T00:00:00Z',
+      };
+
+      await store.addRecipe(soulId, newRecipe);
+
+      const recipes = await store.getRecipes(soulId);
+      expect(recipes).toHaveLength(2);
+      expect(recipes[0].name).toBe('First');
+      expect(recipes[1].name).toBe('Second');
+      expect(recipes[1].source).toBe('user-saved');
+    });
+  });
+
+  describe('backward compatibility: skeletons migration', () => {
+    it('should read from legacy .skeletons.json when .recipes.json does not exist', async () => {
+      const soulId = makeSoulId('soul-1');
+
+      // Manually write a .skeletons.json file (legacy format)
+      const soulsDir = path.join(tmpDir, 'souls');
+      fs.mkdirSync(soulsDir, { recursive: true });
+
+      const legacyData: LayoutRecipe[] = [
+        {
+          id: 'tmpl-legacy' as any,
+          soulId,
+          type: 'title-slide',
+          name: 'Legacy Template',
+          description: 'A legacy skeleton template',
+          tags: [],
+          source: 'built-in' as const,
+          html: '<div>legacy</div>',
+          createdAt: '2024-01-01T00:00:00Z',
+        },
+      ];
+
+      fs.writeFileSync(
+        path.join(soulsDir, `${soulId}.skeletons.json`),
+        JSON.stringify(legacyData, null, 2),
+        'utf-8',
+      );
+
+      const recipes = await store.getRecipes(soulId);
+      expect(recipes).toHaveLength(1);
+      expect(recipes[0].name).toBe('Legacy Template');
+    });
+
+    it('prefers .recipes.json over .skeletons.json', async () => {
+      const soulId = makeSoulId('soul-1');
+
+      const soulsDir = path.join(tmpDir, 'souls');
+      fs.mkdirSync(soulsDir, { recursive: true });
+
+      // Write legacy file
+      fs.writeFileSync(
+        path.join(soulsDir, `${soulId}.skeletons.json`),
+        JSON.stringify([{
+          id: 'tmpl-old' as any, soulId, type: 'title-slide',
+          name: 'Old', description: 'old', tags: [], source: 'built-in' as const,
+          html: '<div>old</div>', createdAt: '2024-01-01T00:00:00Z',
+        }], null, 2),
+        'utf-8',
+      );
+
+      // Write new recipes file
+      await store.saveRecipes(soulId, [{
+        id: 'tmpl-new' as any, soulId, type: 'title-slide',
+        name: 'New', description: 'new', tags: [], source: 'built-in' as const,
+        html: '<div>new</div>', createdAt: '2024-01-02T00:00:00Z',
+      }]);
+
+      const recipes = await store.getRecipes(soulId);
+      expect(recipes).toHaveLength(1);
+      expect(recipes[0].name).toBe('New');
     });
   });
 
