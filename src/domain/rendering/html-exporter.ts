@@ -60,10 +60,22 @@ export class HtmlExporter {
     deckTitle: string,
     includeNavigation: boolean,
   ): string {
-    const sections = slides
+    // Extract body content and styles from each slide's full HTML document
+    const extracted = slides.map((slide) => this.extractSlideContent(slide.html));
+
+    // Collect unique style blocks (deduplicate CSS tokens that repeat across slides)
+    const allStyles = new Set<string>();
+    for (const { styles } of extracted) {
+      for (const style of styles) {
+        allStyles.add(style.trim());
+      }
+    }
+    const mergedStyles = Array.from(allStyles).join('\n');
+
+    const sections = extracted
       .map(
-        (slide, index) =>
-          `    <section class="slide" id="slide-${index + 1}" data-slide-id="${slide.id}">\n${this.indentHtml(slide.html, 6)}\n    </section>`,
+        (ex, index) =>
+          `    <section class="slide-frame" id="slide-${index + 1}" data-slide-id="${slides[index].id}">\n${this.indentHtml(ex.body, 6)}\n    </section>`,
       )
       .join('\n\n');
 
@@ -92,8 +104,9 @@ export class HtmlExporter {
       height: 100%;
       overflow: hidden;
       background: #000;
+      font-family: system-ui, -apple-system, sans-serif;
     }
-    .slide {
+    .slide-frame {
       width: 1920px;
       height: 1080px;
       position: absolute;
@@ -103,10 +116,13 @@ export class HtmlExporter {
       display: none;
       overflow: hidden;
     }
-    .slide.active {
+    .slide-frame.active {
       display: block;
     }
 ${navigationStyles}
+  </style>
+  <style>
+${mergedStyles}
   </style>
 </head>
 <body>
@@ -115,7 +131,7 @@ ${counterHtml}
   <script>
     // Scale slides to fit the viewport
     (function() {
-      var slides = document.querySelectorAll('.slide');
+      var slides = document.querySelectorAll('.slide-frame');
       function scaleSlides() {
         var sw = 1920, sh = 1080;
         var vw = window.innerWidth, vh = window.innerHeight;
@@ -165,7 +181,7 @@ ${navigationScript}
     (function() {
       var current = 0;
       var total = ${slideCount};
-      var slides = document.querySelectorAll('.slide');
+      var slides = document.querySelectorAll('.slide-frame');
       var counter = document.getElementById('slide-counter');
 
       function goTo(index) {
@@ -204,6 +220,44 @@ ${navigationScript}
         }
       });
     })();`;
+  }
+
+  // ── Content Extraction ───────────────────────────────────────
+
+  /**
+   * Extract usable content from a full slide HTML document.
+   * Strips <!DOCTYPE>, <html>, <head>, <body> wrappers and separates
+   * <style> blocks from body content.
+   */
+  private extractSlideContent(html: string): { styles: string[]; body: string } {
+    const styles: string[] = [];
+
+    // Extract all <style> blocks
+    const styleRegex = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+    let styleMatch: RegExpExecArray | null;
+    while ((styleMatch = styleRegex.exec(html)) !== null) {
+      styles.push(styleMatch[1]);
+    }
+
+    // Remove everything outside <body>...</body>, or use the full HTML if no body tag
+    let body = html;
+    const bodyMatch = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html);
+    if (bodyMatch) {
+      body = bodyMatch[1];
+    }
+
+    // Remove <style> blocks from body (they're hoisted to <head>)
+    body = body.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+
+    // Remove any stray <!DOCTYPE>, <html>, <head>, </head>, </html> tags
+    body = body
+      .replace(/<!DOCTYPE[^>]*>/gi, '')
+      .replace(/<\/?html[^>]*>/gi, '')
+      .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
+      .replace(/<\/?body[^>]*>/gi, '')
+      .trim();
+
+    return { styles, body };
   }
 
   // ── Helpers ──────────────────────────────────────────────────
