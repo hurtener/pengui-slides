@@ -63,14 +63,26 @@ export class HtmlExporter {
     // Extract body content and styles from each slide's full HTML document
     const extracted = slides.map((slide) => this.extractSlideContent(slide.html));
 
-    // Collect unique style blocks (deduplicate CSS tokens that repeat across slides)
-    const allStyles = new Set<string>();
-    for (const { styles } of extracted) {
-      for (const style of styles) {
-        allStyles.add(style.trim());
+    // Scope each slide's CSS to its section id to prevent cross-slide collisions
+    const scopedStyles = extracted
+      .map((ex, index) => {
+        const slideId = `slide-${index + 1}`;
+        return ex.styles
+          .map((style) => this.scopeCssToSlide(style, slideId))
+          .join('\n');
+      })
+      .join('\n\n');
+
+    // Collect and deduplicate <link> tags (e.g. Google Fonts)
+    const allLinks = new Set<string>();
+    for (const { links } of extracted) {
+      for (const link of links) {
+        allLinks.add(link.trim());
       }
     }
-    const mergedStyles = Array.from(allStyles).join('\n');
+    const linkTags = Array.from(allLinks)
+      .map((l) => `  ${l}`)
+      .join('\n');
 
     const sections = extracted
       .map(
@@ -97,14 +109,14 @@ export class HtmlExporter {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${this.escapeHtml(deckTitle)}</title>
+${linkTags}
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #000;
-      font-family: system-ui, -apple-system, sans-serif;
+      background: #111;
     }
     .slide-frame {
       width: 1920px;
@@ -122,7 +134,7 @@ export class HtmlExporter {
 ${navigationStyles}
   </style>
   <style>
-${mergedStyles}
+${scopedStyles}
   </style>
 </head>
 <body>
@@ -229,14 +241,22 @@ ${navigationScript}
    * Strips <!DOCTYPE>, <html>, <head>, <body> wrappers and separates
    * <style> blocks from body content.
    */
-  private extractSlideContent(html: string): { styles: string[]; body: string } {
+  private extractSlideContent(html: string): { styles: string[]; body: string; links: string[] } {
     const styles: string[] = [];
+    const links: string[] = [];
 
     // Extract all <style> blocks
     const styleRegex = /<style[^>]*>([\s\S]*?)<\/style>/gi;
     let styleMatch: RegExpExecArray | null;
     while ((styleMatch = styleRegex.exec(html)) !== null) {
       styles.push(styleMatch[1]);
+    }
+
+    // Extract <link> tags from <head> (e.g. Google Fonts preconnects, stylesheets)
+    const linkRegex = /<link\s[^>]*>/gi;
+    let linkMatch: RegExpExecArray | null;
+    while ((linkMatch = linkRegex.exec(html)) !== null) {
+      links.push(linkMatch[0]);
     }
 
     // Remove everything outside <body>...</body>, or use the full HTML if no body tag
@@ -257,7 +277,48 @@ ${navigationScript}
       .replace(/<\/?body[^>]*>/gi, '')
       .trim();
 
-    return { styles, body };
+    return { styles, body, links };
+  }
+
+  /**
+   * Scope CSS rules to a specific slide section by prefixing selectors
+   * with the slide's DOM id, preventing cross-slide style collisions.
+   */
+  private scopeCssToSlide(css: string, slideId: string): string {
+    const result: string[] = [];
+    let depth = 0;
+
+    for (const line of css.split('\n')) {
+      const trimmed = line.trim();
+      const opens = (trimmed.match(/\{/g) || []).length;
+      const closes = (trimmed.match(/\}/g) || []).length;
+
+      if (depth === 0 && opens > 0 && !trimmed.startsWith('@')) {
+        // Line contains a selector at top level — scope it
+        const braceIdx = trimmed.indexOf('{');
+        const selectors = trimmed.substring(0, braceIdx);
+        const rest = trimmed.substring(braceIdx);
+
+        const scoped = selectors
+          .split(',')
+          .map((sel) => {
+            sel = sel.trim();
+            if (!sel) return sel;
+            if (sel === ':root') return `#${slideId}`;
+            if (sel === '*') return `#${slideId}, #${slideId} *`;
+            return `#${slideId} ${sel}`;
+          })
+          .join(', ');
+
+        result.push(`${scoped} ${rest}`);
+      } else {
+        result.push(line);
+      }
+
+      depth += opens - closes;
+    }
+
+    return result.join('\n');
   }
 
   // ── Helpers ──────────────────────────────────────────────────
