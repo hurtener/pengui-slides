@@ -24,7 +24,7 @@ The system introduces the concept of a Design Soul: a structured constraint docu
 
 • **HTML as interchange format.** Each slide is a self-contained HTML document. The server manages a global deck state, allowing incremental construction of large decks without exceeding context windows.
 
-• **Design Souls as first-class assets.** Registered assets that define brand identity. On approval, the server pre-generates skeleton templates for instant, consistent instantiation.
+• **Design Souls as first-class assets.** Registered assets that define brand identity. On approval, the server pre-generates layout recipes (exemplar skeletons) for instant, consistent instantiation.
 
 • **Metadata-enriched slides.** Every slide carries structured metadata in HTML comments-title, data points, narrative, tags. Exported PPTX files embed this metadata in slide notes, making presentations searchable via RAG systems.
 
@@ -189,7 +189,7 @@ The system consists of five components that interact through the MCP protocol:
 
 **PenguiFlow Agent** (external, not part of MCP): The orchestrating LLM that receives user briefs, holds Design Soul context, generates HTML slide content, interprets validation results, and iterates. This is where all creativity and reasoning happens.
 
-**Design Soul Registry:** Persistent storage for Design Soul documents and their pre-generated skeleton templates. Handles registration, approval, listing, and retrieval of souls.
+**Design Soul Registry:** Persistent storage for Design Soul documents and their pre-generated layout recipes. Handles registration, approval, listing, and retrieval of souls.
 
 **Deck State Manager:** In-memory (with optional persistence) manager for active deck sessions. Maintains the ordered collection of slide HTMLs, their metadata, and deck-level properties. Enables incremental construction and random-access editing.
 
@@ -203,11 +203,11 @@ The complete flow for generating a presentation, showing the interaction between
 
 **1\. User brief.** User provides a brief to the PenguiFlow agent: "Make a 10-slide deck about our Q1 results."
 
-**2\. Soul retrieval.** The agent calls the MCP's list_design_souls or get_design_soul tool to retrieve the appropriate Design Soul and its skeleton templates.
+**2\. Soul retrieval.** The agent calls the MCP's list_design_souls or get_design_soul tool to retrieve the appropriate Design Soul and its layout recipes.
 
 **3\. Deck initialization.** The agent calls create_deck to initialize a new deck session in the MCP. Returns a deck_id.
 
-**4\. Slide generation (iterative).** The agent generates HTML for one slide, using the skeleton template as a starting point and filling in content from the brief. It calls add_slide with the HTML and structured metadata.
+**4\. Slide generation (iterative).** The agent generates HTML for one slide, using a layout recipe as a starting point and filling in content from the brief. It calls add_slide with the HTML and structured metadata.
 
 **5\. Validation.** The MCP's validation engine checks the submitted HTML against the Design Soul rules. Returns a list of issues (contrast violations, spacing errors, palette deviations) or an empty list if compliant.
 
@@ -237,43 +237,51 @@ A Design Soul is a structured document (stored as JSON with embedded prose) that
 | **Components** | Patterns for cards, buttons, inputs, pills/chips, icons. Defines how each component should look, including hover and active states. Establishes the visual vocabulary of the system. |
 | **Motion and Tone** | Animation style (smooth, understated), transition durations, easing curves. Also includes do/don't rules and a north star sentence that captures the soul in one phrase. |
 
-## **Skeleton Templates**
+## **Layout Recipes (Exemplar Skeletons)**
 
-When a Design Soul is approved (via the approve_design_soul tool), the MCP server triggers a one-time skeleton generation process. The server uses the soul's design tokens to produce a set of base HTML slide templates-complete with the full CSS theme, layout structure, and slot placeholders, but no content.
+When a Design Soul is approved (via the approve_design_soul tool), the MCP server triggers a one-time **layout recipe generation** process. The server uses the soul's design tokens to produce a set of base HTML slide recipes: complete HTML documents with the full CSS theme (tokens), base slide container, and utility CSS library.
 
-Standard skeleton types generated per soul:
+Standard recipe types generated per soul:
 
-• **Title slide.** Full-bleed styled background with title, subtitle, tag, bottom bar with date and logo.
+• **Title slide.** Centered hero title + subtitle, optional bottom bar for author/date.
 
-• **Two-column layout.** Split layout (configurable ratio) with section label, heading, description on one side, and content cards on the other.
+• **Two-column layout.** Split layout (default ~60/40) for text + visual/content area.
 
-• **Metrics / Numbers slide.** Dark or light variant with 3-column metric card grid (large number, label, description).
+• **Metrics / Numbers slide.** 3-column metric card grid (big number, label, description).
 
-• **Features / Cards grid.** Header row (section label + heading + optional description) with 3-column feature cards including icon slots, titles, descriptions, and pill labels.
+• **Features / Cards grid.** Header row (section label + heading + optional description) with 3-column feature cards including icon, title, description, and pill/badge label.
 
-• **Closing / CTA slide.** Centered CTA with icon, heading, description text, and button row. Bottom info bar with contact and confidentiality.
+• **Closing / CTA slide.** Centered CTA with optional icon, heading, description text, and button row.
 
-• **Blank themed slide.** Blank slide with only the CSS theme, page number, and background. For custom content.
+• **Blank themed slide.** Blank slide with only the CSS theme applied. For custom content.
 
-Skeletons use HTML comments as slot markers that the LLM replaces with content:
+### **Guiding Comments (v1)**
 
-&lt;!-- @slot:title --&gt;Placeholder Heading&lt;!-- @endslot --&gt;
+Recipes use inline HTML comments as *guiding rails* for the LLM (what to edit, what is optional, and how to restructure), instead of rigid “fill-in” slots. Example:
 
-&lt;!-- @slot:subtitle --&gt;Placeholder subtitle text&lt;!-- @endslot --&gt;
+&lt;!-- Title Slide: Center a bold statement. Adjust freely — add/remove elements as needed. --&gt;
 
-&lt;!-- @slot:tag --&gt;Section Label&lt;!-- @endslot --&gt;
+&lt;!-- Bottom bar (optional) — author, date, or branding --&gt;
 
-&lt;!-- @slot:metric-1-value --&gt;XX%&lt;!-- @endslot --&gt;
+### **Spec Evolution: Recipes Over @slot Placeholders**
 
-&lt;!-- @slot:metric-1-label --&gt;Metric Name&lt;!-- @endslot --&gt;
+Early prototypes used HTML comment slots (e.g., &lt;!-- @slot:title --&gt;...&lt;!-- @endslot --&gt;) to encourage deterministic “fill the blanks” editing. In practice, we intentionally evolved v1 to **recipe HTML + guiding comments** because it produces materially better decks:
 
-The agent reads the skeleton, replaces slot content, and optionally adds new elements or modifies the structure. The skeleton guarantees that the CSS theme, layout grid, and component patterns are correct from the start-the agent only needs to provide content, not design.
+• **@slot markers optimize for deterministic filling**, but they implicitly discourage structural edits; models tend to preserve layout, yielding repetitive decks and shallow variation.
+
+• **Comment-guided recipes optimize for “start from a good example, then rewrite boldly”**, which produces richer composition, better slide-to-slide differentiation, and more natural improvements (the model can delete/add/move blocks without fighting a slot grammar).
+
+• **Tradeoff: validation must carry more weight.** You lose a clean programmatic slot contract, so brand consistency must come primarily from validation (token-only enforcement across more properties, stronger structure checks) rather than from template rigidity.
+
+• **Easier to evolve and reuse.** Recipes are exemplars you can iterate without breaking a slot schema, and user-saved templates become more meaningful because they capture full patterns, not just filled fields.
+
+Net: treat this as an intentional spec evolution. “Skeletons” are **editable exemplars**, not fillable forms. This raises the bar on validator completeness to prevent creativity from turning into token/brand drift.
 
 ## **Token-Only CSS Enforcement**
 
 This is the single highest-leverage architectural decision for validation reliability and brand consistency. All visual properties in slide HTML must reference Design Soul tokens via CSS custom properties. Arbitrary literal values are not permitted.
 
-The rule is simple: if a value controls how the slide looks, it must come from a var(--token). This applies to colors, spacing, border-radius, shadows, font families, and font sizes. The skeleton templates ship with all tokens pre-declared in the :root selector, and the agent fills content into the existing token-based system.
+The rule is simple: if a value controls how the slide looks, it must come from a var(--token). This applies to colors, spacing, border-radius, shadows, font families, and font sizes. The layout recipes ship with all tokens pre-declared in the :root selector, and the agent fills content into the existing token-based system.
 
 ### **What This Means in Practice**
 
@@ -325,9 +333,9 @@ color: rgb(107, 98, 89); /\* literal rgb \*/
 
 • **Hybrid export becomes feasible.** Tokens map to a finite set of PowerPoint style primitives. var(--text-primary) maps to a specific RGB value in a PptxGenJS text box. var(--radius-card) tells the hybrid exporter what corner radius to apply to a native shape. The token vocabulary becomes a bridge between HTML and PPTX worlds.
 
-• **Consistency is automatic.** If the agent starts from a skeleton that already uses tokens, and the validator rejects any literal values, every slide automatically uses the soul's design system. No drift, no inconsistency, no "slide 34 looks different from slide 3" problems.
+• **Consistency is automatic.** If the agent starts from a recipe that already uses tokens, and the validator rejects any literal values, every slide automatically uses the soul's design system. No drift, no inconsistency, no "slide 34 looks different from slide 3" problems.
 
-The token vocabulary for a typical soul defines approximately 30-40 tokens across color (12-15), typography (6-8), spacing (6-8), radius (3-4), and shadow (3-4) categories. This is a small, learnable surface that agents master quickly, especially when starting from skeleton templates that demonstrate correct usage.
+The token vocabulary for a typical soul defines approximately 30-40 tokens across color (12-15), typography (6-8), spacing (6-8), radius (3-4), and shadow (3-4) categories. This is a small, learnable surface that agents master quickly, especially when starting from layout recipes that demonstrate correct usage.
 
 ## **Validation Rules Engine**
 
@@ -447,29 +455,29 @@ Output: { soul_id: string, status: 'draft', token_count: number }
 
 ### **approve_design_soul**
 
-Marks a Design Soul as approved and triggers skeleton generation. The server generates the standard set of slide templates (title, two-column, metrics, cards, closing, blank) using the soul's design tokens. This is a potentially long-running operation (10-30 seconds for skeleton generation).
+Marks a Design Soul as approved and triggers **layout recipe generation**. The server generates the standard set of recipe templates (title, two-column, metrics, features grid, closing CTA, blank) using the soul's design tokens. This is a potentially long-running operation (10-30 seconds for recipe generation).
 
 Input: { soul_id: string }
 
 Output: { soul_id: string, status: 'approved',
 
-skeletons: string\[\] // IDs of generated templates }
+recipes: string\[\] // IDs of generated recipes }
 
 ### **list_design_souls**
 
-Returns all registered Design Souls with their status and skeleton availability.
+Returns all registered Design Souls with their status and recipe availability.
 
 Input: { status_filter?: 'draft' | 'approved' | 'all' }
 
-Output: { souls: \[{ soul_id, name, status, skeleton_count }\] }
+Output: { souls: \[{ soul_id, name, status, recipe_count }\] }
 
 ### **get_design_soul**
 
-Retrieves a Design Soul document and optionally its skeleton templates. When include_skeletons is true, returns the full HTML of each skeleton template for the agent to use as a starting point.
+Retrieves a Design Soul document and optionally its layout recipes. When include_recipes is true, returns the full HTML of each recipe for the agent to use as a starting point.
 
-Input: { soul_id: string, include_skeletons?: boolean }
+Input: { soul_id: string, include_recipes?: boolean, include_skeletons?: boolean /* deprecated alias */ }
 
-Output: { soul: DesignSoulDocument, skeletons?: SlideTemplate\[\] }
+Output: { soul: DesignSoulDocument, layout_recipes?: SlideTemplate\[\] }
 
 ## **Deck Management**
 
@@ -624,6 +632,8 @@ Output: { file_path: string, file_size_bytes: number }
 ### **export_html**
 
 Exports the deck as a self-contained HTML file with all slides, navigation, and optional slide transition animations. Can be served as a static site or opened locally.
+
+Because this export bundles multiple slides into a single DOM, the exporter must prevent cross-slide CSS/token collisions. The recommended approach is to scope each slide’s CSS to its slide container (e.g., prefix selectors with `#slide-N` and rewrite `:root` to that container), preserving layout fidelity and the 16:9 aspect ratio for every slide.
 
 Input: { deck_id: string, include_navigation?: boolean }
 
@@ -845,9 +855,9 @@ The PenguiFlow agent orchestrates the deck creation using a structured workflow.
 
 3\. For each slide:
 
-a. Call get_design_soul(include_skeletons=true) if needed
+a. Call get_design_soul(include_recipes=true) if needed (include_skeletons is a deprecated alias)
 
-b. Generate HTML using skeleton as base + brief content
+b. Generate HTML using recipe as base + brief content
 
 c. Construct SlideMetadata
 
@@ -916,7 +926,7 @@ pengui-slides-mcp/
 
 │ │ ├── assembler.ts # PptxGenJS PPTX assembly
 
-│ │ └── skeleton.ts # Skeleton generation from soul
+│ │ └── recipes.ts # Layout recipe generation from soul
 
 │ ├── state/
 
@@ -940,7 +950,7 @@ pengui-slides-mcp/
 
 ├── souls/ # Design Soul storage
 
-├── skeletons/ # Generated skeleton templates
+├── recipes/ # Generated layout recipes (templates)
 
 ├── output/ # Rendered images and exports
 
@@ -1196,11 +1206,11 @@ These metrics determine whether the Pengui Slides MCP Server transitions from pr
 
 ## **Soul Compliance Rate**
 
-**Target:** 80%+ of slides pass validation on the first attempt; 95%+ by the second attempt. This is the most important metric for the Design Soul concept. If the agent is burning 5+ validation loops per slide, either the soul is too strict (too many hard errors on reasonable output), the skeleton isn't giving enough structure, or the token system is poorly designed. A first-attempt compliance rate below 60% signals a fundamental problem.
+**Target:** 80%+ of slides pass validation on the first attempt; 95%+ by the second attempt. This is the most important metric for the Design Soul concept. If the agent is burning 5+ validation loops per slide, either the soul is too strict (too many hard errors on reasonable output), the recipe isn't giving enough structure, or the token system is poorly designed. A first-attempt compliance rate below 60% signals a fundamental problem.
 
 ## **Deck Consistency Score**
 
-**Target:** Variance in validation score across all slides in a deck should be below 0.1 (on a 0.0-1.0 scale). A 30-slide deck should look like one coherent document, not a collection of individually generated pages. Low variance indicates the soul + skeleton system is producing consistent output.
+**Target:** Variance in validation score across all slides in a deck should be below 0.1 (on a 0.0-1.0 scale). A 30-slide deck should look like one coherent document, not a collection of individually generated pages. Low variance indicates the soul + recipe system is producing consistent output.
 
 ## **Export Acceptance**
 
@@ -1364,9 +1374,9 @@ Challenge: coordinate mapping between CSS pixel positions and PowerPoint's inch-
 
 ## **Multi-Format Templates**
 
-Once the skeleton system is in place, it generalizes beyond presentations:
+Once the recipe system is in place, it generalizes beyond presentations:
 
-• **PDF reports.** Same Design Soul, different skeleton. The soul defines colors, typography, and spacing; the skeleton defines the page layout (margins, columns, header/footer). Export via Playwright page.pdf().
+• **PDF reports.** Same Design Soul, different recipe. The soul defines colors, typography, and spacing; the recipe defines the page layout (margins, columns, header/footer). Export via Playwright page.pdf().
 
 • **Email templates.** Design Soul applied to email-safe HTML. Skeletons with table-based layouts for email client compatibility. Export as HTML or via MJML.
 
@@ -1386,7 +1396,7 @@ Once the metadata system is ingesting slides into a RAG store, new possibilities
 
 • **Data lineage tracking.** When the user updates a data point that appears across multiple decks, the system can identify all affected slides and suggest batch updates.
 
-• **Presentation analytics.** Analyze which slide types, layouts, and color choices generate the most engagement (based on user feedback or view metrics). Feed insights back into skeleton selection.
+• **Presentation analytics.** Analyze which slide types, layouts, and color choices generate the most engagement (based on user feedback or view metrics). Feed insights back into recipe selection.
 
 ## **Collaborative Workflows**
 
