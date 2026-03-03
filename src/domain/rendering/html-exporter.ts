@@ -7,13 +7,18 @@
  */
 
 import type { Logger } from '../../infrastructure/logger.js';
+import type { AssetService } from '../assets/asset-service.js';
+import { resolveAssetRefs } from '../assets/asset-resolver.js';
 import type { Slide } from '../../types/deck.js';
 import type { ExportResult } from '../../types/export.js';
 
 // ── HTML Exporter ────────────────────────────────────────────────
 
 export class HtmlExporter {
-  constructor(private readonly logger: Logger) {}
+  constructor(
+    private readonly logger: Logger,
+    private readonly assetService?: AssetService,
+  ) {}
 
   /**
    * Export slides as a self-contained HTML buffer.
@@ -32,7 +37,7 @@ export class HtmlExporter {
       includeNavigation,
     });
 
-    const html = this.buildHtml(slides, deckTitle, includeNavigation);
+    const html = await this.buildHtml(slides, deckTitle, includeNavigation);
     const data = Buffer.from(html, 'utf-8');
     const filename = this.sanitizeFilename(deckTitle) + '.html';
 
@@ -55,11 +60,11 @@ export class HtmlExporter {
 
   // ── HTML Generation ──────────────────────────────────────────
 
-  private buildHtml(
+  private async buildHtml(
     slides: Slide[],
     deckTitle: string,
     includeNavigation: boolean,
-  ): string {
+  ): Promise<string> {
     // Extract body content and styles from each slide's full HTML document
     const extracted = slides.map((slide) => this.extractSlideContent(slide.html));
 
@@ -83,6 +88,13 @@ export class HtmlExporter {
     const linkTags = Array.from(allLinks)
       .map((l) => `  ${l}`)
       .join('\n');
+
+    // Resolve asset refs in each slide's body
+    if (this.assetService) {
+      for (let i = 0; i < extracted.length; i++) {
+        extracted[i].body = await resolveAssetRefs(extracted[i].body, this.assetService);
+      }
+    }
 
     const sections = extracted
       .map(

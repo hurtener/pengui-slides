@@ -21,6 +21,8 @@ describe('createContainer', () => {
     expect(container.metadataEmbedder).toBeDefined();
     expect(container.metadataExporter).toBeDefined();
     expect(container.renderService).toBeDefined();
+    expect(container.assetStore).toBeDefined();
+    expect(container.assetService).toBeDefined();
   });
 
   it('services are properly wired (soul register and approve)', async () => {

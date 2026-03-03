@@ -5,18 +5,21 @@
  * based on the presence of a persistence directory.
  */
 
-import type { ISoulStore, IDeckStore, ISlideStore } from './interfaces.js';
+import type { ISoulStore, IDeckStore, ISlideStore, IAssetStore } from './interfaces.js';
 import { InMemorySoulStore } from './memory/soul-store.js';
 import { InMemoryDeckStore } from './memory/deck-store.js';
 import { InMemorySlideStore } from './memory/slide-store.js';
+import { InMemoryAssetStore } from './memory/asset-store.js';
 import { FileSoulStore } from './file/soul-store.js';
 import { FileDeckStore } from './file/deck-store.js';
 import { FileSlideStore } from './file/slide-store.js';
+import { FileAssetStore } from './file/asset-store.js';
 
 export interface StorageProvider {
   soulStore: ISoulStore;
   deckStore: IDeckStore;
   slideStore: ISlideStore;
+  assetStore: IAssetStore;
 }
 
 /**
@@ -31,6 +34,7 @@ export function createStorage(persistDir?: string): StorageProvider {
       soulStore: new FileSoulStore(persistDir),
       deckStore: new FileDeckStore(persistDir),
       slideStore: new FileSlideStore(persistDir),
+      assetStore: new FileAssetStore(persistDir),
     };
   }
 
@@ -38,5 +42,6 @@ export function createStorage(persistDir?: string): StorageProvider {
     soulStore: new InMemorySoulStore(),
     deckStore: new InMemoryDeckStore(),
     slideStore: new InMemorySlideStore(),
+    assetStore: new InMemoryAssetStore(),
   };
 }

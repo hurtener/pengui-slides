@@ -35,6 +35,10 @@ export enum ErrorCode {
   EXPORT_FAILED = 'EXPORT_FAILED',
   EXPORT_NO_SLIDES = 'EXPORT_NO_SLIDES',
 
+  // Asset errors
+  ASSET_NOT_FOUND = 'ASSET_NOT_FOUND',
+  ASSET_INVALID_MIME = 'ASSET_INVALID_MIME',
+
   // General
   INTERNAL_ERROR = 'INTERNAL_ERROR',
   INVALID_INPUT = 'INVALID_INPUT',
@@ -94,5 +98,11 @@ export class RenderError extends PenguiError {
 export class ExportError extends PenguiError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(ErrorCode.EXPORT_FAILED, message, details);
+  }
+}
+
+export class AssetNotFoundError extends PenguiError {
+  constructor(assetId: string) {
+    super(ErrorCode.ASSET_NOT_FOUND, `Asset not found: ${assetId}`, { assetId });
   }
 }

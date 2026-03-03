@@ -6,9 +6,10 @@
  * the call-site code.
  */
 
-import type { DeckId, SlideId, SoulId } from '../types/common.js';
+import type { AssetId, DeckId, SlideId, SoulId } from '../types/common.js';
 import type { DesignSoul, LayoutRecipe, SoulStatus } from '../types/design-soul.js';
 import type { Deck, DeckRevision, Slide } from '../types/deck.js';
+import type { Asset, AssetScope } from '../types/asset.js';
 
 // ── Soul Store ───────────────────────────────────────────────────
 
@@ -41,4 +42,22 @@ export interface ISlideStore {
   getByDeck(deckId: DeckId): Promise<Slide[]>;
   delete(id: SlideId): Promise<boolean>;
   deleteByDeck(deckId: DeckId): Promise<number>;
+}
+
+// ── Asset Store ──────────────────────────────────────────────────
+
+export interface AssetListFilter {
+  scope?: AssetScope['type'];
+  soulId?: SoulId;
+  deckId?: DeckId;
+  role?: 'logo' | 'content';
+}
+
+export interface IAssetStore {
+  saveMetadata(asset: Asset): Promise<void>;
+  saveData(id: AssetId, data: Buffer): Promise<void>;
+  getMetadata(id: AssetId): Promise<Asset | undefined>;
+  getData(id: AssetId): Promise<Buffer | undefined>;
+  list(filter?: AssetListFilter): Promise<Asset[]>;
+  delete(id: AssetId): Promise<boolean>;
 }

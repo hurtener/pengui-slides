@@ -9,7 +9,7 @@ import { Logger, systemClock, type Clock } from './infrastructure/index.js';
 
 // Storage
 import { createStorage } from './storage/factory.js';
-import type { ISoulStore, IDeckStore, ISlideStore } from './storage/interfaces.js';
+import type { ISoulStore, IDeckStore, ISlideStore, IAssetStore } from './storage/interfaces.js';
 
 // Domain services
 import { SoulService } from './domain/souls/soul-service.js';
@@ -19,6 +19,7 @@ import { MetadataParser } from './domain/metadata/metadata-parser.js';
 import { MetadataEmbedder } from './domain/metadata/metadata-embedder.js';
 import { MetadataExporter } from './domain/metadata/metadata-exporter.js';
 import { RenderService } from './domain/rendering/render-service.js';
+import { AssetService } from './domain/assets/asset-service.js';
 
 export interface ServiceContainer {
   config: PenguiConfig;
@@ -29,6 +30,7 @@ export interface ServiceContainer {
   soulStore: ISoulStore;
   deckStore: IDeckStore;
   slideStore: ISlideStore;
+  assetStore: IAssetStore;
 
   // Services
   soulService: SoulService;
@@ -38,6 +40,7 @@ export interface ServiceContainer {
   metadataEmbedder: MetadataEmbedder;
   metadataExporter: MetadataExporter;
   renderService: RenderService;
+  assetService: AssetService;
 }
 
 export function createContainer(config: PenguiConfig): ServiceContainer {
@@ -45,7 +48,7 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
   const clock = systemClock;
 
   // Storage layer - uses file-based persistence if persistDir is configured
-  const { soulStore, deckStore, slideStore } = createStorage(config.persistDir);
+  const { soulStore, deckStore, slideStore, assetStore } = createStorage(config.persistDir);
 
   // Domain services
   const soulService = new SoulService(soulStore, slideStore, clock, logger.child('souls'));
@@ -54,7 +57,8 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
   const metadataParser = new MetadataParser();
   const metadataEmbedder = new MetadataEmbedder();
   const metadataExporter = new MetadataExporter();
-  const renderService = new RenderService(config, logger.child('rendering'));
+  const assetService = new AssetService(assetStore, clock, logger.child('assets'));
+  const renderService = new RenderService(config, logger.child('rendering'), assetService);
 
   return {
     config,
@@ -63,6 +67,7 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
     soulStore,
     deckStore,
     slideStore,
+    assetStore,
     soulService,
     deckService,
     validationService,
@@ -70,5 +75,6 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
     metadataEmbedder,
     metadataExporter,
     renderService,
+    assetService,
   };
 }
