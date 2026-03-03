@@ -11,3 +11,5 @@ coverage/
 output/
 *.pptx
 *.pdf
+.pengui-data/
+output/

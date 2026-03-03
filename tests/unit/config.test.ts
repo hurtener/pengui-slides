@@ -15,6 +15,9 @@ describe('defaultConfig', () => {
     expect(defaultConfig.logLevel).toBe('info');
     expect(defaultConfig.outputDir).toBe('./output');
     expect(defaultConfig.headless).toBe(true);
+    expect(defaultConfig.transport).toBe('stdio');
+    expect(defaultConfig.httpHost).toBe('127.0.0.1');
+    expect(defaultConfig.httpPort).toBe(3000);
   });
 });
 
@@ -52,5 +55,14 @@ describe('loadConfig', () => {
     expect(config.headless).toBe(false);
     // All other fields should remain default
     expect(config.slideWidth).toBe(1920);
+  });
+
+  it('merges transport config overrides correctly', () => {
+    const config = loadConfig({ transport: 'http', httpPort: 8080 });
+
+    expect(config.transport).toBe('http');
+    expect(config.httpPort).toBe(8080);
+    // Non-overridden transport fields keep defaults
+    expect(config.httpHost).toBe('127.0.0.1');
   });
 });

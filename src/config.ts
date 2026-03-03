@@ -37,6 +37,15 @@ export interface PenguiConfig {
 
   /** If set, uses file-based persistence at this directory. Otherwise, in-memory. */
   persistDir?: string;
+
+  /** Transport mode: stdio (sidecar) or http (remote) */
+  transport: 'stdio' | 'http';
+
+  /** HTTP server bind host (only used when transport is 'http') */
+  httpHost: string;
+
+  /** HTTP server port (only used when transport is 'http') */
+  httpPort: number;
 }
 
 export const defaultConfig: PenguiConfig = {
@@ -52,6 +61,9 @@ export const defaultConfig: PenguiConfig = {
   logLevel: 'info',
   outputDir: './output',
   headless: true,
+  transport: 'stdio',
+  httpHost: '127.0.0.1',
+  httpPort: 3000,
 };
 
 export function loadConfig(overrides?: Partial<PenguiConfig>): PenguiConfig {
