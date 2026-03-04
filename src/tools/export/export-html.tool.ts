@@ -17,7 +17,7 @@ export function registerExportHtmlTool(server: McpServer, container: ServiceCont
     'export_html',
     {
       title: 'Export HTML',
-      description: 'Export a deck as a self-contained HTML file with optional slide navigation. Set include_data to true to also return the HTML content in the response.',
+      description: 'Export a deck as a self-contained HTML file with optional slide navigation. Set include_data to true to also receive the HTML content in the response.',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to export.'),
         include_navigation: z.boolean().optional().describe('Whether to include slide navigation controls. Defaults to false.'),

@@ -17,7 +17,7 @@ export function registerExportPdfTool(server: McpServer, container: ServiceConta
     'export_pdf',
     {
       title: 'Export PDF',
-      description: 'Export a deck as a PDF file. Returns metadata and file path. Set include_data to true to also return the binary content as base64.',
+      description: 'Export a deck as a PDF file. Returns metadata and file path. Set include_data to true to also receive the binary content as base64.',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to export.'),
         mode: z.enum(['image', 'direct']).optional().describe('PDF generation mode: "image" renders slides to PNG first, "direct" uses page.pdf(). Defaults to "image".'),

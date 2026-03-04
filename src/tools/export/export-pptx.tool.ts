@@ -17,7 +17,7 @@ export function registerExportPptxTool(server: McpServer, container: ServiceCont
     'export_pptx',
     {
       title: 'Export PPTX',
-      description: 'Export a deck as a PowerPoint (.pptx) file. Returns metadata and file path. Set include_data to true to also return the binary content as base64.',
+      description: 'Export a deck as a PowerPoint (.pptx) file. Returns metadata and file path. Set include_data to true to also receive the binary content as base64.',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to export.'),
         resolution: z.enum(['1080p', '4k']).optional().describe('Slide resolution. Defaults to "1080p".'),
