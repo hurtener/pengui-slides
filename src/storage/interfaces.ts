@@ -6,9 +6,10 @@
  * the call-site code.
  */
 
-import type { DeckId, SlideId, SoulId } from '../types/common.js';
-import type { DesignSoul, SkeletonTemplate, SoulStatus } from '../types/design-soul.js';
+import type { AssetId, DeckId, SlideId, SoulId } from '../types/common.js';
+import type { DesignSoul, LayoutRecipe, SoulStatus } from '../types/design-soul.js';
 import type { Deck, DeckRevision, Slide } from '../types/deck.js';
+import type { Asset, AssetScope } from '../types/asset.js';
 
 // ── Soul Store ───────────────────────────────────────────────────
 
@@ -17,8 +18,9 @@ export interface ISoulStore {
   get(id: SoulId): Promise<DesignSoul | undefined>;
   list(statusFilter?: SoulStatus | 'all'): Promise<DesignSoul[]>;
   delete(id: SoulId): Promise<boolean>;
-  saveSkeletons(soulId: SoulId, templates: SkeletonTemplate[]): Promise<void>;
-  getSkeletons(soulId: SoulId): Promise<SkeletonTemplate[]>;
+  saveRecipes(soulId: SoulId, recipes: LayoutRecipe[]): Promise<void>;
+  getRecipes(soulId: SoulId): Promise<LayoutRecipe[]>;
+  addRecipe(soulId: SoulId, recipe: LayoutRecipe): Promise<void>;
 }
 
 // ── Deck Store ───────────────────────────────────────────────────
@@ -40,4 +42,22 @@ export interface ISlideStore {
   getByDeck(deckId: DeckId): Promise<Slide[]>;
   delete(id: SlideId): Promise<boolean>;
   deleteByDeck(deckId: DeckId): Promise<number>;
+}
+
+// ── Asset Store ──────────────────────────────────────────────────
+
+export interface AssetListFilter {
+  scope?: AssetScope['type'];
+  soulId?: SoulId;
+  deckId?: DeckId;
+  role?: 'logo' | 'content';
+}
+
+export interface IAssetStore {
+  saveMetadata(asset: Asset): Promise<void>;
+  saveData(id: AssetId, data: Buffer): Promise<void>;
+  getMetadata(id: AssetId): Promise<Asset | undefined>;
+  getData(id: AssetId): Promise<Buffer | undefined>;
+  list(filter?: AssetListFilter): Promise<Asset[]>;
+  delete(id: AssetId): Promise<boolean>;
 }

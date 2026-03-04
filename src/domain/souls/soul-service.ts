@@ -2,29 +2,32 @@
  * Soul Service — domain logic for Design Soul lifecycle.
  *
  * Orchestrates registration, approval, listing, and retrieval
- * of Design Souls and their skeleton templates.
+ * of Design Souls and their layout recipes.
  */
 
-import type { SoulId } from '../../types/common.js';
+import type { SoulId, SlideId } from '../../types/common.js';
 import type {
   DesignSoul,
   DesignSoulInput,
-  SkeletonTemplate,
+  LayoutRecipe,
   SoulStatus,
 } from '../../types/design-soul.js';
-import type { ISoulStore } from '../../storage/interfaces.js';
+import type { ISoulStore, ISlideStore } from '../../storage/interfaces.js';
 import type { Clock } from '../../infrastructure/clock.js';
 import type { Logger } from '../../infrastructure/logger.js';
-import { generateSoulId } from '../../infrastructure/id-generator.js';
+import { generateSoulId, generateTemplateId } from '../../infrastructure/id-generator.js';
 import { SoulNotFoundError, PenguiError, ErrorCode } from '../../types/errors.js';
 import { generateTokens } from './token-generator.js';
-import { SkeletonGenerator } from './skeleton-generator.js';
+import { generateUtilityCss } from './utility-css-generator.js';
+import { generateStyleGuide } from './style-guide-generator.js';
+import { RecipeGenerator } from './recipe-generator.js';
 
 export class SoulService {
-  private readonly skeletonGenerator = new SkeletonGenerator();
+  private readonly recipeGenerator = new RecipeGenerator();
 
   constructor(
     private readonly store: ISoulStore,
+    private readonly slideStore: ISlideStore,
     private readonly clock: Clock,
     private readonly logger: Logger,
   ) {}
@@ -32,13 +35,15 @@ export class SoulService {
   /**
    * Register a new Design Soul.
    *
-   * Generates CSS tokens from the provided layers, creates the soul
-   * entity in 'draft' status, and persists it.
+   * Generates CSS tokens, utility CSS, and style guide from the provided
+   * layers, creates the soul entity in 'draft' status, and persists it.
    */
   async register(input: DesignSoulInput): Promise<DesignSoul> {
     this.logger.info('Registering new Design Soul', { name: input.name });
 
     const { cssString, tokenNames, allowedFonts } = generateTokens(input.layers);
+    const utilityCss = generateUtilityCss();
+    const styleGuide = generateStyleGuide(input.layers, tokenNames);
 
     const now = this.clock.now();
     const soul: DesignSoul = {
@@ -50,6 +55,8 @@ export class SoulService {
       cssTokens: cssString,
       tokenNames,
       allowedFonts,
+      utilityCss,
+      styleGuide,
       createdAt: now,
       updatedAt: now,
     };
@@ -65,10 +72,10 @@ export class SoulService {
    * Approve a draft Design Soul.
    *
    * Verifies the soul exists and is in 'draft' status, generates
-   * skeleton templates, updates the status to 'approved', and
-   * persists the skeletons.
+   * layout recipes, updates the status to 'approved', and
+   * persists the recipes.
    */
-  async approve(soulId: SoulId): Promise<{ soul: DesignSoul; skeletons: SkeletonTemplate[] }> {
+  async approve(soulId: SoulId): Promise<{ soul: DesignSoul; recipes: LayoutRecipe[] }> {
     this.logger.info('Approving Design Soul', { soulId });
 
     const existing = await this.store.get(soulId);
@@ -84,8 +91,8 @@ export class SoulService {
       );
     }
 
-    // Generate skeleton templates
-    const skeletons = this.skeletonGenerator.generateAll(
+    // Generate layout recipes
+    const recipes = this.recipeGenerator.generateAll(
       soulId,
       existing.cssTokens,
       this.clock,
@@ -101,14 +108,14 @@ export class SoulService {
     };
 
     await this.store.save(updatedSoul);
-    await this.store.saveSkeletons(soulId, skeletons);
+    await this.store.saveRecipes(soulId, recipes);
 
     this.logger.info('Design Soul approved', {
       soulId,
-      skeletonCount: skeletons.length,
+      recipeCount: recipes.length,
     });
 
-    return { soul: updatedSoul, skeletons };
+    return { soul: updatedSoul, recipes };
   }
 
   /**
@@ -120,24 +127,80 @@ export class SoulService {
   }
 
   /**
-   * Retrieve a Design Soul by ID, optionally including its skeleton templates.
+   * Retrieve a Design Soul by ID, optionally including its layout recipes.
    */
   async get(
     soulId: SoulId,
-    includeSkeletons?: boolean,
-  ): Promise<{ soul: DesignSoul; skeletons?: SkeletonTemplate[] }> {
-    this.logger.debug('Getting Design Soul', { soulId, includeSkeletons });
+    includeRecipes?: boolean,
+  ): Promise<{ soul: DesignSoul; recipes?: LayoutRecipe[] }> {
+    this.logger.debug('Getting Design Soul', { soulId, includeRecipes });
 
     const soul = await this.store.get(soulId);
     if (!soul) {
       throw new SoulNotFoundError(soulId);
     }
 
-    let skeletons: SkeletonTemplate[] | undefined;
-    if (includeSkeletons) {
-      skeletons = await this.store.getSkeletons(soulId);
+    let recipes: LayoutRecipe[] | undefined;
+    if (includeRecipes) {
+      recipes = await this.store.getRecipes(soulId);
     }
 
-    return { soul, skeletons };
+    return { soul, recipes };
+  }
+
+  /**
+   * Save a validated slide as a reusable layout recipe (template).
+   *
+   * The slide must belong to an existing soul and must have passed
+   * validation before it can be saved as a template.
+   */
+  async saveAsTemplate(
+    soulId: SoulId,
+    slideId: SlideId,
+    name: string,
+    tags: string[],
+    description: string,
+  ): Promise<LayoutRecipe> {
+    // 1. Verify soul exists
+    const soul = await this.store.get(soulId);
+    if (!soul) throw new SoulNotFoundError(soulId);
+
+    // 2. Get slide from slideStore
+    const slide = await this.slideStore.get(slideId);
+    if (!slide) {
+      throw new PenguiError(ErrorCode.SLIDE_NOT_FOUND, `Slide "${slideId}" not found`, {
+        slideId,
+      });
+    }
+
+    // 3. Verify slide passed validation
+    if (!slide.lastValidation?.passed) {
+      throw new PenguiError(
+        ErrorCode.VALIDATION_FAILED,
+        'Slide must pass validation before saving as template',
+        { slideId, validation: slide.lastValidation },
+      );
+    }
+
+    // 4. Create recipe
+    const recipe: LayoutRecipe = {
+      id: generateTemplateId(),
+      soulId,
+      type: name.toLowerCase().replace(/\s+/g, '-'),
+      name,
+      description,
+      tags,
+      source: 'user-saved',
+      html: slide.html,
+      createdAt: this.clock.now(),
+      savedFromSlideId: slideId,
+    };
+
+    // 5. Store it
+    await this.store.addRecipe(soulId, recipe);
+
+    this.logger.info('Saved slide as template', { soulId, slideId, recipeId: recipe.id });
+
+    return recipe;
   }
 }

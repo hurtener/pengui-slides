@@ -17,13 +17,14 @@ export function registerExportHtmlTool(server: McpServer, container: ServiceCont
     'export_html',
     {
       title: 'Export HTML',
-      description: 'Export a deck as a self-contained HTML file with optional slide navigation.',
+      description: 'Export a deck as a self-contained HTML file with optional slide navigation. Set include_data to true to also receive the HTML content in the response.',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to export.'),
         include_navigation: z.boolean().optional().describe('Whether to include slide navigation controls. Defaults to false.'),
+        include_data: z.boolean().optional().describe('If true, include the full HTML content as an embedded resource in the response. Defaults to false.'),
       }),
     },
-    async ({ deck_id, include_navigation }) => {
+    async ({ deck_id, include_navigation, include_data }) => {
       try {
         // Get deck info and all slides
         const summary = await container.deckService.getDeckSummary(deck_id);
@@ -43,9 +44,31 @@ export function registerExportHtmlTool(server: McpServer, container: ServiceCont
         const filePath = path.join(outputDir, result.filename);
         fs.writeFileSync(filePath, result.data);
 
-        return textResponse({
+        const metadata = {
           file_path: filePath,
-        });
+          filename: result.filename,
+          file_size_bytes: result.fileSizeBytes,
+          slide_count: result.slideCount,
+          mime_type: result.mimeType,
+        };
+
+        if (include_data) {
+          return {
+            content: [
+              { type: 'text' as const, text: JSON.stringify(metadata, null, 2) },
+              {
+                type: 'resource' as const,
+                resource: {
+                  uri: `pengui://exports/${result.filename}`,
+                  mimeType: result.mimeType,
+                  text: result.data.toString('utf-8'),
+                },
+              },
+            ],
+          };
+        }
+
+        return textResponse(metadata);
       } catch (error) {
         return handleToolError(error);
       }

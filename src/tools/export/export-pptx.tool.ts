@@ -17,15 +17,16 @@ export function registerExportPptxTool(server: McpServer, container: ServiceCont
     'export_pptx',
     {
       title: 'Export PPTX',
-      description: 'Export a deck as a PowerPoint (.pptx) file. Returns the output file path and metadata.',
+      description: 'Export a deck as a PowerPoint (.pptx) file. Returns metadata and file path. Set include_data to true to also receive the binary content as base64.',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to export.'),
         resolution: z.enum(['1080p', '4k']).optional().describe('Slide resolution. Defaults to "1080p".'),
         image_format: z.enum(['png', 'jpeg']).optional().describe('Image format for slides. Defaults to "png".'),
         jpeg_quality: z.number().optional().describe('JPEG quality (1-100). Only used when image_format is "jpeg". Defaults to 90.'),
+        include_data: z.boolean().optional().describe('If true, include the PPTX binary as a base64 embedded resource in the response. Defaults to false.'),
       }),
     },
-    async ({ deck_id, resolution, image_format, jpeg_quality }) => {
+    async ({ deck_id, resolution, image_format, jpeg_quality, include_data }) => {
       try {
         // Get deck info and all slides
         const summary = await container.deckService.getDeckSummary(deck_id);
@@ -47,11 +48,31 @@ export function registerExportPptxTool(server: McpServer, container: ServiceCont
         const filePath = path.join(outputDir, result.filename);
         fs.writeFileSync(filePath, result.data);
 
-        return textResponse({
+        const metadata = {
           file_path: filePath,
+          filename: result.filename,
           file_size_bytes: result.fileSizeBytes,
           slide_count: result.slideCount,
-        });
+          mime_type: result.mimeType,
+        };
+
+        if (include_data) {
+          return {
+            content: [
+              { type: 'text' as const, text: JSON.stringify(metadata, null, 2) },
+              {
+                type: 'resource' as const,
+                resource: {
+                  uri: `pengui://exports/${result.filename}`,
+                  mimeType: result.mimeType,
+                  blob: result.data.toString('base64'),
+                },
+              },
+            ],
+          };
+        }
+
+        return textResponse(metadata);
       } catch (error) {
         return handleToolError(error);
       }

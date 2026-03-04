@@ -7,6 +7,8 @@
  */
 
 import type { Logger } from '../../infrastructure/logger.js';
+import type { AssetService } from '../assets/asset-service.js';
+import { resolveAssetRefs } from '../assets/asset-resolver.js';
 import type { PlaywrightPool } from './playwright-pool.js';
 import type { SlideRenderer } from './slide-renderer.js';
 import type { Slide } from '../../types/deck.js';
@@ -24,6 +26,7 @@ export class PdfExporter {
     private readonly renderer: SlideRenderer,
     private readonly pool: PlaywrightPool,
     private readonly logger: Logger,
+    private readonly assetService?: AssetService,
   ) {}
 
   /**
@@ -130,10 +133,15 @@ ${imgTags}
    * page breaks and use Playwright's page.pdf() directly.
    */
   private async exportDirect(slides: Slide[]): Promise<Buffer> {
-    const sections = slides
+    // Resolve asset refs in each slide's HTML before combining
+    const resolvedHtmls = this.assetService
+      ? await Promise.all(slides.map((s) => resolveAssetRefs(s.html, this.assetService!)))
+      : slides.map((s) => s.html);
+
+    const sections = resolvedHtmls
       .map(
-        (slide) =>
-          `<section class="slide-page">${slide.html}</section>`,
+        (html) =>
+          `<section class="slide-page">${html}</section>`,
       )
       .join('\n');
 

@@ -117,4 +117,5 @@ export interface UpdateSlideInput {
   slideId: string;
   html?: string;
   metadata?: Partial<AddSlideInput['metadata']>;
+  lastValidation?: ValidationResult;
 }

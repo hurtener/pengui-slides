@@ -56,6 +56,7 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
     },
     async ({ deck_id, html, metadata, position }) => {
       try {
+        // 1. Add slide (stores with raw HTML)
         const slide = await container.deckService.addSlide({
           deckId: deck_id,
           html,
@@ -73,12 +74,29 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
           position,
         });
 
-        // Retrieve the deck to get the soul ID and slide count
+        // 2. Embed metadata into HTML
+        const embeddedHtml = container.metadataEmbedder.embed(html, slide.metadata);
+
+        // 3. Update the slide with embedded HTML
+        await container.deckService.updateSlide({
+          deckId: deck_id,
+          slideId: slide.id as string,
+          html: embeddedHtml,
+        });
+
+        // 4. Retrieve the deck to get the soul ID and slide count
         const deck = await container.deckService.getDeckSummary(deck_id);
         const sId = soulId(deck.soulId as string);
 
-        // Validate the slide HTML against the deck's Design Soul
-        const validation = await container.validationService.validateSlide(html, sId);
+        // 5. Validate the embedded HTML against the deck's Design Soul
+        const validation = await container.validationService.validateSlide(embeddedHtml, sId);
+
+        // 6. Store the validation result on the slide
+        await container.deckService.updateSlide({
+          deckId: deck_id,
+          slideId: slide.id as string,
+          lastValidation: validation,
+        });
 
         return textResponse({
           slide_id: slide.id,

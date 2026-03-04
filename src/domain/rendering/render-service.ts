@@ -8,6 +8,7 @@
 
 import type { PenguiConfig } from '../../config.js';
 import type { Logger } from '../../infrastructure/logger.js';
+import type { AssetService } from '../assets/asset-service.js';
 import type { Slide } from '../../types/deck.js';
 import type {
   PreviewResult,
@@ -38,6 +39,7 @@ export class RenderService {
   constructor(
     private readonly config: PenguiConfig,
     private readonly logger: Logger,
+    private readonly assetService?: AssetService,
   ) {}
 
   // ── Preview ──────────────────────────────────────────────────
@@ -148,6 +150,7 @@ export class RenderService {
       this.slideRenderer = new SlideRenderer(
         pool,
         this.logger.child('slide-renderer'),
+        this.assetService,
       );
     }
     return this.slideRenderer;
@@ -183,6 +186,7 @@ export class RenderService {
         renderer,
         pool,
         this.logger.child('pdf-exporter'),
+        this.assetService,
       );
     }
     return this.pdfExporter;
@@ -192,6 +196,7 @@ export class RenderService {
     if (!this.htmlExporter) {
       this.htmlExporter = new HtmlExporter(
         this.logger.child('html-exporter'),
+        this.assetService,
       );
     }
     return this.htmlExporter;

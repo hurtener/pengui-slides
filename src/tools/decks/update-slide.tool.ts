@@ -85,12 +85,30 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
 
         const slide = await container.deckService.updateSlide(updateInput as Parameters<typeof container.deckService.updateSlide>[0]);
 
-        // Re-validate if HTML was changed
+        // If HTML was changed, embed metadata and re-validate
         let validation;
         if (html !== undefined) {
+          // Embed metadata into the updated HTML
+          const embeddedHtml = container.metadataEmbedder.update(html, slide.metadata);
+
+          // Update the slide with embedded HTML
+          await container.deckService.updateSlide({
+            deckId: deck_id,
+            slideId: slide_id,
+            html: embeddedHtml,
+          });
+
+          // Validate the embedded HTML
           const deck = await container.deckService.getDeckSummary(deck_id);
           const sId = soulId(deck.soulId as string);
-          validation = await container.validationService.validateSlide(html, sId);
+          validation = await container.validationService.validateSlide(embeddedHtml, sId);
+
+          // Store the validation result on the slide
+          await container.deckService.updateSlide({
+            deckId: deck_id,
+            slideId: slide_id,
+            lastValidation: validation,
+          });
         }
 
         return textResponse({

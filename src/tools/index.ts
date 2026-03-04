@@ -1,8 +1,8 @@
 /**
  * Master tool registry for Pengui Slides MCP Server.
  *
- * Imports and registers all 16 MCP tools:
- *   4 soul tools + 7 deck tools + 1 validation tool + 4 export tools.
+ * Imports and registers all 21 MCP tools:
+ *   5 soul tools + 7 deck tools + 4 asset tools + 1 validation tool + 4 export tools.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -13,6 +13,7 @@ import { registerRegisterDesignSoulTool } from './souls/register-design-soul.too
 import { registerApproveDesignSoulTool } from './souls/approve-design-soul.tool.js';
 import { registerListDesignSoulsTool } from './souls/list-design-souls.tool.js';
 import { registerGetDesignSoulTool } from './souls/get-design-soul.tool.js';
+import { registerSaveAsTemplateTool } from './souls/save-as-template.tool.js';
 
 // Deck tools
 import { registerCreateDeckTool } from './decks/create-deck.tool.js';
@@ -26,6 +27,12 @@ import { registerGetDeckSummaryTool } from './decks/get-deck-summary.tool.js';
 // Validation tools
 import { registerValidateSlideTool } from './validation/validate-slide.tool.js';
 
+// Asset tools
+import { registerUploadAssetTool } from './assets/upload-asset.tool.js';
+import { registerListAssetsTool } from './assets/list-assets.tool.js';
+import { registerGetAssetTool } from './assets/get-asset.tool.js';
+import { registerDeleteAssetTool } from './assets/delete-asset.tool.js';
+
 // Export tools
 import { registerRenderPreviewTool } from './export/render-preview.tool.js';
 import { registerExportPptxTool } from './export/export-pptx.tool.js';
@@ -38,6 +45,7 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerApproveDesignSoulTool(server, container);
   registerListDesignSoulsTool(server, container);
   registerGetDesignSoulTool(server, container);
+  registerSaveAsTemplateTool(server, container);
 
   // Deck tools
   registerCreateDeckTool(server, container);
@@ -47,6 +55,12 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerRemoveSlideTool(server, container);
   registerReorderSlidesTool(server, container);
   registerGetDeckSummaryTool(server, container);
+
+  // Asset tools
+  registerUploadAssetTool(server, container);
+  registerListAssetsTool(server, container);
+  registerGetAssetTool(server, container);
+  registerDeleteAssetTool(server, container);
 
   // Validation tools
   registerValidateSlideTool(server, container);

@@ -17,13 +17,14 @@ export function registerExportPdfTool(server: McpServer, container: ServiceConta
     'export_pdf',
     {
       title: 'Export PDF',
-      description: 'Export a deck as a PDF file. Returns the output file path and metadata.',
+      description: 'Export a deck as a PDF file. Returns metadata and file path. Set include_data to true to also receive the binary content as base64.',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to export.'),
         mode: z.enum(['image', 'direct']).optional().describe('PDF generation mode: "image" renders slides to PNG first, "direct" uses page.pdf(). Defaults to "image".'),
+        include_data: z.boolean().optional().describe('If true, include the PDF binary as a base64 embedded resource in the response. Defaults to false.'),
       }),
     },
-    async ({ deck_id, mode }) => {
+    async ({ deck_id, mode, include_data }) => {
       try {
         // Get deck info and all slides
         const summary = await container.deckService.getDeckSummary(deck_id);
@@ -39,11 +40,31 @@ export function registerExportPdfTool(server: McpServer, container: ServiceConta
         const filePath = path.join(outputDir, result.filename);
         fs.writeFileSync(filePath, result.data);
 
-        return textResponse({
+        const metadata = {
           file_path: filePath,
+          filename: result.filename,
           file_size_bytes: result.fileSizeBytes,
           slide_count: result.slideCount,
-        });
+          mime_type: result.mimeType,
+        };
+
+        if (include_data) {
+          return {
+            content: [
+              { type: 'text' as const, text: JSON.stringify(metadata, null, 2) },
+              {
+                type: 'resource' as const,
+                resource: {
+                  uri: `pengui://exports/${result.filename}`,
+                  mimeType: result.mimeType,
+                  blob: result.data.toString('base64'),
+                },
+              },
+            ],
+          };
+        }
+
+        return textResponse(metadata);
       } catch (error) {
         return handleToolError(error);
       }

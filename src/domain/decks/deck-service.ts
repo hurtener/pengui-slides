@@ -223,6 +223,11 @@ export class DeckService {
       slide.metadata.revisionHash = sha256(input.html);
     }
 
+    // Update lastValidation if provided
+    if (input.lastValidation !== undefined) {
+      slide.lastValidation = input.lastValidation;
+    }
+
     // Merge metadata fields if provided
     if (input.metadata) {
       const m = input.metadata;

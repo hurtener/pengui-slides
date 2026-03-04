@@ -12,7 +12,10 @@ import type {
   PreviewResult,
   RenderOptions,
 } from '../../types/export.js';
-import { DEFAULT_PREVIEW_OPTIONS } from '../../types/export.js';
+import {
+  DEFAULT_PREVIEW_OPTIONS,
+  DEFAULT_RENDER_OPTIONS,
+} from '../../types/export.js';
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -39,9 +42,18 @@ export class PreviewRenderer {
   ): Promise<PreviewResult> {
     const opts: PreviewOptions = { ...DEFAULT_PREVIEW_OPTIONS, ...options };
 
+    // Render at full slide resolution (1920x1080) so that CSS layouts,
+    // fonts, and absolute positioning work correctly.
+    // Previews are rendered at native resolution to ensure all CSS
+    // properties, custom properties, and layouts resolve properly.
+    // The resulting image is returned as base64 for the client to
+    // display at the desired preview dimensions.
+    const nativeWidth = DEFAULT_RENDER_OPTIONS.width;
+    const nativeHeight = DEFAULT_RENDER_OPTIONS.height;
+
     const renderOptions: Partial<RenderOptions> = {
-      width: opts.width,
-      height: opts.height,
+      width: nativeWidth,
+      height: nativeHeight,
       deviceScaleFactor: 1,
       format: opts.format,
       ...(opts.quality !== undefined ? { quality: opts.quality } : {}),

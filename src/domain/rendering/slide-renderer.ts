@@ -6,6 +6,8 @@
  */
 
 import type { Logger } from '../../infrastructure/logger.js';
+import type { AssetService } from '../assets/asset-service.js';
+import { resolveAssetRefs } from '../assets/asset-resolver.js';
 import type { PlaywrightPool } from './playwright-pool.js';
 import type {
   RenderOptions,
@@ -20,6 +22,7 @@ export class SlideRenderer {
   constructor(
     private readonly pool: PlaywrightPool,
     private readonly logger: Logger,
+    private readonly assetService?: AssetService,
   ) {}
 
   /**
@@ -56,7 +59,15 @@ export class SlideRenderer {
         height: opts.height,
       });
 
-      await page.setContent(html, { waitUntil: 'networkidle' });
+      // Resolve asset://ID refs to data URIs before rendering
+      const resolved = this.assetService
+        ? await resolveAssetRefs(html, this.assetService)
+        : html;
+
+      await page.setContent(resolved, { waitUntil: 'load' });
+
+      // Allow CSS custom properties, fonts, and layout to fully resolve
+      await page.waitForTimeout(100);
 
       const screenshotOptions: Record<string, unknown> = {
         type: opts.format,

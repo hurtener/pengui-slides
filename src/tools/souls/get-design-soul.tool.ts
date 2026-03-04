@@ -2,7 +2,7 @@
  * get_design_soul MCP tool.
  *
  * Retrieves a single Design Soul by ID, optionally including
- * its generated skeleton templates.
+ * its layout recipes and style guide.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -22,20 +22,36 @@ export function registerGetDesignSoulTool(
     {
       title: 'Get Design Soul',
       description:
-        'Retrieve a Design Soul by its ID. Optionally include the generated skeleton ' +
-        'templates (only available for approved souls).',
+        'Retrieve a Design Soul by its ID. Optionally include the layout recipes ' +
+        '(only available for approved souls) and the generated style guide.',
       inputSchema: z.object({
         soul_id: SoulIdSchema,
-        include_skeletons: z
+        include_recipes: z
           .boolean()
           .optional()
           .default(false)
-          .describe('Whether to include skeleton templates in the response'),
+          .describe('Whether to include layout recipes in the response'),
+        /** @deprecated Use include_recipes instead */
+        include_skeletons: z
+          .boolean()
+          .optional()
+          .describe('[Deprecated] Alias for include_recipes'),
+        include_style_guide: z
+          .boolean()
+          .optional()
+          .default(true)
+          .describe('Whether to include the style guide in the response'),
       }),
     },
-    async ({ soul_id, include_skeletons }) => {
+    async ({ soul_id, include_recipes, include_skeletons, include_style_guide }) => {
       try {
-        const { soul, skeletons } = await container.soulService.get(soulId(soul_id), include_skeletons);
+        // include_skeletons is a deprecated alias for include_recipes
+        const shouldIncludeRecipes = include_recipes || include_skeletons || false;
+
+        const { soul, recipes } = await container.soulService.get(
+          soulId(soul_id),
+          shouldIncludeRecipes,
+        );
 
         const response: Record<string, unknown> = {
           soul: {
@@ -43,18 +59,25 @@ export function registerGetDesignSoulTool(
             name: soul.name,
             status: soul.status,
             css_tokens: soul.cssTokens,
+            utility_css: soul.utilityCss,
             token_names: soul.tokenNames,
             allowed_fonts: soul.allowedFonts,
           },
         };
 
-        if (skeletons) {
-          response.skeletons = skeletons.map((s) => ({
-            id: s.id,
-            type: s.type,
-            name: s.name,
-            description: s.description,
-            html: s.html,
+        if (include_style_guide) {
+          response.style_guide = soul.styleGuide;
+        }
+
+        if (recipes) {
+          response.layout_recipes = recipes.map((r) => ({
+            id: r.id,
+            type: r.type,
+            name: r.name,
+            description: r.description,
+            tags: r.tags,
+            source: r.source,
+            html: r.html,
           }));
         }
 

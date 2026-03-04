@@ -6,7 +6,7 @@
  */
 
 import type { SoulId } from '../../types/common.js';
-import type { DesignSoul, SkeletonTemplate, SoulStatus } from '../../types/design-soul.js';
+import type { DesignSoul, LayoutRecipe, SoulStatus } from '../../types/design-soul.js';
 import type { ISoulStore } from '../interfaces.js';
 
 function clone<T>(obj: T): T {
@@ -15,7 +15,7 @@ function clone<T>(obj: T): T {
 
 export class InMemorySoulStore implements ISoulStore {
   private souls = new Map<string, DesignSoul>();
-  private skeletons = new Map<string, SkeletonTemplate[]>();
+  private recipes = new Map<string, LayoutRecipe[]>();
 
   async save(soul: DesignSoul): Promise<void> {
     this.souls.set(soul.id, clone(soul));
@@ -37,16 +37,22 @@ export class InMemorySoulStore implements ISoulStore {
 
   async delete(id: SoulId): Promise<boolean> {
     const existed = this.souls.delete(id);
-    this.skeletons.delete(id);
+    this.recipes.delete(id);
     return existed;
   }
 
-  async saveSkeletons(soulId: SoulId, templates: SkeletonTemplate[]): Promise<void> {
-    this.skeletons.set(soulId, clone(templates));
+  async saveRecipes(soulId: SoulId, recipes: LayoutRecipe[]): Promise<void> {
+    this.recipes.set(soulId, clone(recipes));
   }
 
-  async getSkeletons(soulId: SoulId): Promise<SkeletonTemplate[]> {
-    const templates = this.skeletons.get(soulId);
-    return templates ? clone(templates) : [];
+  async getRecipes(soulId: SoulId): Promise<LayoutRecipe[]> {
+    const recipes = this.recipes.get(soulId);
+    return recipes ? clone(recipes) : [];
+  }
+
+  async addRecipe(soulId: SoulId, recipe: LayoutRecipe): Promise<void> {
+    const existing = this.recipes.get(soulId) ?? [];
+    existing.push(clone(recipe));
+    this.recipes.set(soulId, existing);
   }
 }
