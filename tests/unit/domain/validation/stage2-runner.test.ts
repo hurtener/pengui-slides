@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from 'vitest';
-import type { Page } from 'playwright';
+import type { BrowserContext, Page } from 'playwright';
 import { chromium, type Browser } from 'playwright';
 import { Stage2Runner } from '../../../../src/domain/validation/stage2/stage2-runner.js';
 
@@ -16,17 +16,20 @@ const validHtml = `<!DOCTYPE html>
 describe('Stage2Runner', () => {
   let browser: Browser;
   let page: Page;
+  const contexts: BrowserContext[] = [];
 
   afterAll(async () => {
-    if (page) await page.close();
+    if (page && !page.isClosed()) await page.close();
+    await Promise.all(contexts.map((context) => context.close().catch(() => undefined)));
     if (browser) await browser.close();
-  });
+  }, 20000);
 
   it('runs stage 2 checks and returns issues', async () => {
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({
       viewport: { width: 1920, height: 1080 },
     });
+    contexts.push(context);
     page = await context.newPage();
     await page.setContent(validHtml, { waitUntil: 'load' });
 
@@ -56,6 +59,7 @@ describe('Stage2Runner', () => {
     const context = await browser.newContext({
       viewport: { width: 1920, height: 1080 },
     });
+    contexts.push(context);
     const overflowPage = await context.newPage();
     await overflowPage.setContent(overflowHtml, { waitUntil: 'load' });
 

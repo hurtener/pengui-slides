@@ -9,6 +9,7 @@ import { z } from 'zod';
 import type { ServiceContainer } from '../../container.js';
 import { textResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
+import { SlideNotFoundError } from '../../types/errors.js';
 
 export function registerGetSlideTool(server: McpServer, container: ServiceContainer): void {
   server.registerTool(
@@ -21,10 +22,12 @@ export function registerGetSlideTool(server: McpServer, container: ServiceContai
         slide_id: z.string().describe('The slide to retrieve.'),
       }),
     },
-    async ({ deck_id: _deck_id, slide_id }) => {
+    async ({ deck_id, slide_id }) => {
       try {
-        // Verify deck exists via getSlide (slide stores deckId)
         const slide = await container.deckService.getSlide(slide_id);
+        if ((slide.deckId as string) !== deck_id) {
+          throw new SlideNotFoundError(slide_id);
+        }
 
         return textResponse({
           html: slide.html,

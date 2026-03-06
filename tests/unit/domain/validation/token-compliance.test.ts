@@ -100,4 +100,21 @@ describe('TokenComplianceCheck', () => {
     const issues = check.run(html, tokenNames, allowedFonts);
     expect(issues).toHaveLength(0);
   });
+
+  it('flags unknown token references', () => {
+    const html = `
+      <style>
+        .slide { color: var(--color-missing); }
+      </style>
+      <div class="slide">Bad</div>`;
+
+    const issues = check.run(html, tokenNames, allowedFonts);
+    expect(issues.some((issue) => issue.actual === '--color-missing')).toBe(true);
+  });
+
+  it('checks inline styles for literal colors', () => {
+    const html = '<div class="slide" style="color: #ff0000;">Bad</div>';
+    const issues = check.run(html, tokenNames, allowedFonts);
+    expect(issues.length).toBeGreaterThan(0);
+  });
 });

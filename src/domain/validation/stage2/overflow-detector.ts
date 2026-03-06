@@ -12,6 +12,7 @@ import type { Stage2Check, ValidationIssue } from '../../../types/validation.js'
 
 const SLIDE_WIDTH = 1920;
 const SLIDE_HEIGHT = 1080;
+const SAFE_AREA_INSET = 48;
 
 interface OverflowInfo {
   selector: string;
@@ -27,7 +28,7 @@ export class OverflowDetector implements Stage2Check {
     const pwPage = page as import('playwright').Page;
 
     const overflows: OverflowInfo[] = await pwPage.evaluate(
-      ([slideW, slideH]: [number, number]) => {
+      ([slideW, slideH, safeInset]: [number, number, number]) => {
         const results: OverflowInfo[] = [];
         const allElements = document.querySelectorAll('.slide *');
 
@@ -37,10 +38,10 @@ export class OverflowDetector implements Stage2Check {
           // Skip zero-size elements
           if (rect.width === 0 || rect.height === 0) continue;
 
-          const overflowsRight = rect.right > slideW;
-          const overflowsBottom = rect.bottom > slideH;
-          const overflowsLeft = rect.left < 0;
-          const overflowsTop = rect.top < 0;
+          const overflowsRight = rect.right > slideW - safeInset;
+          const overflowsBottom = rect.bottom > slideH - safeInset;
+          const overflowsLeft = rect.left < safeInset;
+          const overflowsTop = rect.top < safeInset;
 
           if (overflowsRight || overflowsBottom || overflowsLeft || overflowsTop) {
             results.push({
@@ -61,7 +62,7 @@ export class OverflowDetector implements Stage2Check {
 
         return results;
       },
-      [SLIDE_WIDTH, SLIDE_HEIGHT] as [number, number]
+      [SLIDE_WIDTH, SLIDE_HEIGHT, SAFE_AREA_INSET] as [number, number, number]
     );
 
     for (const overflow of overflows) {
@@ -74,13 +75,13 @@ export class OverflowDetector implements Stage2Check {
       issues.push({
         id: `${this.id}-${issues.length}`,
         stage: 'stage2_render',
-        severity: 'warning',
+        severity: 'error',
         rule: this.id,
-        message: `Element "${overflow.selector}" overflows the slide bounds (${directions.join(', ')}). Bounding rect: [${overflow.rect.left}, ${overflow.rect.top}, ${overflow.rect.right}, ${overflow.rect.bottom}].`,
+        message: `Element "${overflow.selector}" overflows the safe area (${directions.join(', ')}). Bounding rect: [${overflow.rect.left}, ${overflow.rect.top}, ${overflow.rect.right}, ${overflow.rect.bottom}].`,
         element: overflow.selector,
-        expected: `Within 0,0 to ${SLIDE_WIDTH},${SLIDE_HEIGHT}`,
+        expected: `Within ${SAFE_AREA_INSET},${SAFE_AREA_INSET} to ${SLIDE_WIDTH - SAFE_AREA_INSET},${SLIDE_HEIGHT - SAFE_AREA_INSET}`,
         actual: `[${overflow.rect.left}, ${overflow.rect.top}] to [${overflow.rect.right}, ${overflow.rect.bottom}]`,
-        fixSuggestion: 'Adjust element size or position to fit within the 1920x1080 slide bounds.',
+        fixSuggestion: 'Adjust element size or position so all content stays inside the safe-area inset.',
       });
     }
 

@@ -49,7 +49,19 @@ export class StructuralCheck implements Stage1Check {
       // Validate the JSON inside the meta comment
       const jsonStr = metaMatch[1].trim();
       try {
-        JSON.parse(jsonStr);
+        const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+
+        if (!parsed.title || !parsed.type) {
+          issues.push({
+            id: `${this.id}-meta-required-fields`,
+            stage: 'stage1_lint',
+            severity: 'error',
+            rule: this.id,
+            message: 'The @slide-meta comment must include at least "title" and "type".',
+            actual: jsonStr.slice(0, 100),
+            fixSuggestion: 'Include title and type fields in the @slide-meta JSON object.',
+          });
+        }
       } catch {
         issues.push({
           id: `${this.id}-meta-invalid`,
@@ -76,6 +88,19 @@ export class StructuralCheck implements Stage1Check {
         expected: '<div class="slide">',
         fixSuggestion: 'Wrap slide content in a <div class="slide">...</div> container.',
       });
+    } else if (metaMatch) {
+      const metaIndex = html.indexOf(metaMatch[0]);
+      const slideIndex = html.indexOf('<div class="slide"');
+      if (metaIndex > slideIndex) {
+        issues.push({
+          id: `${this.id}-meta-order`,
+          stage: 'stage1_lint',
+          severity: 'error',
+          rule: this.id,
+          message: 'The @slide-meta comment must appear before the root .slide container.',
+          fixSuggestion: 'Move the metadata comment so it is the first non-rendered block before <div class="slide">.',
+        });
+      }
     }
 
     return issues;

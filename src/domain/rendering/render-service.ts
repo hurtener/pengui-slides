@@ -122,6 +122,7 @@ export class RenderService {
     if (this.pool) {
       await this.pool.shutdown();
     }
+    this.slideRenderer?.clearCache();
 
     this.pool = null;
     this.slideRenderer = null;

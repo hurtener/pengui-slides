@@ -12,6 +12,7 @@ import type { ServiceContainer } from '../../container.js';
 import { BooleanParamSchema } from '../_shared/schemas.js';
 import { textResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
+import { validateSlidesForExport } from './export-validation.js';
 
 export function registerExportPptxTool(server: McpServer, container: ServiceContainer): void {
   server.registerTool(
@@ -34,6 +35,7 @@ export function registerExportPptxTool(server: McpServer, container: ServiceCont
         const slides = await Promise.all(
           summary.slides.map((s) => container.deckService.getSlide(s.id as string)),
         );
+        await validateSlidesForExport(container, deck_id, summary.soulId as string, slides);
 
         // Build export options
         const options: { resolution?: '1080p' | '4k'; imageFormat?: 'png' | 'jpeg'; jpegQuality?: number } = {};

@@ -39,7 +39,7 @@ describe('RenderService', () => {
 
   afterAll(async () => {
     await service.shutdown();
-  });
+  }, 20000);
 
   it('exports HTML synchronously (no Playwright)', async () => {
     const slides = [makeSlide('s1', simpleHtml, 0)];

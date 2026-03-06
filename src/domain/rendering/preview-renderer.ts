@@ -41,26 +41,22 @@ export class PreviewRenderer {
     options?: Partial<PreviewOptions>,
   ): Promise<PreviewResult> {
     const opts: PreviewOptions = { ...DEFAULT_PREVIEW_OPTIONS, ...options };
-
-    // Render at full slide resolution (1920x1080) so that CSS layouts,
-    // fonts, and absolute positioning work correctly.
-    // Previews are rendered at native resolution to ensure all CSS
-    // properties, custom properties, and layouts resolve properly.
-    // The resulting image is returned as base64 for the client to
-    // display at the desired preview dimensions.
     const nativeWidth = DEFAULT_RENDER_OPTIONS.width;
     const nativeHeight = DEFAULT_RENDER_OPTIONS.height;
+    const scale = Math.min(opts.width / nativeWidth, opts.height / nativeHeight);
+
+    const previewHtml = this.injectPreviewScaling(input.html, nativeWidth, nativeHeight, scale);
 
     const renderOptions: Partial<RenderOptions> = {
-      width: nativeWidth,
-      height: nativeHeight,
+      width: opts.width,
+      height: opts.height,
       deviceScaleFactor: 1,
       format: opts.format,
       ...(opts.quality !== undefined ? { quality: opts.quality } : {}),
     };
 
     const result = await this.renderer.render(
-      input.html,
+      previewHtml,
       input.slideId,
       renderOptions,
     );
@@ -98,5 +94,38 @@ export class PreviewRenderer {
 
     this.logger.info('Previews rendered', { count: results.length });
     return results;
+  }
+
+  private injectPreviewScaling(
+    html: string,
+    nativeWidth: number,
+    nativeHeight: number,
+    scale: number,
+  ): string {
+    const previewStyles = `
+<style data-pengui-preview-scale>
+  html, body {
+    width: ${nativeWidth}px !important;
+    height: ${nativeHeight}px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  body {
+    transform: scale(${scale});
+    transform-origin: top left;
+  }
+</style>`;
+
+    if (html.includes('</head>')) {
+      return html.replace('</head>', `${previewStyles}\n</head>`);
+    }
+
+    if (html.includes('<body')) {
+      return html.replace(/<body([^>]*)>/i, `<head>${previewStyles}</head><body$1>`);
+    }
+
+    return `${previewStyles}\n${html}`;
   }
 }

@@ -29,6 +29,13 @@ export function registerListDesignSoulsTool(
     async ({ status_filter }) => {
       try {
         const souls = await container.soulService.list(status_filter ?? undefined);
+        const recipeCounts = await Promise.all(
+          souls.map(async (soul) => ({
+            soulId: soul.id,
+            recipeCount: (await container.soulStore.getRecipes(soul.id)).length,
+          })),
+        );
+        const recipeCountMap = new Map(recipeCounts.map((entry) => [entry.soulId, entry.recipeCount]));
 
         return textResponse({
           souls: souls.map((soul) => ({
@@ -36,6 +43,7 @@ export function registerListDesignSoulsTool(
             name: soul.name,
             status: soul.status,
             token_count: soul.tokenNames.length,
+            recipe_count: recipeCountMap.get(soul.id) ?? 0,
           })),
         });
       } catch (error) {

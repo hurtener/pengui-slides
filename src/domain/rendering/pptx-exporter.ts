@@ -15,6 +15,7 @@ async function createPptx(): Promise<PptxInstance> {
   return new Ctor();
 }
 import type { Logger } from '../../infrastructure/logger.js';
+import { MetadataExporter } from '../metadata/metadata-exporter.js';
 import type { SlideRenderer } from './slide-renderer.js';
 import type { Slide } from '../../types/deck.js';
 import type {
@@ -38,6 +39,8 @@ const RESOLUTION_MAP: Record<string, { width: number; height: number }> = {
 // ── PPTX Exporter ────────────────────────────────────────────────
 
 export class PptxExporter {
+  private readonly metadataExporter = new MetadataExporter();
+
   constructor(
     private readonly renderer: SlideRenderer,
     private readonly logger: Logger,
@@ -134,41 +137,7 @@ export class PptxExporter {
    * Build speaker notes from slide metadata in a readable markdown-ish format.
    */
   private buildSpeakerNotes(slide: Slide): string {
-    const parts: string[] = [];
-    const meta = slide.metadata;
-
-    if (meta.title) {
-      parts.push(`# ${meta.title}`);
-    }
-
-    if (meta.narrative) {
-      parts.push('', meta.narrative);
-    }
-
-    if (meta.keyPoints && meta.keyPoints.length > 0) {
-      parts.push('', '## Key Points');
-      for (const point of meta.keyPoints) {
-        parts.push(`- ${point}`);
-      }
-    }
-
-    if (meta.dataPoints && meta.dataPoints.length > 0) {
-      parts.push('', '## Data');
-      for (const dp of meta.dataPoints) {
-        const unit = dp.unit ? ` ${dp.unit}` : '';
-        parts.push(`- ${dp.label}: ${dp.value}${unit}`);
-      }
-    }
-
-    if (meta.sources && meta.sources.length > 0) {
-      parts.push('', '## Sources');
-      for (const src of meta.sources) {
-        const label = src.title ?? src.url ?? 'Unknown source';
-        parts.push(`- ${label}`);
-      }
-    }
-
-    return parts.join('\n');
+    return this.metadataExporter.toMarkdown(slide.metadata);
   }
 
   /**

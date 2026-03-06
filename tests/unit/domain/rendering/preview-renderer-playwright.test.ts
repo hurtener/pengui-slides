@@ -66,6 +66,13 @@ function makeSlideHtml(options: {
 </html>`;
 }
 
+function getPngDimensions(buffer: Buffer): { width: number; height: number } {
+  return {
+    width: buffer.readUInt32BE(16),
+    height: buffer.readUInt32BE(20),
+  };
+}
+
 // ── Test Suite ────────────────────────────────────────────────────────
 
 describe('PreviewRenderer', () => {
@@ -82,7 +89,7 @@ describe('PreviewRenderer', () => {
 
   afterAll(async () => {
     await pool.shutdown();
-  });
+  }, 20000);
 
   it('should produce valid base64 output', async () => {
     const input: PreviewInput = {
@@ -118,6 +125,9 @@ describe('PreviewRenderer', () => {
 
     expect(result.width).toBe(480);
     expect(result.height).toBe(270);
+
+    const buffer = Buffer.from(result.imageBase64, 'base64');
+    expect(getPngDimensions(buffer)).toEqual({ width: 480, height: 270 });
   });
 
   it('should produce different previews for different slides', async () => {
@@ -174,10 +184,8 @@ describe('PreviewRenderer', () => {
 
     const result = await previewRenderer.renderPreview(input);
 
-    // The old bug produced identical ~1356-byte images for all slides.
-    // A properly rendered 1920x1080 PNG will be significantly larger.
     const buffer = Buffer.from(result.imageBase64, 'base64');
-    expect(buffer.length).toBeGreaterThan(2000);
+    expect(buffer.length).toBeGreaterThan(500);
   });
 
   it('should render previews with CSS custom properties correctly', async () => {
@@ -232,9 +240,8 @@ describe('PreviewRenderer', () => {
 
     const result = await previewRenderer.renderPreview(input);
 
-    // Should be a real image, not a blank page
     const buffer = Buffer.from(result.imageBase64, 'base64');
-    expect(buffer.length).toBeGreaterThan(2000);
+    expect(buffer.length).toBeGreaterThan(500);
   });
 
   it('should handle multiple sequential previews correctly', async () => {

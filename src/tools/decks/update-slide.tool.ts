@@ -55,6 +55,7 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
     },
     async ({ deck_id, slide_id, html, metadata }) => {
       try {
+        const shouldSyncMetadata = html != null || metadata != null;
         const updateInput: {
           deckId: string;
           slideId: string;
@@ -83,22 +84,21 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
           };
         }
 
-        const slide = await container.deckService.updateSlide(updateInput as Parameters<typeof container.deckService.updateSlide>[0]);
+        const slide = await container.deckService.updateSlide(
+          updateInput as Parameters<typeof container.deckService.updateSlide>[0],
+        );
 
-        // If HTML was changed, embed metadata and re-validate
         let validation;
-        if (html != null) {
-          // Embed metadata into the updated HTML
-          const embeddedHtml = container.metadataEmbedder.update(html, slide.metadata);
+        if (shouldSyncMetadata) {
+          const sourceHtml = html ?? slide.html;
+          const embeddedHtml = container.metadataEmbedder.update(sourceHtml, slide.metadata);
 
-          // Update the slide with embedded HTML
           await container.deckService.updateSlide({
             deckId: deck_id,
             slideId: slide_id,
             html: embeddedHtml,
           });
 
-          // Validate the embedded HTML
           const deck = await container.deckService.getDeckSummary(deck_id);
           const sId = soulId(deck.soulId as string);
           validation = await container.validationService.validateSlide(embeddedHtml, sId);
