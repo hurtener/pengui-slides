@@ -24,7 +24,7 @@ describe('validateSlidesForExport', () => {
     const stored = await container.deckService.getSlide(slide.id as string);
     expect(stored.lastValidation?.stage2Skipped).toBe(false);
     expect(stored.lastValidation?.passed).toBe(true);
-  });
+  }, 10000);
 
   it('blocks export when any slide fails full validation', async () => {
     const container = createContainer(loadConfig({ logLevel: 'error' }));

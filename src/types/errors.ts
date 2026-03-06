@@ -18,6 +18,9 @@ export enum ErrorCode {
   SLIDE_NOT_FOUND = 'SLIDE_NOT_FOUND',
   SLIDE_INVALID_HTML = 'SLIDE_INVALID_HTML',
   SLIDE_INVALID_POSITION = 'SLIDE_INVALID_POSITION',
+  SLIDE_TEXT_EDIT_NOT_FOUND = 'SLIDE_TEXT_EDIT_NOT_FOUND',
+  SLIDE_TEXT_EDIT_INVALID = 'SLIDE_TEXT_EDIT_INVALID',
+  SLIDE_REVISION_CONFLICT = 'SLIDE_REVISION_CONFLICT',
 
   // Validation errors
   VALIDATION_FAILED = 'VALIDATION_FAILED',
@@ -86,6 +89,28 @@ export class DeckNotFoundError extends PenguiError {
 export class SlideNotFoundError extends PenguiError {
   constructor(slideId: string) {
     super(ErrorCode.SLIDE_NOT_FOUND, `Slide not found: ${slideId}`, { slideId });
+  }
+}
+
+export class SlideTextEditNotFoundError extends PenguiError {
+  constructor(editId: string) {
+    super(ErrorCode.SLIDE_TEXT_EDIT_NOT_FOUND, `Editable text node not found: ${editId}`, { editId });
+  }
+}
+
+export class SlideTextEditInvalidError extends PenguiError {
+  constructor(editId: string, message: string) {
+    super(ErrorCode.SLIDE_TEXT_EDIT_INVALID, message, { editId });
+  }
+}
+
+export class SlideRevisionConflictError extends PenguiError {
+  constructor(slideId: string, expectedRevisionHash: string, actualRevisionHash: string) {
+    super(
+      ErrorCode.SLIDE_REVISION_CONFLICT,
+      `Slide revision conflict for ${slideId}. Reload the latest slide state and try again.`,
+      { slideId, expectedRevisionHash, actualRevisionHash },
+    );
   }
 }
 

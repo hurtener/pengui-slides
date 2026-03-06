@@ -1,8 +1,9 @@
 /**
  * Master tool registry for Pengui Slides MCP Server.
  *
- * Imports and registers all 21 MCP tools:
- *   5 soul tools + 7 deck tools + 4 asset tools + 1 validation tool + 4 export tools.
+ * Imports and registers all MCP tools:
+ *   soul tools, deck tools, asset tools, validation tools, export tools,
+ *   and MCP App editor tools.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -39,6 +40,11 @@ import { registerExportPptxTool } from './export/export-pptx.tool.js';
 import { registerExportPdfTool } from './export/export-pdf.tool.js';
 import { registerExportHtmlTool } from './export/export-html.tool.js';
 
+// MCP App tools
+import { registerOpenDeckEditorTool } from './app/open-deck-editor.tool.js';
+import { registerGetEditorStateTool } from './app/get-editor-state.tool.js';
+import { registerApplyTextEditTool } from './app/apply-text-edit.tool.js';
+
 export function registerAllTools(server: McpServer, container: ServiceContainer): void {
   // Soul tools
   registerRegisterDesignSoulTool(server, container);
@@ -70,4 +76,9 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerExportPptxTool(server, container);
   registerExportPdfTool(server, container);
   registerExportHtmlTool(server, container);
+
+  // MCP App tools
+  registerOpenDeckEditorTool(server, container);
+  registerGetEditorStateTool(server, container);
+  registerApplyTextEditTool(server, container);
 }

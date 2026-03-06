@@ -20,6 +20,7 @@ import { MetadataEmbedder } from './domain/metadata/metadata-embedder.js';
 import { MetadataExporter } from './domain/metadata/metadata-exporter.js';
 import { RenderService } from './domain/rendering/render-service.js';
 import { AssetService } from './domain/assets/asset-service.js';
+import { EditorService } from './domain/editor/editor-service.js';
 
 export interface ServiceContainer {
   config: PenguiConfig;
@@ -41,6 +42,7 @@ export interface ServiceContainer {
   metadataExporter: MetadataExporter;
   renderService: RenderService;
   assetService: AssetService;
+  editorService: EditorService;
 }
 
 export function createContainer(config: PenguiConfig): ServiceContainer {
@@ -59,6 +61,13 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
   const metadataExporter = new MetadataExporter();
   const assetService = new AssetService(assetStore, clock, logger.child('assets'));
   const renderService = new RenderService(config, logger.child('rendering'), assetService);
+  const editorService = new EditorService(
+    deckService,
+    validationService,
+    renderService,
+    metadataEmbedder,
+    logger.child('editor'),
+  );
 
   return {
     config,
@@ -76,5 +85,6 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
     metadataExporter,
     renderService,
     assetService,
+    editorService,
   };
 }
