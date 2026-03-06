@@ -9,6 +9,7 @@ import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServiceContainer } from '../../container.js';
+import { BooleanParamSchema } from '../_shared/schemas.js';
 import { textResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 
@@ -20,8 +21,8 @@ export function registerExportHtmlTool(server: McpServer, container: ServiceCont
       description: 'Export a deck as a self-contained HTML file with optional slide navigation. Set include_data to true to also receive the HTML content in the response.',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to export.'),
-        include_navigation: z.boolean().optional().describe('Whether to include slide navigation controls. Defaults to false.'),
-        include_data: z.boolean().optional().describe('If true, include the full HTML content as an embedded resource in the response. Defaults to false.'),
+        include_navigation: BooleanParamSchema.describe('Whether to include slide navigation controls. Defaults to false.'),
+        include_data: BooleanParamSchema.describe('If true, include the full HTML content as an embedded resource in the response. Defaults to false.'),
       }),
     },
     async ({ deck_id, include_navigation, include_data }) => {

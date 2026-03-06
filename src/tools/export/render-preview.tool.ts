@@ -18,8 +18,8 @@ export function registerRenderPreviewTool(server: McpServer, container: ServiceC
       description: 'Render preview thumbnails for slides in a deck. Returns base64-encoded images.',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to render previews for.'),
-        slides: z.array(z.string()).optional().describe('Specific slide IDs to render. If omitted, renders all slides.'),
-        thumbnail_width: z.number().optional().describe('Width of the thumbnail in pixels. Defaults to config preview width.'),
+        slides: z.array(z.string()).nullish().describe('Specific slide IDs to render. If omitted, renders all slides.'),
+        thumbnail_width: z.number().nullish().describe('Width of the thumbnail in pixels. Defaults to config preview width.'),
       }),
     },
     async ({ deck_id, slides: slideIds, thumbnail_width }) => {
@@ -35,7 +35,7 @@ export function registerRenderPreviewTool(server: McpServer, container: ServiceC
 
         // Build preview options
         const previewOptions: { width?: number; height?: number } = {};
-        if (thumbnail_width !== undefined) {
+        if (thumbnail_width != null) {
           previewOptions.width = thumbnail_width;
           // Maintain 16:9 aspect ratio
           previewOptions.height = Math.round(thumbnail_width * 9 / 16);

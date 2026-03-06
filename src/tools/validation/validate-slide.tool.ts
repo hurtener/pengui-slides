@@ -21,7 +21,7 @@ export function registerValidateSlideTool(server: McpServer, container: ServiceC
       inputSchema: z.object({
         html: z.string().describe('The slide HTML to validate.'),
         soul_id: z.string().describe('The Design Soul to validate against.'),
-        depth: z.enum(['lint', 'full']).optional().describe('Validation depth: "lint" for fast static checks, "full" for Playwright render analysis. Defaults to "lint".'),
+        depth: z.enum(['lint', 'full']).nullish().describe('Validation depth: "lint" for fast static checks, "full" for Playwright render analysis. Defaults to "lint".'),
       }),
     },
     async ({ html, soul_id, depth }) => {

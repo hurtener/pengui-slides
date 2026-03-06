@@ -22,19 +22,20 @@ export function registerListAssetsTool(server: McpServer, container: ServiceCont
       description:
         'List uploaded image assets. Filter by scope type, soul, deck, or role. Returns metadata and asset refs — no binary data.',
       inputSchema: z.object({
-        scope_type: z.enum(['soul', 'deck', 'global']).optional().describe('Filter by scope type.'),
-        soul_id: z.string().optional().describe('Filter by soul ID (only returns soul-scoped assets for this soul).'),
-        deck_id: z.string().optional().describe('Filter by deck ID (only returns deck-scoped assets for this deck).'),
-        role: z.enum(['logo', 'content']).optional().describe('Filter by role.'),
+        scope_type: z.enum(['soul', 'deck', 'global']).nullish().describe('Filter by scope type. When set, only assets of this scope are returned.'),
+        soul_id: z.string().nullish().describe('Filter soul-scoped assets by this soul ID. Only relevant when scope_type is "soul" or omitted.'),
+        deck_id: z.string().nullish().describe('Filter deck-scoped assets by this deck ID. Only relevant when scope_type is "deck" or omitted.'),
+        role: z.enum(['logo', 'content']).nullish().describe('Filter by role.'),
       }),
     },
     async ({ scope_type, soul_id, deck_id, role }) => {
       try {
         const filter: AssetListFilter = {};
         if (scope_type) filter.scope = scope_type;
-        if (soul_id) filter.soulId = soulId(soul_id);
-        if (deck_id) filter.deckId = deckId(deck_id);
         if (role) filter.role = role;
+        // Only pass scope-specific IDs when they match the requested scope
+        if (soul_id && scope_type !== 'deck' && scope_type !== 'global') filter.soulId = soulId(soul_id);
+        if (deck_id && scope_type !== 'soul' && scope_type !== 'global') filter.deckId = deckId(deck_id);
 
         const assets = await container.assetService.list(filter);
 

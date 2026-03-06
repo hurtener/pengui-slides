@@ -9,7 +9,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServiceContainer } from '../../container.js';
 import { soulId } from '../../types/common.js';
-import { SoulIdSchema } from '../_shared/schemas.js';
+import { SoulIdSchema, BooleanParamSchema } from '../_shared/schemas.js';
 import { textResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 
@@ -26,27 +26,19 @@ export function registerGetDesignSoulTool(
         '(only available for approved souls) and the generated style guide.',
       inputSchema: z.object({
         soul_id: SoulIdSchema,
-        include_recipes: z
-          .boolean()
-          .optional()
-          .default(false)
-          .describe('Whether to include layout recipes in the response'),
+        include_recipes: BooleanParamSchema
+          .describe('Whether to include layout recipes in the response. Defaults to false.'),
         /** @deprecated Use include_recipes instead */
-        include_skeletons: z
-          .boolean()
-          .optional()
-          .describe('[Deprecated] Alias for include_recipes'),
-        include_style_guide: z
-          .boolean()
-          .optional()
-          .default(true)
-          .describe('Whether to include the style guide in the response'),
+        include_skeletons: BooleanParamSchema
+          .describe('[Deprecated] Alias for include_recipes.'),
+        include_style_guide: BooleanParamSchema
+          .describe('Whether to include the style guide in the response. Defaults to true.'),
       }),
     },
     async ({ soul_id, include_recipes, include_skeletons, include_style_guide }) => {
       try {
         // include_skeletons is a deprecated alias for include_recipes
-        const shouldIncludeRecipes = include_recipes || include_skeletons || false;
+        const shouldIncludeRecipes = include_recipes ?? include_skeletons ?? false;
 
         const { soul, recipes } = await container.soulService.get(
           soulId(soul_id),
@@ -65,7 +57,7 @@ export function registerGetDesignSoulTool(
           },
         };
 
-        if (include_style_guide) {
+        if (include_style_guide ?? true) {
           response.style_guide = soul.styleGuide;
         }
 

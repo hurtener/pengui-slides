@@ -29,16 +29,16 @@ const sourceSchema = z.object({
 });
 
 const partialMetadataSchema = z.object({
-  title: z.string().optional().describe('Slide title.'),
-  type: z.string().optional().describe('Slide type.'),
-  narrative: z.string().optional().describe('Narrative description.'),
-  key_points: z.array(z.string()).optional().describe('Key points.'),
-  data_points: z.array(dataPointSchema).optional().describe('Structured data points.'),
-  tags: z.array(z.string()).optional().describe('Tags.'),
-  audience: z.string().optional().describe('Target audience.'),
-  confidentiality: z.string().optional().describe('Confidentiality level.'),
-  sources: z.array(sourceSchema).optional().describe('Source attributions.'),
-}).optional();
+  title: z.string().nullish().describe('Slide title.'),
+  type: z.string().nullish().describe('Slide type.'),
+  narrative: z.string().nullish().describe('Narrative description.'),
+  key_points: z.array(z.string()).nullish().describe('Key points.'),
+  data_points: z.array(dataPointSchema).nullish().describe('Structured data points.'),
+  tags: z.array(z.string()).nullish().describe('Tags.'),
+  audience: z.string().nullish().describe('Target audience.'),
+  confidentiality: z.string().nullish().describe('Confidentiality level.'),
+  sources: z.array(sourceSchema).nullish().describe('Source attributions.'),
+}).nullish();
 
 export function registerUpdateSlideTool(server: McpServer, container: ServiceContainer): void {
   server.registerTool(
@@ -49,7 +49,7 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
       inputSchema: z.object({
         deck_id: z.string().describe('The deck containing the slide.'),
         slide_id: z.string().describe('The slide to update.'),
-        html: z.string().optional().describe('New HTML content for the slide.'),
+        html: z.string().nullish().describe('New HTML content for the slide.'),
         metadata: partialMetadataSchema.describe('Partial metadata fields to update.'),
       }),
     },
@@ -65,21 +65,21 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
           slideId: slide_id,
         };
 
-        if (html !== undefined) {
+        if (html != null) {
           updateInput.html = html;
         }
 
-        if (metadata !== undefined) {
+        if (metadata != null) {
           updateInput.metadata = {
-            ...(metadata.title !== undefined ? { title: metadata.title } : {}),
-            ...(metadata.type !== undefined ? { type: metadata.type } : {}),
-            ...(metadata.narrative !== undefined ? { narrative: metadata.narrative } : {}),
-            ...(metadata.key_points !== undefined ? { keyPoints: metadata.key_points } : {}),
-            ...(metadata.data_points !== undefined ? { dataPoints: metadata.data_points } : {}),
-            ...(metadata.tags !== undefined ? { tags: metadata.tags } : {}),
-            ...(metadata.audience !== undefined ? { audience: metadata.audience } : {}),
-            ...(metadata.confidentiality !== undefined ? { confidentiality: metadata.confidentiality } : {}),
-            ...(metadata.sources !== undefined ? { sources: metadata.sources } : {}),
+            ...(metadata.title != null ? { title: metadata.title } : {}),
+            ...(metadata.type != null ? { type: metadata.type } : {}),
+            ...(metadata.narrative != null ? { narrative: metadata.narrative } : {}),
+            ...(metadata.key_points != null ? { keyPoints: metadata.key_points } : {}),
+            ...(metadata.data_points != null ? { dataPoints: metadata.data_points } : {}),
+            ...(metadata.tags != null ? { tags: metadata.tags } : {}),
+            ...(metadata.audience != null ? { audience: metadata.audience } : {}),
+            ...(metadata.confidentiality != null ? { confidentiality: metadata.confidentiality } : {}),
+            ...(metadata.sources != null ? { sources: metadata.sources } : {}),
           };
         }
 
@@ -87,7 +87,7 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
 
         // If HTML was changed, embed metadata and re-validate
         let validation;
-        if (html !== undefined) {
+        if (html != null) {
           // Embed metadata into the updated HTML
           const embeddedHtml = container.metadataEmbedder.update(html, slide.metadata);
 

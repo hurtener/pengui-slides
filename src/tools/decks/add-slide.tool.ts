@@ -33,12 +33,12 @@ const metadataSchema = z.object({
   title: z.string().describe('Slide title.'),
   type: z.string().describe('Slide type (e.g. "title", "content", "metrics", "two-column").'),
   narrative: z.string().describe('Narrative description of the slide content.'),
-  key_points: z.array(z.string()).optional().describe('Key points covered in this slide.'),
-  data_points: z.array(dataPointSchema).optional().describe('Structured data points.'),
-  tags: z.array(z.string()).optional().describe('Tags for categorisation.'),
-  audience: z.string().optional().describe('Target audience for this slide.'),
-  confidentiality: z.string().optional().describe('Confidentiality level: "public", "internal", "confidential", "restricted".'),
-  sources: z.array(sourceSchema).optional().describe('Source attributions.'),
+  key_points: z.array(z.string()).nullish().describe('Key points covered in this slide.'),
+  data_points: z.array(dataPointSchema).nullish().describe('Structured data points.'),
+  tags: z.array(z.string()).nullish().describe('Tags for categorisation.'),
+  audience: z.string().nullish().describe('Target audience for this slide.'),
+  confidentiality: z.string().nullish().describe('Confidentiality level: "public", "internal", "confidential", "restricted".'),
+  sources: z.array(sourceSchema).nullish().describe('Source attributions.'),
 });
 
 export function registerAddSlideTool(server: McpServer, container: ServiceContainer): void {
@@ -51,7 +51,7 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
         deck_id: z.string().describe('The deck to add the slide to.'),
         html: z.string().describe('The slide HTML content.'),
         metadata: metadataSchema.describe('Slide metadata.'),
-        position: z.number().optional().describe('Zero-based position to insert the slide. Appends to end if omitted.'),
+        position: z.number().nullish().describe('Zero-based position to insert the slide. Appends to end if omitted.'),
       }),
     },
     async ({ deck_id, html, metadata, position }) => {
@@ -64,14 +64,14 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
             title: metadata.title,
             type: metadata.type,
             narrative: metadata.narrative,
-            keyPoints: metadata.key_points,
-            dataPoints: metadata.data_points,
-            tags: metadata.tags,
-            audience: metadata.audience,
-            confidentiality: metadata.confidentiality,
-            sources: metadata.sources,
+            keyPoints: metadata.key_points ?? undefined,
+            dataPoints: metadata.data_points ?? undefined,
+            tags: metadata.tags ?? undefined,
+            audience: metadata.audience ?? undefined,
+            confidentiality: metadata.confidentiality ?? undefined,
+            sources: metadata.sources ?? undefined,
           },
-          position,
+          position: position ?? undefined,
         });
 
         // 2. Embed metadata into HTML

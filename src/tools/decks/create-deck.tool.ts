@@ -18,16 +18,16 @@ export function registerCreateDeckTool(server: McpServer, container: ServiceCont
       description: 'Create a new empty slide deck linked to a Design Soul.',
       inputSchema: z.object({
         soul_id: z.string().describe('The ID of the Design Soul to use for this deck.'),
-        title: z.string().optional().describe('Deck title. Defaults to "Untitled Deck".'),
-        author: z.string().optional().describe('Author name.'),
+        title: z.string().nullish().describe('Deck title. Defaults to "Untitled Deck".'),
+        author: z.string().nullish().describe('Author name.'),
       }),
     },
     async ({ soul_id, title, author }) => {
       try {
         const deck = await container.deckService.createDeck({
           soulId: soul_id,
-          title,
-          author,
+          title: title ?? undefined,
+          author: author ?? undefined,
         });
 
         return textResponse({

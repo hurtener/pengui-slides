@@ -9,6 +9,7 @@ import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServiceContainer } from '../../container.js';
+import { BooleanParamSchema } from '../_shared/schemas.js';
 import { textResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 
@@ -20,8 +21,8 @@ export function registerExportPdfTool(server: McpServer, container: ServiceConta
       description: 'Export a deck as a PDF file. Returns metadata and file path. Set include_data to true to also receive the binary content as base64.',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to export.'),
-        mode: z.enum(['image', 'direct']).optional().describe('PDF generation mode: "image" renders slides to PNG first, "direct" uses page.pdf(). Defaults to "image".'),
-        include_data: z.boolean().optional().describe('If true, include the PDF binary as a base64 embedded resource in the response. Defaults to false.'),
+        mode: z.enum(['image', 'direct']).nullish().describe('PDF generation mode: "image" renders slides to PNG first, "direct" uses page.pdf(). Defaults to "image".'),
+        include_data: BooleanParamSchema.describe('If true, include the PDF binary as a base64 embedded resource in the response. Defaults to false.'),
       }),
     },
     async ({ deck_id, mode, include_data }) => {
@@ -32,7 +33,7 @@ export function registerExportPdfTool(server: McpServer, container: ServiceConta
           summary.slides.map((s) => container.deckService.getSlide(s.id as string)),
         );
 
-        const result = await container.renderService.exportPdf(slides, summary.title, mode);
+        const result = await container.renderService.exportPdf(slides, summary.title, mode ?? undefined);
 
         // Write to output directory
         const outputDir = container.config.outputDir;

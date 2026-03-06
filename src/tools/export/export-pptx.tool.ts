@@ -9,6 +9,7 @@ import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServiceContainer } from '../../container.js';
+import { BooleanParamSchema } from '../_shared/schemas.js';
 import { textResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 
@@ -20,10 +21,10 @@ export function registerExportPptxTool(server: McpServer, container: ServiceCont
       description: 'Export a deck as a PowerPoint (.pptx) file. Returns metadata and file path. Set include_data to true to also receive the binary content as base64.',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to export.'),
-        resolution: z.enum(['1080p', '4k']).optional().describe('Slide resolution. Defaults to "1080p".'),
-        image_format: z.enum(['png', 'jpeg']).optional().describe('Image format for slides. Defaults to "png".'),
-        jpeg_quality: z.number().optional().describe('JPEG quality (1-100). Only used when image_format is "jpeg". Defaults to 90.'),
-        include_data: z.boolean().optional().describe('If true, include the PPTX binary as a base64 embedded resource in the response. Defaults to false.'),
+        resolution: z.enum(['1080p', '4k']).nullish().describe('Slide resolution. Defaults to "1080p".'),
+        image_format: z.enum(['png', 'jpeg']).nullish().describe('Image format for slides. Defaults to "png".'),
+        jpeg_quality: z.number().nullish().describe('JPEG quality (1-100). Only used when image_format is "jpeg". Defaults to 90.'),
+        include_data: BooleanParamSchema.describe('If true, include the PPTX binary as a base64 embedded resource in the response. Defaults to false.'),
       }),
     },
     async ({ deck_id, resolution, image_format, jpeg_quality, include_data }) => {
@@ -36,9 +37,9 @@ export function registerExportPptxTool(server: McpServer, container: ServiceCont
 
         // Build export options
         const options: { resolution?: '1080p' | '4k'; imageFormat?: 'png' | 'jpeg'; jpegQuality?: number } = {};
-        if (resolution !== undefined) options.resolution = resolution;
-        if (image_format !== undefined) options.imageFormat = image_format;
-        if (jpeg_quality !== undefined) options.jpegQuality = jpeg_quality;
+        if (resolution != null) options.resolution = resolution;
+        if (image_format != null) options.imageFormat = image_format;
+        if (jpeg_quality != null) options.jpegQuality = jpeg_quality;
 
         const result = await container.renderService.exportPptx(slides, summary.title, options);
 

@@ -101,8 +101,10 @@ export class FileAssetStore implements IAssetStore {
 
     if (filter.scope && asset.scope.type !== filter.scope) return false;
     if (filter.role && asset.role !== filter.role) return false;
-    if (filter.soulId && (asset.scope.type !== 'soul' || asset.scope.soulId !== filter.soulId)) return false;
-    if (filter.deckId && (asset.scope.type !== 'deck' || asset.scope.deckId !== filter.deckId)) return false;
+    // Only check soulId against soul-scoped assets (avoid rejecting deck/global assets)
+    if (filter.soulId && asset.scope.type === 'soul' && asset.scope.soulId !== filter.soulId) return false;
+    // Only check deckId against deck-scoped assets (avoid rejecting soul/global assets)
+    if (filter.deckId && asset.scope.type === 'deck' && asset.scope.deckId !== filter.deckId) return false;
 
     return true;
   }

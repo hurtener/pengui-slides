@@ -28,7 +28,7 @@ export function registerListDesignSoulsTool(
     },
     async ({ status_filter }) => {
       try {
-        const souls = await container.soulService.list(status_filter);
+        const souls = await container.soulService.list(status_filter ?? undefined);
 
         return textResponse({
           souls: souls.map((soul) => ({

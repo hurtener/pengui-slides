@@ -28,15 +28,15 @@ export function registerUploadAssetTool(server: McpServer, container: ServiceCon
         scope_type: z.enum(['soul', 'deck', 'global']).describe(
           'Scope: "soul" for logos tied to a design soul, "deck" for deck-specific content images, "global" for images available everywhere.',
         ),
-        soul_id: z.string().optional().describe('Required when scope_type is "soul".'),
-        deck_id: z.string().optional().describe('Required when scope_type is "deck".'),
+        soul_id: z.string().nullish().describe('Required when scope_type is "soul".'),
+        deck_id: z.string().nullish().describe('Required when scope_type is "deck".'),
         role: z.enum(['logo', 'content']).describe('"logo" for branding marks, "content" for slide imagery.'),
         data_base64: z.string().min(1).describe('Base64-encoded image data.'),
       }),
     },
     async ({ name, filename, mime_type, scope_type, soul_id, deck_id, role, data_base64 }) => {
       try {
-        const scope = buildScope(scope_type, soul_id, deck_id);
+        const scope = buildScope(scope_type, soul_id ?? undefined, deck_id ?? undefined);
 
         const asset = await container.assetService.upload({
           name,

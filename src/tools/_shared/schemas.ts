@@ -7,6 +7,22 @@
 
 import * as z from 'zod';
 
+// ── Boolean Param Schema ─────────────────────────────────────────
+// Some MCP clients (e.g. pydantic-based) misinterpret boolean JSON Schema
+// as string, causing agents to send "true"/"false" strings instead of
+// actual booleans. This helper accepts both and coerces strings to booleans.
+
+export const BooleanParamSchema = z
+  .preprocess(
+    (v) => {
+      if (v === 'true') return true;
+      if (v === 'false') return false;
+      return v;
+    },
+    z.boolean(),
+  )
+  .nullish();
+
 // ── Common ID Schemas ────────────────────────────────────────────
 
 export const SoulIdSchema = z.string().uuid().describe('Design Soul identifier');
@@ -17,7 +33,7 @@ export const SlideIdSchema = z.string().uuid().describe('Slide identifier');
 
 export const StatusFilterSchema = z
   .enum(['draft', 'approved', 'archived', 'all'])
-  .optional()
+  .nullish()
   .describe('Filter by status');
 
 // ── Layer 1: Color Language ──────────────────────────────────────
