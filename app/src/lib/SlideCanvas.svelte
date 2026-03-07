@@ -22,6 +22,8 @@
   let activeOriginalText = '';
 
   $: frameKey = `${revisionHash}:${renderNonce}`;
+  $: scaledWidth = NATIVE_WIDTH * scale;
+  $: scaledHeight = NATIVE_HEIGHT * scale;
 
   onMount(() => {
     const resizeObserver = new ResizeObserver(() => updateScale());
@@ -160,15 +162,17 @@
 
 <div class="canvas-shell" bind:this={containerEl}>
   {#key frameKey}
-    <div class="scale-stage" style={`transform: scale(${scale}); width: ${NATIVE_WIDTH}px; height: ${NATIVE_HEIGHT}px;`}>
-      <iframe
-        bind:this={iframeEl}
-        class="slide-frame"
-        srcdoc={html}
-        sandbox="allow-same-origin"
-        title="Selected slide preview"
-        on:load={handleLoad}
-      ></iframe>
+    <div class="scaled-stage" style={`width: ${scaledWidth}px; height: ${scaledHeight}px;`}>
+      <div class="scale-stage" style={`transform: scale(${scale}); width: ${NATIVE_WIDTH}px; height: ${NATIVE_HEIGHT}px;`}>
+        <iframe
+          bind:this={iframeEl}
+          class="slide-frame"
+          srcdoc={html}
+          sandbox="allow-same-origin"
+          title="Selected slide preview"
+          on:load={handleLoad}
+        ></iframe>
+      </div>
     </div>
   {/key}
 </div>
@@ -177,9 +181,13 @@
   .canvas-shell {
     position: relative;
     width: 100%;
-    height: 100%;
-    overflow: auto;
+    aspect-ratio: 16 / 9;
+    min-height: 280px;
+    max-height: min(68vh, 860px);
+    overflow: hidden;
     border-radius: 24px;
+    display: grid;
+    place-items: center;
     background:
       radial-gradient(circle at top, rgba(255, 250, 242, 0.92), rgba(235, 221, 201, 0.72)),
       linear-gradient(180deg, rgba(92, 64, 41, 0.08), rgba(92, 64, 41, 0));
@@ -189,8 +197,18 @@
   }
 
   .scale-stage {
+    position: absolute;
+    top: 0;
+    left: 0;
     transform-origin: top left;
-    margin: 28px auto;
+  }
+
+  .scaled-stage {
+    position: relative;
+    flex: 0 0 auto;
+    max-width: 100%;
+    max-height: 100%;
+    overflow: hidden;
   }
 
   .slide-frame {
@@ -202,5 +220,12 @@
     box-shadow:
       0 30px 70px rgba(44, 27, 12, 0.18),
       0 6px 18px rgba(44, 27, 12, 0.12);
+  }
+
+  @media (max-width: 860px) {
+    .canvas-shell {
+      max-height: none;
+      min-height: 220px;
+    }
   }
 </style>

@@ -14,6 +14,13 @@
 export type ValidationSeverity = 'error' | 'warning' | 'info';
 export type ValidationStage = 'stage1_lint' | 'stage2_render';
 export type ValidationDepth = 'lint' | 'full';
+export type ValidationPresentationStatus =
+  | 'clean'
+  | 'edited_with_preexisting_issues'
+  | 'regression'
+  | 'blocking'
+  | 'unvalidated';
+export type SlideHealth = 'clean' | 'needs_attention' | 'blocked';
 
 // ── Validation Issue ──────────────────────────────────────────────
 
@@ -28,6 +35,14 @@ export interface ValidationIssue {
   actual?: string;
   line?: number;
   fixSuggestion?: string;
+}
+
+export interface ValidationIssueSummary {
+  id: string;
+  severity: ValidationSeverity;
+  rule: string;
+  message: string;
+  stage: ValidationStage;
 }
 
 // ── Style Score ───────────────────────────────────────────────────
@@ -54,6 +69,27 @@ export interface ValidationResult {
   stage2ElapsedMs?: number;
   stage2Skipped: boolean;
   validatedAt: string;
+}
+
+export interface ValidationDelta {
+  introducedIssues: ValidationIssue[];
+  resolvedIssues: ValidationIssue[];
+  preExistingIssues: ValidationIssue[];
+  blockingIssues: ValidationIssue[];
+  status: ValidationPresentationStatus;
+  summary: string;
+}
+
+export interface ValidationPresentation {
+  status: ValidationPresentationStatus;
+  headline: string;
+  blockingCount: number;
+  introducedCount: number;
+  preExistingCount: number;
+  resolvedCount: number;
+  topBlockers: ValidationIssueSummary[];
+  topPreExisting: ValidationIssueSummary[];
+  showTechnicalDetailsAvailable: boolean;
 }
 
 // ── Check Interfaces (Strategy Pattern) ───────────────────────────

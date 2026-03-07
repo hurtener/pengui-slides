@@ -14,9 +14,9 @@ import type { SlideMetadata } from '../../types/metadata.js';
 const SLIDE_META_REGEX = /<!--\s*@slide-meta\s+[\s\S]*?\s*-->\n?/;
 
 /**
- * Regex to locate the opening slide div (first div tag in the markup).
+ * Regex to locate the opening root slide div in the markup.
  */
-const SLIDE_DIV_REGEX = /(<div[\s>])/;
+const SLIDE_DIV_REGEX = /(<div[^>]*class=["'][^"']*\bslide\b[^"']*["'][^>]*>)/i;
 
 export class MetadataEmbedder {
   /**

@@ -10,6 +10,10 @@ import type { ServiceContainer } from '../../container.js';
 import { soulId } from '../../types/common.js';
 import { textResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
+import {
+  buildValidationDelta,
+  buildValidationPresentation,
+} from '../../domain/validation/validation-presentation.js';
 
 const dataPointSchema = z.object({
   label: z.string().describe('Label for the data point.'),
@@ -55,6 +59,8 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
     },
     async ({ deck_id, slide_id, html, metadata }) => {
       try {
+        const previousSlide = await container.deckService.getSlide(slide_id);
+        const previousValidation = previousSlide.lastValidation ?? null;
         const shouldSyncMetadata = html != null || metadata != null;
         const updateInput: {
           deckId: string;
@@ -89,6 +95,8 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
         );
 
         let validation;
+        let validationDelta;
+        let validationPresentation;
         if (shouldSyncMetadata) {
           const sourceHtml = html ?? slide.html;
           const embeddedHtml = container.metadataEmbedder.update(sourceHtml, slide.metadata);
@@ -109,11 +117,16 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
             slideId: slide_id,
             lastValidation: validation,
           });
+
+          validationDelta = buildValidationDelta(validation, previousValidation);
+          validationPresentation = buildValidationPresentation(validationDelta);
         }
 
         return textResponse({
           slide_id: slide.id,
           ...(validation ? { validation } : {}),
+          ...(validationDelta ? { validation_delta: validationDelta } : {}),
+          ...(validationPresentation ? { validation_presentation: validationPresentation } : {}),
         });
       } catch (error) {
         return handleToolError(error);

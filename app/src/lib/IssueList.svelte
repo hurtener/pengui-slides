@@ -1,9 +1,12 @@
 <script lang="ts">
-  import type { ValidationIssue } from './types';
+  export type IssueListItem = {
+    id: string;
+    message: string;
+  };
 
   export let title = '';
   export let tone: 'error' | 'warning' | 'info' = 'info';
-  export let issues: ValidationIssue[] = [];
+  export let issues: IssueListItem[] = [];
 </script>
 
 <section class={`issue-group ${tone}`}>

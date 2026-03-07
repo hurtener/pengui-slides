@@ -56,6 +56,62 @@ class MockBridge implements DeckEditorBridge {
 }
 
 function makeState(selectedSlideId: string): EditorState {
+  const selectedValidation = selectedSlideId === 'slide-1'
+    ? {
+        passed: false,
+        issues: [{
+          id: 'issue-1',
+          stage: 'stage1_lint',
+          severity: 'error' as const,
+          rule: 'demo',
+          message: 'Headline needs revision.',
+        }],
+        errorCount: 1,
+        warningCount: 0,
+        infoCount: 0,
+        stage2Skipped: false,
+        validatedAt: '2026-03-06T00:00:00.000Z',
+      }
+    : {
+        passed: true,
+        issues: [],
+        errorCount: 0,
+        warningCount: 0,
+        infoCount: 0,
+        stage2Skipped: false,
+        validatedAt: '2026-03-06T00:00:00.000Z',
+      };
+
+  const selectedPresentation = selectedSlideId === 'slide-1'
+    ? {
+        status: 'edited_with_preexisting_issues' as const,
+        headline: 'This slide still has 1 older issue.',
+        blockingCount: 0,
+        introducedCount: 0,
+        preExistingCount: 1,
+        resolvedCount: 0,
+        topBlockers: [],
+        topPreExisting: [{
+          id: 'issue-1',
+          stage: 'stage1_lint',
+          severity: 'error' as const,
+          rule: 'demo',
+          message: 'Headline needs revision.',
+        }],
+        showTechnicalDetailsAvailable: true,
+      }
+    : {
+        status: 'clean' as const,
+        headline: 'No issues introduced by this edit.',
+        blockingCount: 0,
+        introducedCount: 0,
+        preExistingCount: 0,
+        resolvedCount: 0,
+        topBlockers: [],
+        topPreExisting: [],
+        showTechnicalDetailsAvailable: false,
+      };
+
   return {
     deck: {
       id: 'deck-1',
@@ -82,31 +138,24 @@ function makeState(selectedSlideId: string): EditorState {
         keyPoints: selectedSlideId === 'slide-1' ? ['One', 'Two'] : ['Three'],
         tags: selectedSlideId === 'slide-1' ? ['draft'] : ['ready'],
       },
-      lastValidation: selectedSlideId === 'slide-1'
-        ? {
-            passed: false,
-            issues: [{
+      lastValidation: selectedValidation,
+      validationPresentation: selectedPresentation,
+      validationDelta: {
+        introducedIssues: [],
+        resolvedIssues: [],
+        preExistingIssues: selectedSlideId === 'slide-1'
+          ? [{
               id: 'issue-1',
               stage: 'stage1_lint',
-              severity: 'error',
+              severity: 'error' as const,
               rule: 'demo',
               message: 'Headline needs revision.',
-            }],
-            errorCount: 1,
-            warningCount: 0,
-            infoCount: 0,
-            stage2Skipped: false,
-            validatedAt: '2026-03-06T00:00:00.000Z',
-          }
-        : {
-            passed: true,
-            issues: [],
-            errorCount: 0,
-            warningCount: 0,
-            infoCount: 0,
-            stage2Skipped: false,
-            validatedAt: '2026-03-06T00:00:00.000Z',
-          },
+            }]
+          : [],
+        blockingIssues: [],
+        status: selectedPresentation.status,
+        summary: selectedPresentation.headline,
+      },
       revisionHash: selectedSlideId === 'slide-1' ? 'hash-one' : 'hash-two',
     },
     thumbnails: [
@@ -117,6 +166,26 @@ function makeState(selectedSlideId: string): EditorState {
         type: 'content',
         imageBase64: 'aGVsbG8=',
         isValid: false,
+        health: 'needs_attention',
+        hasNewIssues: false,
+        blockingCount: 0,
+        validationPresentation: {
+          status: 'edited_with_preexisting_issues',
+          headline: 'This slide still has 1 older issue.',
+          blockingCount: 0,
+          introducedCount: 0,
+          preExistingCount: 1,
+          resolvedCount: 0,
+          topBlockers: [],
+          topPreExisting: [{
+            id: 'issue-1',
+            stage: 'stage1_lint',
+            severity: 'error',
+            rule: 'demo',
+            message: 'Headline needs revision.',
+          }],
+          showTechnicalDetailsAvailable: true,
+        },
       },
       {
         slideId: 'slide-2',
@@ -125,6 +194,20 @@ function makeState(selectedSlideId: string): EditorState {
         type: 'metrics',
         imageBase64: 'd29ybGQ=',
         isValid: true,
+        health: 'clean',
+        hasNewIssues: false,
+        blockingCount: 0,
+        validationPresentation: {
+          status: 'clean',
+          headline: 'This slide is ready.',
+          blockingCount: 0,
+          introducedCount: 0,
+          preExistingCount: 0,
+          resolvedCount: 0,
+          topBlockers: [],
+          topPreExisting: [],
+          showTechnicalDetailsAvailable: false,
+        },
         styleScore: 0.92,
       },
     ],
@@ -135,6 +218,10 @@ function makeState(selectedSlideId: string): EditorState {
       type: selectedSlideId === 'slide-1' ? 'content' : 'metrics',
       imageBase64: selectedSlideId === 'slide-1' ? 'aGVsbG8=' : 'd29ybGQ=',
       isValid: selectedSlideId !== 'slide-1',
+      health: selectedSlideId === 'slide-1' ? 'needs_attention' : 'clean',
+      hasNewIssues: false,
+      blockingCount: 0,
+      validationPresentation: selectedPresentation,
       ...(selectedSlideId === 'slide-2' ? { styleScore: 0.92 } : {}),
     },
   };
@@ -153,14 +240,23 @@ describe('DeckEditorApp', () => {
 
     await waitFor(() => {
       expect(view.getByRole('heading', { level: 2, name: 'Slide One' })).toBeTruthy();
-      expect(view.getByText('Headline needs revision.')).toBeTruthy();
+      expect(view.queryByText('This slide still has 1 older issue.')).toBeNull();
+      expect(view.queryByText('hash-one')).toBeNull();
+    });
+
+    await fireEvent.click(view.getByRole('button', { name: /slide details/i }));
+    await fireEvent.click(view.getByRole('button', { name: /^checks$/i }));
+
+    await waitFor(() => {
+      expect(view.getByText('This slide still has 1 older issue.')).toBeTruthy();
     });
 
     await fireEvent.click(view.getByRole('button', { name: /2\. Slide Two/i }));
 
     await waitFor(() => {
-      expect(view.getByText('Looks good')).toBeTruthy();
-      expect(view.getByText('No validation issues on the selected slide.')).toBeTruthy();
+      expect(view.getByRole('heading', { level: 2, name: 'Slide Two' })).toBeTruthy();
+      expect(view.getAllByText('No issues introduced by this edit.').length).toBeGreaterThan(0);
+      expect(view.getAllByText('Clean').length).toBeGreaterThan(0);
     });
   });
 
@@ -173,9 +269,9 @@ describe('DeckEditorApp', () => {
       expect(view.getByRole('heading', { level: 2, name: 'Slide One' })).toBeTruthy();
     });
 
-    const textarea = view.getByPlaceholderText(/tighten the headline/i);
+    const textarea = view.getByPlaceholderText(/remove the cta/i);
     await fireEvent.input(textarea, { target: { value: 'Make the headline shorter.' } });
-    await fireEvent.click(view.getByRole('button', { name: /send revision request/i }));
+    await fireEvent.click(view.getByRole('button', { name: /ask agent to revise/i }));
 
     await waitFor(() => {
       expect(bridge.sentRevisionPayload?.instruction).toBe('Make the headline shorter.');

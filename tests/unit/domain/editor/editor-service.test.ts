@@ -38,6 +38,8 @@ describe('EditorService', () => {
     expect(state.selectedSlide.html).toContain('data-edit-id=');
     expect(state.selectedPreview.slideId).toBe(slide.id);
     expect(state.thumbnails).toHaveLength(1);
+    expect(state.selectedSlide.validationPresentation.status).toBe('clean');
+    expect(state.selectedPreview.health).toBe('clean');
 
     const stored = await container.deckService.getSlide(slide.id as string);
     expect(stored.html).toContain('data-edit-id=');
@@ -77,6 +79,7 @@ describe('EditorService', () => {
     expect(updated.selectedSlide.html).toContain('Updated copy');
     expect(updated.selectedSlide.revisionHash).not.toBe(initial.selectedSlide.revisionHash);
     expect(updated.selectedPreview.imageBase64.length).toBeGreaterThan(100);
+    expect(updated.selectedSlide.validationPresentation.status).toBe('clean');
   });
 
   it('rejects stale revision hashes with a conflict error', async () => {

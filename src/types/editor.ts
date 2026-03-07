@@ -1,6 +1,6 @@
 import type { DeckSummary } from './deck.js';
 import type { SlideMetadata } from './metadata.js';
-import type { ValidationResult } from './validation.js';
+import type { ValidationDelta, ValidationPresentation, ValidationResult, SlideHealth } from './validation.js';
 
 export interface EditorThumbnail {
   slideId: string;
@@ -9,6 +9,10 @@ export interface EditorThumbnail {
   type: string;
   imageBase64: string;
   isValid: boolean;
+  health: SlideHealth;
+  hasNewIssues: boolean;
+  blockingCount: number;
+  validationPresentation: ValidationPresentation;
   styleScore?: number;
 }
 
@@ -18,6 +22,8 @@ export interface EditorSelectedSlide {
   html: string;
   metadata: SlideMetadata;
   lastValidation: ValidationResult | null;
+  validationPresentation: ValidationPresentation;
+  validationDelta: ValidationDelta;
   revisionHash: string;
 }
 
