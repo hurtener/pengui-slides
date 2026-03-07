@@ -78,7 +78,7 @@ describe('SlideRenderer', () => {
 
   afterAll(async () => {
     await pool.shutdown();
-  });
+  }, 20000);
 
   it('should produce a non-empty image buffer', async () => {
     const html = makeSlideHtml({ title: 'Hello World' });

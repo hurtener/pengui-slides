@@ -506,7 +506,8 @@ Step 6 — Add Slides
   Tool: add_slide (repeat for each slide)
   Input: deck_id, html (full HTML document with all tokens), metadata
   Result: slide_id, validation score
-  IMPORTANT: Each slide must score 1.0 — fix and resubmit if it doesn't
+  IMPORTANT: Do not introduce new blocking issues while iterating.
+  Fix pre-existing issues when requested or before export.
 
 Step 7 — Export
   Tool: export_pptx, export_pdf, or export_html
@@ -536,7 +537,7 @@ Step 1 — Add or update the slide
   Tool: add_slide or update_slide
   Result: validation results with score, issues list
 
-Step 2 — If score < 1.0, read the issues
+Step 2 — Review the issues
   Common fixes:
   - "literal color" → replace #hex with var(--color-*)
   - "literal spacing" → replace 24px with var(--space-lg)
@@ -547,7 +548,8 @@ Step 2 — If score < 1.0, read the issues
 
 Step 3 — Resubmit the fixed HTML
   Tool: update_slide with corrected HTML
-  Repeat until score = 1.0
+  Repeat until no new blocking issues remain.
+  For final export, all slides must still pass full validation.
 \`\`\`
 
 ## Workflow 4: Create a Custom Recipe
@@ -555,7 +557,7 @@ Step 3 — Resubmit the fixed HTML
 \`\`\`
 Step 1 — Create a slide with your custom layout
   Tool: add_slide with the custom HTML
-  Requirement: must pass validation (score 1.0)
+  Requirement: must pass validation before saving as a reusable template
 
 Step 2 — Save as template
   Tool: save_as_template

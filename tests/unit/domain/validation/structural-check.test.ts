@@ -11,7 +11,7 @@ describe('StructuralCheck', () => {
 <html lang="en">
 <head><style>.slide { width: 1920px; }</style></head>
 <body>
-  <!-- @slide-meta {"title":"Test"} -->
+  <!-- @slide-meta {"title":"Test","type":"content"} -->
   <div class="slide"><p>Content</p></div>
 </body>
 </html>`;
@@ -23,7 +23,7 @@ describe('StructuralCheck', () => {
   it('flags missing DOCTYPE', () => {
     const html = `<html>
 <body>
-  <!-- @slide-meta {"title":"Test"} -->
+  <!-- @slide-meta {"title":"Test","type":"content"} -->
   <div class="slide"><p>Content</p></div>
 </body>
 </html>`;
@@ -67,7 +67,7 @@ describe('StructuralCheck', () => {
     const html = `<!DOCTYPE html>
 <html>
 <body>
-  <!-- @slide-meta {"title":"Test"} -->
+  <!-- @slide-meta {"title":"Test","type":"content"} -->
   <div class="content"><p>No slide class</p></div>
 </body>
 </html>`;
@@ -90,7 +90,7 @@ describe('StructuralCheck', () => {
     const html = `<!doctype html>
 <html>
 <body>
-  <!-- @slide-meta {"title":"Test"} -->
+  <!-- @slide-meta {"title":"Test","type":"content"} -->
   <div class="slide"><p>Content</p></div>
 </body>
 </html>`;
@@ -98,5 +98,31 @@ describe('StructuralCheck', () => {
     const issues = check.run(html, tokenNames, allowedFonts);
     const doctypeIssue = issues.find((i) => i.id.includes('doctype'));
     expect(doctypeIssue).toBeUndefined();
+  });
+
+  it('flags missing required metadata fields', () => {
+    const html = `<!DOCTYPE html>
+<html>
+<body>
+  <!-- @slide-meta {"title":"Test"} -->
+  <div class="slide"><p>Content</p></div>
+</body>
+</html>`;
+
+    const issues = check.run(html, tokenNames, allowedFonts);
+    expect(issues.some((issue) => issue.id.includes('meta-required-fields'))).toBe(true);
+  });
+
+  it('flags metadata comment after the slide container', () => {
+    const html = `<!DOCTYPE html>
+<html>
+<body>
+  <div class="slide"><p>Content</p></div>
+  <!-- @slide-meta {"title":"Test","type":"content"} -->
+</body>
+</html>`;
+
+    const issues = check.run(html, tokenNames, allowedFonts);
+    expect(issues.some((issue) => issue.id.includes('meta-order'))).toBe(true);
   });
 });

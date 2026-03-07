@@ -363,8 +363,10 @@ describe('DeckService', () => {
       expect(summary.slides[0].title).toBe('First Slide');
       expect(summary.slides[0].type).toBe('title');
       expect(summary.slides[0].position).toBe(0);
+      expect(summary.slides[0].isValid).toBe(false);
       expect(summary.slides[1].title).toBe('Second Slide');
       expect(summary.slides[1].position).toBe(1);
+      expect(summary.slides[1].isValid).toBe(false);
       expect(summary.revisionCount).toBeGreaterThan(0);
     });
 

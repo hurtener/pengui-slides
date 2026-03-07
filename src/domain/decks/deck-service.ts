@@ -420,7 +420,7 @@ export class DeckService {
       position: slide.position,
       title: slide.metadata.title,
       type: slide.metadata.type,
-      isValid: slide.lastValidation?.passed ?? true,
+      isValid: slide.lastValidation?.passed ?? false,
       ...(slide.lastValidation?.styleScore
         ? { styleScore: slide.lastValidation.styleScore.overall }
         : {}),

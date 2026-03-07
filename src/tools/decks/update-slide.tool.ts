@@ -10,6 +10,10 @@ import type { ServiceContainer } from '../../container.js';
 import { soulId } from '../../types/common.js';
 import { textResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
+import {
+  buildValidationDelta,
+  buildValidationPresentation,
+} from '../../domain/validation/validation-presentation.js';
 
 const dataPointSchema = z.object({
   label: z.string().describe('Label for the data point.'),
@@ -55,6 +59,9 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
     },
     async ({ deck_id, slide_id, html, metadata }) => {
       try {
+        const previousSlide = await container.deckService.getSlide(slide_id);
+        const previousValidation = previousSlide.lastValidation ?? null;
+        const shouldSyncMetadata = html != null || metadata != null;
         const updateInput: {
           deckId: string;
           slideId: string;
@@ -83,22 +90,23 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
           };
         }
 
-        const slide = await container.deckService.updateSlide(updateInput as Parameters<typeof container.deckService.updateSlide>[0]);
+        const slide = await container.deckService.updateSlide(
+          updateInput as Parameters<typeof container.deckService.updateSlide>[0],
+        );
 
-        // If HTML was changed, embed metadata and re-validate
         let validation;
-        if (html != null) {
-          // Embed metadata into the updated HTML
-          const embeddedHtml = container.metadataEmbedder.update(html, slide.metadata);
+        let validationDelta;
+        let validationPresentation;
+        if (shouldSyncMetadata) {
+          const sourceHtml = html ?? slide.html;
+          const embeddedHtml = container.metadataEmbedder.update(sourceHtml, slide.metadata);
 
-          // Update the slide with embedded HTML
           await container.deckService.updateSlide({
             deckId: deck_id,
             slideId: slide_id,
             html: embeddedHtml,
           });
 
-          // Validate the embedded HTML
           const deck = await container.deckService.getDeckSummary(deck_id);
           const sId = soulId(deck.soulId as string);
           validation = await container.validationService.validateSlide(embeddedHtml, sId);
@@ -109,11 +117,16 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
             slideId: slide_id,
             lastValidation: validation,
           });
+
+          validationDelta = buildValidationDelta(validation, previousValidation);
+          validationPresentation = buildValidationPresentation(validationDelta);
         }
 
         return textResponse({
           slide_id: slide.id,
           ...(validation ? { validation } : {}),
+          ...(validationDelta ? { validation_delta: validationDelta } : {}),
+          ...(validationPresentation ? { validation_presentation: validationPresentation } : {}),
         });
       } catch (error) {
         return handleToolError(error);

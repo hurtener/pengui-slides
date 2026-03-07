@@ -12,6 +12,7 @@ import type { ServiceContainer } from '../../container.js';
 import { BooleanParamSchema } from '../_shared/schemas.js';
 import { textResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
+import { validateSlidesForExport } from './export-validation.js';
 
 export function registerExportPdfTool(server: McpServer, container: ServiceContainer): void {
   server.registerTool(
@@ -32,6 +33,7 @@ export function registerExportPdfTool(server: McpServer, container: ServiceConta
         const slides = await Promise.all(
           summary.slides.map((s) => container.deckService.getSlide(s.id as string)),
         );
+        await validateSlidesForExport(container, deck_id, summary.soulId as string, slides);
 
         const result = await container.renderService.exportPdf(slides, summary.title, mode ?? undefined);
 

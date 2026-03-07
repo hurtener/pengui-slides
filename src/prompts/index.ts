@@ -90,12 +90,14 @@ For each slide:
 - Use the FULL canonical HTML structure (DOCTYPE, <style> with ALL tokens, <div class="slide">)
 - Use only var(--token) references — no literal colors or spacing
 - Include the @slide-meta comment with layout type and title
-- Target validation score 1.0 — fix any issues before moving to the next slide
+- Do not introduce new blocking validation issues while iterating
+- Fix pre-existing issues when explicitly requested or before export
 
 STEP 5 — Export
 Export to the desired format(s): export_pptx, export_pdf, or export_html.
 
-IMPORTANT: Every slide must pass validation at score 1.0 before moving on.
+IMPORTANT: Collaborative editing does not require every intermediate slide revision to reach score 1.0 immediately.
+Final exported decks still require slides to pass full validation.
 Read resource pengui://docs/validation for scoring details.`,
         },
       },

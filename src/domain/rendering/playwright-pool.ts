@@ -18,9 +18,11 @@ type PageInstance = any;
 export class PlaywrightPool {
   private browser: BrowserInstance | null = null;
   private availablePages: PageInstance[] = [];
+  private allPages = new Set<PageInstance>();
   private launching: Promise<BrowserInstance> | null = null;
   private readonly maxPoolSize: number;
   private readonly headless: boolean;
+  private shuttingDown = false;
 
   constructor(options?: { maxPoolSize?: number; headless?: boolean }) {
     this.maxPoolSize = options?.maxPoolSize ?? 4;
@@ -34,13 +36,19 @@ export class PlaywrightPool {
    * Lazily launches the browser on first call.
    */
   async getPage(): Promise<PageInstance> {
+    if (this.shuttingDown) {
+      throw new Error('PlaywrightPool is shutting down');
+    }
+
     const browser = await this.ensureBrowser();
 
     if (this.availablePages.length > 0) {
       return this.availablePages.pop()!;
     }
 
-    return browser.newPage();
+    const page = await browser.newPage();
+    this.allPages.add(page);
+    return page;
   }
 
   /**
@@ -49,15 +57,20 @@ export class PlaywrightPool {
    */
   async releasePage(page: PageInstance): Promise<void> {
     try {
-      if (this.availablePages.length < this.maxPoolSize) {
-        // Reset page state before returning to pool
-        await page.setContent('<html><body></body></html>');
+      if (this.shuttingDown) {
+        await page.close({ runBeforeUnload: false });
+        this.allPages.delete(page);
+        return;
+      }
+
+      if (this.availablePages.length < this.maxPoolSize && !page.isClosed()) {
         this.availablePages.push(page);
       } else {
-        await page.close();
+        await page.close({ runBeforeUnload: false });
+        this.allPages.delete(page);
       }
     } catch {
-      // Page may already be closed — swallow gracefully
+      this.allPages.delete(page);
     }
   }
 
@@ -65,14 +78,22 @@ export class PlaywrightPool {
    * Shut down the browser and release all pooled pages.
    */
   async shutdown(): Promise<void> {
-    for (const page of this.availablePages) {
-      try {
-        await page.close();
-      } catch {
-        // ignore
-      }
-    }
+    this.shuttingDown = true;
+
+    await Promise.allSettled(
+      Array.from(this.allPages).map(async (page) => {
+        try {
+          if (!page.isClosed()) {
+            await page.close({ runBeforeUnload: false });
+          }
+        } catch {
+          // ignore
+        }
+      }),
+    );
+
     this.availablePages = [];
+    this.allPages.clear();
 
     if (this.browser) {
       try {
@@ -84,6 +105,7 @@ export class PlaywrightPool {
     }
 
     this.launching = null;
+    this.shuttingDown = false;
   }
 
   // ── Internals ────────────────────────────────────────────────

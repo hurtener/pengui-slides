@@ -61,6 +61,14 @@ function hasLiteralSpacing(value: string): boolean {
   return LITERAL_SPACING_PATTERN.test(trimmed);
 }
 
+function parseInlineStyle(styleText: string): postcss.Root | null {
+  try {
+    return postcss.parse(`__inline__ { ${styleText} }`);
+  } catch {
+    return null;
+  }
+}
+
 export class SpacingComplianceCheck implements Stage1Check {
   readonly id = 'spacing-compliance';
   readonly name = 'Spacing Compliance';
@@ -88,7 +96,7 @@ export class SpacingComplianceCheck implements Stage1Check {
           issues.push({
             id: `${this.id}-${issues.length}`,
             stage: 'stage1_lint',
-            severity: 'warning',
+            severity: 'error',
             rule: this.id,
             message: `Property "${prop}" uses a literal spacing value instead of a token variable.`,
             element: decl.parent?.type === 'rule' ? (decl.parent as postcss.Rule).selector : undefined,
@@ -96,6 +104,37 @@ export class SpacingComplianceCheck implements Stage1Check {
             actual: decl.value,
             line: decl.source?.start?.line,
             fixSuggestion: `Replace literal spacing with a var(--space-*) token (e.g. var(--space-md)).`,
+          });
+        }
+      });
+    });
+
+    $('[style]').each((_i, el) => {
+      const styleText = $(el).attr('style');
+      if (!styleText?.trim()) return;
+
+      const root = parseInlineStyle(styleText);
+      if (!root) return;
+
+      const selector = el.tagName.toLowerCase() +
+        (el.attribs.class ? `.${el.attribs.class.split(/\s+/).join('.')}` : '');
+
+      root.walkDecls((decl) => {
+        const prop = decl.prop.toLowerCase();
+        if (!SPACING_PROPERTIES.has(prop)) return;
+
+        if (hasLiteralSpacing(decl.value)) {
+          issues.push({
+            id: `${this.id}-${issues.length}`,
+            stage: 'stage1_lint',
+            severity: 'error',
+            rule: this.id,
+            message: `Inline style property "${prop}" uses a literal spacing value instead of a token variable.`,
+            element: selector,
+            expected: 'var(--space-*)',
+            actual: decl.value,
+            line: decl.source?.start?.line,
+            fixSuggestion: 'Replace literal spacing with a var(--space-*) token or approved component token.',
           });
         }
       });

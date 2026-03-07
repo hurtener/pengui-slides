@@ -133,15 +133,20 @@ ${imgTags}
    * page breaks and use Playwright's page.pdf() directly.
    */
   private async exportDirect(slides: Slide[]): Promise<Buffer> {
-    // Resolve asset refs in each slide's HTML before combining
     const resolvedHtmls = this.assetService
       ? await Promise.all(slides.map((s) => resolveAssetRefs(s.html, this.assetService!)))
       : slides.map((s) => s.html);
 
-    const sections = resolvedHtmls
+    const extracted = resolvedHtmls.map((html) => this.extractSlideContent(html));
+
+    const scopedStyles = extracted
+      .map((slide, index) => slide.styles.map((style) => this.scopeCssToSlide(style, `slide-${index + 1}`)).join('\n'))
+      .join('\n\n');
+
+    const sections = extracted
       .map(
-        (html) =>
-          `<section class="slide-page">${html}</section>`,
+        (slide, index) =>
+          `<section class="slide-page" id="slide-${index + 1}">${slide.body}</section>`,
       )
       .join('\n');
 
@@ -159,6 +164,9 @@ ${imgTags}
     position: relative;
   }
   .slide-page:last-child { page-break-after: auto; }
+</style>
+<style>
+${scopedStyles}
 </style>
 </head>
 <body>
@@ -211,5 +219,67 @@ ${sections}
       .replace(/\s+/g, '_')
       .substring(0, 100)
       || 'presentation';
+  }
+
+  private extractSlideContent(html: string): { styles: string[]; body: string } {
+    const styles: string[] = [];
+
+    const styleRegex = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+    let styleMatch: RegExpExecArray | null;
+    while ((styleMatch = styleRegex.exec(html)) !== null) {
+      styles.push(styleMatch[1]);
+    }
+
+    let body = html;
+    const bodyMatch = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html);
+    if (bodyMatch) {
+      body = bodyMatch[1];
+    }
+
+    body = body
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<!DOCTYPE[^>]*>/gi, '')
+      .replace(/<\/?html[^>]*>/gi, '')
+      .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
+      .replace(/<\/?body[^>]*>/gi, '')
+      .trim();
+
+    return { styles, body };
+  }
+
+  private scopeCssToSlide(css: string, slideId: string): string {
+    const result: string[] = [];
+    let depth = 0;
+
+    for (const line of css.split('\n')) {
+      const trimmed = line.trim();
+      const opens = (trimmed.match(/\{/g) || []).length;
+      const closes = (trimmed.match(/\}/g) || []).length;
+
+      if (depth === 0 && opens > 0 && !trimmed.startsWith('@')) {
+        const braceIdx = trimmed.indexOf('{');
+        const selectors = trimmed.substring(0, braceIdx);
+        const rest = trimmed.substring(braceIdx);
+
+        const scoped = selectors
+          .split(',')
+          .map((sel) => {
+            const normalized = sel.trim();
+            if (!normalized) return normalized;
+            if (normalized === ':root') return `#${slideId}`;
+            if (normalized === '*') return `#${slideId}, #${slideId} *`;
+            return `#${slideId} ${normalized}`;
+          })
+          .join(', ');
+
+        result.push(`${scoped} ${rest}`);
+      } else {
+        result.push(line);
+      }
+
+      depth += opens - closes;
+    }
+
+    return result.join('\n');
   }
 }

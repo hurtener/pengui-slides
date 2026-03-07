@@ -11,6 +11,7 @@ import type { Stage1Check, ValidationIssue } from '../../../types/validation.js'
 
 const EXPECTED_WIDTH = '1920px';
 const EXPECTED_HEIGHT = '1080px';
+const EXPECTED_SAFE_AREA_TOKEN = 'var(--space-safe-area)';
 
 export class SafeAreaCheck implements Stage1Check {
   readonly id = 'safe-area-check';
@@ -23,8 +24,10 @@ export class SafeAreaCheck implements Stage1Check {
     // Collect all CSS rules that target .slide
     let foundWidth = false;
     let foundHeight = false;
+    let foundSafeAreaInset = false;
     let actualWidth: string | undefined;
     let actualHeight: string | undefined;
+    let actualSafeAreaInset: string | undefined;
 
     $('style').each((_i, el) => {
       const cssText = $(el).text();
@@ -55,6 +58,13 @@ export class SafeAreaCheck implements Stage1Check {
           foundHeight = true;
           actualHeight = decl.value.trim();
         });
+
+        rule.walkDecls(/^padding(?:-(top|right|bottom|left))?$/, (decl) => {
+          if (decl.value.includes('--space-safe-area')) {
+            foundSafeAreaInset = true;
+            actualSafeAreaInset = decl.value.trim();
+          }
+        });
       });
     });
 
@@ -72,6 +82,11 @@ export class SafeAreaCheck implements Stage1Check {
         if (heightMatch) {
           foundHeight = true;
           actualHeight = heightMatch[1].trim();
+        }
+        const paddingMatch = /padding(?:-[a-z]+)?\s*:\s*([^;]+)/i.exec(inlineStyle);
+        if (paddingMatch && paddingMatch[1].includes('--space-safe-area')) {
+          foundSafeAreaInset = true;
+          actualSafeAreaInset = paddingMatch[1].trim();
         }
       }
     }
@@ -119,6 +134,29 @@ export class SafeAreaCheck implements Stage1Check {
         expected: EXPECTED_HEIGHT,
         actual: actualHeight,
         fixSuggestion: `Set "height: ${EXPECTED_HEIGHT}" on the .slide container.`,
+      });
+    }
+
+    if (!foundSafeAreaInset) {
+      issues.push({
+        id: `${this.id}-safe-area-missing`,
+        stage: 'stage1_lint',
+        severity: 'error',
+        rule: this.id,
+        message: 'Root .slide container is missing the required safe-area inset token.',
+        expected: EXPECTED_SAFE_AREA_TOKEN,
+        fixSuggestion: 'Set padding on the .slide container using var(--space-safe-area).',
+      });
+    } else if (actualSafeAreaInset && !actualSafeAreaInset.includes('--space-safe-area')) {
+      issues.push({
+        id: `${this.id}-safe-area-mismatch`,
+        stage: 'stage1_lint',
+        severity: 'error',
+        rule: this.id,
+        message: `Root .slide container safe-area inset is "${actualSafeAreaInset}", expected "${EXPECTED_SAFE_AREA_TOKEN}".`,
+        expected: EXPECTED_SAFE_AREA_TOKEN,
+        actual: actualSafeAreaInset,
+        fixSuggestion: 'Use var(--space-safe-area) for the slide padding to preserve the required inset.',
       });
     }
 

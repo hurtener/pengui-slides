@@ -98,6 +98,9 @@ describe('MetadataExporter', () => {
       expect(md).toContain('---');
       expect(md).toContain('Generated: 2026-01-15T12:00:00.000Z');
       expect(md).toContain('Soul: soul-1');
+      expect(md).toContain('Deck: deck-1');
+      expect(md).toContain('Position: 2');
+      expect(md).toContain('Revision: abc123');
       expect(md).toContain('Meta v1.0');
     });
 

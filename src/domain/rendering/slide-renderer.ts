@@ -9,6 +9,7 @@ import type { Logger } from '../../infrastructure/logger.js';
 import type { AssetService } from '../assets/asset-service.js';
 import { resolveAssetRefs } from '../assets/asset-resolver.js';
 import type { PlaywrightPool } from './playwright-pool.js';
+import { sha256 } from '../../infrastructure/hash.js';
 import type {
   RenderOptions,
   SlideRenderResult,
@@ -19,6 +20,9 @@ import { DEFAULT_RENDER_OPTIONS } from '../../types/export.js';
 // ── Slide Renderer ───────────────────────────────────────────────
 
 export class SlideRenderer {
+  private readonly cache = new Map<string, Omit<SlideRenderResult, 'slideId' | 'renderTimeMs'>>();
+  private readonly maxCacheEntries = 200;
+
   constructor(
     private readonly pool: PlaywrightPool,
     private readonly logger: Logger,
@@ -64,10 +68,26 @@ export class SlideRenderer {
         ? await resolveAssetRefs(html, this.assetService)
         : html;
 
-      await page.setContent(resolved, { waitUntil: 'load' });
+      const cacheKey = this.buildCacheKey(resolved, opts);
+      const cached = this.cache.get(cacheKey);
+      if (cached) {
+        this.cache.delete(cacheKey);
+        this.cache.set(cacheKey, cached);
 
-      // Allow CSS custom properties, fonts, and layout to fully resolve
-      await page.waitForTimeout(100);
+        return {
+          slideId,
+          imageData: Buffer.from(cached.imageData),
+          format: cached.format,
+          width: cached.width,
+          height: cached.height,
+          renderTimeMs: Math.round(performance.now() - start),
+        };
+      }
+
+      await page.setContent(resolved, { waitUntil: 'load' });
+      await page.evaluate(() => {
+        return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      });
 
       const screenshotOptions: Record<string, unknown> = {
         type: opts.format,
@@ -88,6 +108,14 @@ export class SlideRenderer {
         bytes: imageData.length,
       });
 
+      this.cache.set(cacheKey, {
+        imageData: Buffer.from(imageData),
+        format: opts.format as ImageFormat,
+        width: opts.width,
+        height: opts.height,
+      });
+      this.trimCache();
+
       return {
         slideId,
         imageData,
@@ -100,6 +128,29 @@ export class SlideRenderer {
       if (page) {
         await this.pool.releasePage(page);
       }
+    }
+  }
+
+  clearCache(): void {
+    this.cache.clear();
+  }
+
+  private buildCacheKey(html: string, options: RenderOptions): string {
+    return sha256(JSON.stringify({
+      html,
+      width: options.width,
+      height: options.height,
+      format: options.format,
+      quality: options.quality ?? null,
+      deviceScaleFactor: options.deviceScaleFactor,
+    }));
+  }
+
+  private trimCache(): void {
+    while (this.cache.size > this.maxCacheEntries) {
+      const oldestKey = this.cache.keys().next().value;
+      if (!oldestKey) break;
+      this.cache.delete(oldestKey);
     }
   }
 }

@@ -81,7 +81,9 @@ export class MetadataExporter {
     // Provenance footer
     sections.push('');
     sections.push('---');
-    sections.push(`*Generated: ${metadata.generatedAt} | Soul: ${metadata.soulId} | Meta v${metadata.metaVersion}*`);
+    sections.push(
+      `*Generated: ${metadata.generatedAt} | Soul: ${metadata.soulId} | Deck: ${metadata.deckId} | Position: ${metadata.position} | Revision: ${metadata.revisionHash} | Meta v${metadata.metaVersion}*`,
+    );
 
     return sections.join('\n');
   }

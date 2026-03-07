@@ -12,6 +12,7 @@ import type { Stage1Check, ValidationIssue } from '../../../types/validation.js'
 
 /** Regex to extract @slide-meta JSON from HTML comments. */
 const SLIDE_META_REGEX = /<!--\s*@slide-meta\s+([\s\S]*?)-->/;
+const ROOT_SLIDE_REGEX = /<div[^>]*class=["'][^"']*\bslide\b[^"']*["'][^>]*>/i;
 
 export class StructuralCheck implements Stage1Check {
   readonly id = 'structural-check';
@@ -36,20 +37,32 @@ export class StructuralCheck implements Stage1Check {
     // ── Check @slide-meta comment ───────────────────────────────────
     const metaMatch = SLIDE_META_REGEX.exec(html);
     if (!metaMatch) {
-      issues.push({
-        id: `${this.id}-meta-missing`,
-        stage: 'stage1_lint',
-        severity: 'error',
-        rule: this.id,
-        message: 'Missing @slide-meta comment block. Each slide must include a <!-- @slide-meta {...} --> comment.',
-        expected: '<!-- @slide-meta {"layout":"...", ...} -->',
-        fixSuggestion: 'Add a <!-- @slide-meta {"layout":"...", "title":"..."} --> comment to the HTML.',
-      });
+        issues.push({
+          id: `${this.id}-meta-missing`,
+          stage: 'stage1_lint',
+          severity: 'error',
+          rule: this.id,
+          message: 'Missing @slide-meta comment block. Each slide must include a <!-- @slide-meta {...} --> comment.',
+          expected: '<!-- @slide-meta {"layout":"...", ...} -->',
+          fixSuggestion: 'Add the metadata block before the root .slide container, or let add_slide / update_slide regenerate the embedded metadata for you.',
+        });
     } else {
       // Validate the JSON inside the meta comment
       const jsonStr = metaMatch[1].trim();
       try {
-        JSON.parse(jsonStr);
+        const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+
+        if (!parsed.title || !parsed.type) {
+          issues.push({
+            id: `${this.id}-meta-required-fields`,
+            stage: 'stage1_lint',
+            severity: 'error',
+            rule: this.id,
+            message: 'The @slide-meta comment must include at least "title" and "type".',
+            actual: jsonStr.slice(0, 100),
+            fixSuggestion: 'Update the slide metadata fields instead of hand-editing the comment when possible; the server will re-embed title and type automatically.',
+          });
+        }
       } catch {
         issues.push({
           id: `${this.id}-meta-invalid`,
@@ -58,7 +71,7 @@ export class StructuralCheck implements Stage1Check {
           rule: this.id,
           message: 'The @slide-meta comment contains invalid JSON.',
           actual: jsonStr.slice(0, 100),
-          fixSuggestion: 'Ensure the @slide-meta comment contains valid JSON (e.g. <!-- @slide-meta {"layout":"title"} -->).',
+          fixSuggestion: 'Use the metadata fields in add_slide / update_slide and let the server re-embed a valid @slide-meta block automatically.',
         });
       }
     }
@@ -76,6 +89,20 @@ export class StructuralCheck implements Stage1Check {
         expected: '<div class="slide">',
         fixSuggestion: 'Wrap slide content in a <div class="slide">...</div> container.',
       });
+    } else if (metaMatch) {
+      const metaIndex = html.indexOf(metaMatch[0]);
+      const slideMatch = ROOT_SLIDE_REGEX.exec(html);
+      const slideIndex = slideMatch?.index ?? -1;
+      if (metaIndex > slideIndex) {
+        issues.push({
+          id: `${this.id}-meta-order`,
+          stage: 'stage1_lint',
+          severity: 'error',
+          rule: this.id,
+          message: 'The @slide-meta comment must appear before the root .slide container.',
+          fixSuggestion: 'Place the metadata block immediately before the root .slide container. If you are editing slide content through the tools, update semantic metadata and let the server manage comment placement.',
+        });
+      }
     }
 
     return issues;

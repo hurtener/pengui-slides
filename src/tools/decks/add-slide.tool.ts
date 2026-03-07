@@ -11,6 +11,10 @@ import type { ServiceContainer } from '../../container.js';
 import { soulId } from '../../types/common.js';
 import { textResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
+import {
+  buildValidationDelta,
+  buildValidationPresentation,
+} from '../../domain/validation/validation-presentation.js';
 
 const dataPointSchema = z.object({
   label: z.string().describe('Label for the data point.'),
@@ -98,11 +102,16 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
           lastValidation: validation,
         });
 
+        const validationDelta = buildValidationDelta(validation, null);
+        const validationPresentation = buildValidationPresentation(validationDelta);
+
         return textResponse({
           slide_id: slide.id,
           position: slide.position,
           slide_count: deck.slideCount,
           validation,
+          validation_delta: validationDelta,
+          validation_presentation: validationPresentation,
         });
       } catch (error) {
         return handleToolError(error);

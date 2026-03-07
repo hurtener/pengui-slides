@@ -40,6 +40,8 @@ const LITERAL_COLOR_PATTERNS = [
   /^hsla\s*\(/,                       // hsla()
 ];
 
+const VAR_REFERENCE_REGEX = /var\(\s*(--[A-Za-z0-9_-]+)/g;
+
 function isLiteralColor(value: string): boolean {
   const trimmed = value.trim().toLowerCase();
 
@@ -80,13 +82,61 @@ function containsLiteralColor(fullValue: string): string | null {
   return null;
 }
 
+function extractVarReferences(value: string): string[] {
+  const refs: string[] = [];
+  let match: RegExpExecArray | null;
+  VAR_REFERENCE_REGEX.lastIndex = 0;
+
+  while ((match = VAR_REFERENCE_REGEX.exec(value)) !== null) {
+    refs.push(match[1]);
+  }
+
+  return refs;
+}
+
+function pushInvalidTokenIssues(
+  issues: ValidationIssue[],
+  value: string,
+  allowedTokens: Set<string>,
+  selector?: string,
+  line?: number,
+): void {
+  const refs = extractVarReferences(value);
+
+  for (const ref of refs) {
+    if (allowedTokens.has(ref)) continue;
+
+    issues.push({
+      id: `token-compliance-${issues.length}`,
+      stage: 'stage1_lint',
+      severity: 'error',
+      rule: 'token-compliance',
+      message: `CSS references unknown design token "${ref}".`,
+      element: selector,
+      expected: 'A token defined by the active Design Soul',
+      actual: ref,
+      line,
+      fixSuggestion: 'Replace the token reference with one returned by get_design_soul.',
+    });
+  }
+}
+
+function parseInlineStyle(styleText: string): postcss.Root | null {
+  try {
+    return postcss.parse(`__inline__ { ${styleText} }`);
+  } catch {
+    return null;
+  }
+}
+
 export class TokenComplianceCheck implements Stage1Check {
   readonly id = 'token-compliance';
   readonly name = 'Token Compliance';
 
-  run(html: string, _soulTokenNames: string[], _allowedFonts: string[]): ValidationIssue[] {
+  run(html: string, soulTokenNames: string[], _allowedFonts: string[]): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
     const $ = cheerio.load(html);
+    const allowedTokens = new Set(soulTokenNames);
 
     $('style').each((_i, el) => {
       const cssText = $(el).text();
@@ -101,6 +151,16 @@ export class TokenComplianceCheck implements Stage1Check {
       }
 
       root.walkDecls((decl) => {
+        if (decl.prop.startsWith('--')) return;
+
+        pushInvalidTokenIssues(
+          issues,
+          decl.value,
+          allowedTokens,
+          decl.parent?.type === 'rule' ? (decl.parent as postcss.Rule).selector : undefined,
+          decl.source?.start?.line,
+        );
+
         const prop = decl.prop.toLowerCase();
         if (!COLOR_PROPERTIES.has(prop)) return;
 
@@ -113,6 +173,42 @@ export class TokenComplianceCheck implements Stage1Check {
             rule: this.id,
             message: `Property "${prop}" uses literal color "${literal}" instead of a design token variable.`,
             element: decl.parent?.type === 'rule' ? (decl.parent as postcss.Rule).selector : undefined,
+            expected: 'var(--<token-name>)',
+            actual: literal,
+            line: decl.source?.start?.line,
+            fixSuggestion: `Replace "${literal}" with a var(--<token-name>) reference from the Design Soul.`,
+          });
+        }
+      });
+    });
+
+    $('[style]').each((_i, el) => {
+      const styleText = $(el).attr('style');
+      if (!styleText?.trim()) return;
+
+      const root = parseInlineStyle(styleText);
+      if (!root) return;
+
+      root.walkDecls((decl) => {
+        if (decl.prop.startsWith('--')) return;
+
+        const selector = el.tagName.toLowerCase() +
+          (el.attribs.class ? `.${el.attribs.class.split(/\s+/).join('.')}` : '');
+
+        pushInvalidTokenIssues(issues, decl.value, allowedTokens, selector, decl.source?.start?.line);
+
+        const prop = decl.prop.toLowerCase();
+        if (!COLOR_PROPERTIES.has(prop)) return;
+
+        const literal = containsLiteralColor(decl.value);
+        if (literal) {
+          issues.push({
+            id: `${this.id}-${issues.length}`,
+            stage: 'stage1_lint',
+            severity: 'error',
+            rule: this.id,
+            message: `Inline style property "${prop}" uses literal color "${literal}" instead of a design token variable.`,
+            element: selector,
             expected: 'var(--<token-name>)',
             actual: literal,
             line: decl.source?.start?.line,

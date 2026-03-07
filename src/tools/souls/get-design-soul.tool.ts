@@ -49,11 +49,16 @@ export function registerGetDesignSoulTool(
           soul: {
             id: soul.id,
             name: soul.name,
+            description: soul.description,
             status: soul.status,
+            layers: soul.layers,
             css_tokens: soul.cssTokens,
             utility_css: soul.utilityCss,
             token_names: soul.tokenNames,
             allowed_fonts: soul.allowedFonts,
+            created_at: soul.createdAt,
+            updated_at: soul.updatedAt,
+            approved_at: soul.approvedAt ?? null,
           },
         };
 

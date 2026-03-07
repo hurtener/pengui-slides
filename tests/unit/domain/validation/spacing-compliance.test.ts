@@ -26,7 +26,7 @@ describe('SpacingComplianceCheck', () => {
 
     const issues = check.run(html, tokenNames, allowedFonts);
     expect(issues.length).toBeGreaterThan(0);
-    expect(issues[0].severity).toBe('warning');
+    expect(issues[0].severity).toBe('error');
     expect(issues[0].rule).toBe('spacing-compliance');
   });
 
@@ -115,5 +115,12 @@ describe('SpacingComplianceCheck', () => {
     const html = '<style></style><div class="slide">Empty</div>';
     const issues = check.run(html, tokenNames, allowedFonts);
     expect(issues).toHaveLength(0);
+  });
+
+  it('checks inline styles for literal spacing', () => {
+    const html = '<div class="slide" style="padding: 16px;">Bad</div>';
+    const issues = check.run(html, tokenNames, allowedFonts);
+    expect(issues.length).toBeGreaterThan(0);
+    expect(issues[0].severity).toBe('error');
   });
 });
