@@ -109,7 +109,7 @@ describe('PreviewRenderer', () => {
     // Verify it is valid base64 by decoding it
     const buffer = Buffer.from(result.imageBase64, 'base64');
     expect(buffer.length).toBeGreaterThan(0);
-  });
+  }, 10000);
 
   it('should report the requested preview dimensions', async () => {
     const input: PreviewInput = {

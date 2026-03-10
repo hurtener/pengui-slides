@@ -37,6 +37,8 @@ export enum ErrorCode {
   // Export errors
   EXPORT_FAILED = 'EXPORT_FAILED',
   EXPORT_NO_SLIDES = 'EXPORT_NO_SLIDES',
+  EXPORT_TRANSLATION_BLOCKED = 'EXPORT_TRANSLATION_BLOCKED',
+  GOOGLE_AUTH_MISSING = 'GOOGLE_AUTH_MISSING',
 
   // Asset errors
   ASSET_NOT_FOUND = 'ASSET_NOT_FOUND',
@@ -123,6 +125,21 @@ export class RenderError extends PenguiError {
 export class ExportError extends PenguiError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(ErrorCode.EXPORT_FAILED, message, details);
+  }
+}
+
+export class ExportTranslationBlockedError extends PenguiError {
+  constructor(message: string, details?: Record<string, unknown>) {
+    super(ErrorCode.EXPORT_TRANSLATION_BLOCKED, message, details);
+  }
+}
+
+export class GoogleAuthMissingError extends PenguiError {
+  constructor() {
+    super(
+      ErrorCode.GOOGLE_AUTH_MISSING,
+      'Google Slides export requires either PENGUI_GOOGLE_ACCESS_TOKEN or service account credentials.',
+    );
   }
 }
 

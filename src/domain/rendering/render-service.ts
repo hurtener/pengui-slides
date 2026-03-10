@@ -16,6 +16,8 @@ import type {
   ExportResult,
   ExportPptxOptions,
   PdfMode,
+  RenderOptions,
+  SlideRenderResult,
 } from '../../types/export.js';
 
 import { PlaywrightPool } from './playwright-pool.js';
@@ -109,6 +111,15 @@ export class RenderService {
   ): Promise<ExportResult> {
     const exporter = this.ensureHtmlExporter();
     return exporter.export(slides, deckTitle, includeNavigation);
+  }
+
+  async renderSlideHtml(
+    html: string,
+    slideId: string,
+    options?: Partial<RenderOptions>,
+  ): Promise<SlideRenderResult> {
+    const renderer = this.ensureSlideRenderer();
+    return renderer.render(html, slideId, options);
   }
 
   // ── Lifecycle ────────────────────────────────────────────────

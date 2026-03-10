@@ -61,6 +61,23 @@ export interface SlideMetadata {
   tags: string[];
 }
 
+export interface SlideTranslationIssue {
+  code: string;
+  message: string;
+  severity: 'error' | 'warning';
+  selector?: string;
+  detail?: string;
+}
+
+export interface SlideDocument {
+  version: '1';
+  sourceRevisionHash: string;
+  width: number;
+  height: number;
+  backgroundColor?: string;
+  elements: Array<Record<string, unknown>>;
+}
+
 export interface SlideSummary {
   id: string;
   position: number;
@@ -100,6 +117,10 @@ export interface EditorSelectedSlide {
   slideId: string;
   position: number;
   html: string;
+  sourceKind?: 'legacy_html' | 'document_v1';
+  document?: SlideDocument | null;
+  translationIssues?: SlideTranslationIssue[];
+  editableExportReady?: boolean;
   metadata: SlideMetadata;
   lastValidation: ValidationResult | null;
   validationPresentation: ValidationPresentation;

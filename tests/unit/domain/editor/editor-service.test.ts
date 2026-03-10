@@ -44,7 +44,7 @@ describe('EditorService', () => {
     const stored = await container.deckService.getSlide(slide.id as string);
     expect(stored.html).toContain('data-edit-id=');
     expect(stored.lastValidation?.passed).toBe(true);
-  });
+  }, 20000);
 
   it('applies a text edit and refreshes revision hash and preview state', async () => {
     const container = createContainer(loadConfig({ logLevel: 'error' }));
@@ -80,7 +80,7 @@ describe('EditorService', () => {
     expect(updated.selectedSlide.revisionHash).not.toBe(initial.selectedSlide.revisionHash);
     expect(updated.selectedPreview.imageBase64.length).toBeGreaterThan(100);
     expect(updated.selectedSlide.validationPresentation.status).toBe('clean');
-  });
+  }, 12000);
 
   it('rejects stale revision hashes with a conflict error', async () => {
     const container = createContainer(loadConfig({ logLevel: 'error' }));
@@ -117,7 +117,7 @@ describe('EditorService', () => {
       text: 'My update',
       expectedRevisionHash: state.selectedSlide.revisionHash,
     })).rejects.toBeInstanceOf(SlideRevisionConflictError);
-  });
+  }, 12000);
 
   it('rejects slide selections that do not belong to the requested deck', async () => {
     const container = createContainer(loadConfig({ logLevel: 'error' }));

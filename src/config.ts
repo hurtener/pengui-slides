@@ -46,6 +46,15 @@ export interface PenguiConfig {
 
   /** HTTP server port (only used when transport is 'http') */
   httpPort: number;
+
+  /** Optional pre-minted Google OAuth access token for Google Slides export */
+  googleAccessToken?: string;
+
+  /** Optional Google service account client email for Google Slides export */
+  googleClientEmail?: string;
+
+  /** Optional Google service account private key for Google Slides export */
+  googlePrivateKey?: string;
 }
 
 export const defaultConfig: PenguiConfig = {

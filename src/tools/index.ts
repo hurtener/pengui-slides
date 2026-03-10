@@ -39,6 +39,7 @@ import { registerRenderPreviewTool } from './export/render-preview.tool.js';
 import { registerExportPptxTool } from './export/export-pptx.tool.js';
 import { registerExportPdfTool } from './export/export-pdf.tool.js';
 import { registerExportHtmlTool } from './export/export-html.tool.js';
+import { registerExportGoogleSlidesTool } from './export/export-google-slides.tool.js';
 
 // MCP App tools
 import { registerOpenDeckEditorTool } from './app/open-deck-editor.tool.js';
@@ -76,6 +77,7 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerExportPptxTool(server, container);
   registerExportPdfTool(server, container);
   registerExportHtmlTool(server, container);
+  registerExportGoogleSlidesTool(server, container);
 
   // MCP App tools
   registerOpenDeckEditorTool(server, container);

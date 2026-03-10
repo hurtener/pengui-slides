@@ -102,6 +102,21 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
           lastValidation: validation,
         });
 
+        // 7. Compile HTML into the canonical slide document when possible.
+        const refreshedSlide = await container.deckService.getSlide(slide.id as string);
+        const compilation = await container.slideDocumentService.compileSlideHtml(
+          embeddedHtml,
+          refreshedSlide.metadata.revisionHash,
+        );
+        const translationState = container.slideDocumentService.buildTranslationState(compilation);
+        await container.deckService.updateSlide({
+          deckId: deck_id,
+          slideId: slide.id as string,
+          sourceKind: translationState.sourceKind,
+          document: translationState.document ?? undefined,
+          translationIssues: translationState.translationIssues,
+        });
+
         const validationDelta = buildValidationDelta(validation, null);
         const validationPresentation = buildValidationPresentation(validationDelta);
 
@@ -109,6 +124,8 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
           slide_id: slide.id,
           position: slide.position,
           slide_count: deck.slideCount,
+          source_kind: translationState.sourceKind,
+          translation_issues: translationState.translationIssues,
           validation,
           validation_delta: validationDelta,
           validation_presentation: validationPresentation,

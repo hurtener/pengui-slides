@@ -21,6 +21,8 @@ import { MetadataExporter } from './domain/metadata/metadata-exporter.js';
 import { RenderService } from './domain/rendering/render-service.js';
 import { AssetService } from './domain/assets/asset-service.js';
 import { EditorService } from './domain/editor/editor-service.js';
+import { SlideDocumentService } from './domain/documents/index.js';
+import { GoogleSlidesExportService } from './domain/export/google-slides-export-service.js';
 
 export interface ServiceContainer {
   config: PenguiConfig;
@@ -42,7 +44,9 @@ export interface ServiceContainer {
   metadataExporter: MetadataExporter;
   renderService: RenderService;
   assetService: AssetService;
+  slideDocumentService: SlideDocumentService;
   editorService: EditorService;
+  googleSlidesExportService: GoogleSlidesExportService;
 }
 
 export function createContainer(config: PenguiConfig): ServiceContainer {
@@ -61,12 +65,24 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
   const metadataExporter = new MetadataExporter();
   const assetService = new AssetService(assetStore, clock, logger.child('assets'));
   const renderService = new RenderService(config, logger.child('rendering'), assetService);
+  const slideDocumentService = new SlideDocumentService(
+    logger.child('documents'),
+    config.headless,
+    assetService,
+  );
   const editorService = new EditorService(
     deckService,
     validationService,
     renderService,
     metadataEmbedder,
+    slideDocumentService,
     logger.child('editor'),
+  );
+  const googleSlidesExportService = new GoogleSlidesExportService(
+    config,
+    logger.child('google-slides-export'),
+    renderService,
+    slideDocumentService,
   );
 
   return {
@@ -85,6 +101,8 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
     metadataExporter,
     renderService,
     assetService,
+    slideDocumentService,
     editorService,
+    googleSlidesExportService,
   };
 }

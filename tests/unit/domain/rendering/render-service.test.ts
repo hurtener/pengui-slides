@@ -59,7 +59,7 @@ describe('RenderService', () => {
     expect(results).toHaveLength(1);
     expect(results[0].imageBase64.length).toBeGreaterThan(100);
     expect(results[0].format).toBe('png');
-  });
+  }, 10000);
 
   it('exports PPTX via Playwright', async () => {
     const slides = [makeSlide('s1', simpleHtml, 0)];

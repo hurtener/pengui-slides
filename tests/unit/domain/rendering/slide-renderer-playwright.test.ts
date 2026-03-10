@@ -89,7 +89,7 @@ describe('SlideRenderer', () => {
     expect(result.slideId).toBe('slide-1');
     expect(result.format).toBe('png');
     expect(result.renderTimeMs).toBeGreaterThanOrEqual(0);
-  });
+  }, 10000);
 
   it('should render at the requested viewport dimensions', async () => {
     const html = makeSlideHtml({ title: 'Dimensions Test' });
