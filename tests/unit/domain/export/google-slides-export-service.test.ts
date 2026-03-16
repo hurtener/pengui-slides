@@ -298,9 +298,7 @@ describe('GoogleSlidesExportService', () => {
 
     const result = await service.export([slide], 'Editable Deck');
 
-    expect(slideDocumentService.render).toHaveBeenCalledWith(slide.document, {
-      includeDispositions: ['background'],
-    });
+    expect(slideDocumentService.render).not.toHaveBeenCalled();
     expect(renderService.renderSlideHtml).toHaveBeenCalled();
     expect(result.slides[0]).toEqual({
       slideId: 'slide-1',
@@ -1199,12 +1197,124 @@ describe('GoogleSlidesExportService', () => {
     const result = await service.export([slide], 'Editable Deck');
 
     expect(result.slides[0]?.mode).toBe('hybrid_background');
-    expect(slideDocumentService.render).toHaveBeenCalledWith(expect.objectContaining({
-      elements: expect.arrayContaining([
-        expect.objectContaining({ id: 'divider-1', exportDisposition: 'background' }),
-      ]),
-    }), {
-      includeDispositions: ['background'],
+    expect(slideDocumentService.render).not.toHaveBeenCalled();
+    expect(renderService.renderSlideHtml).toHaveBeenCalled();
+  });
+
+  it('renders fallback backgrounds from the original slide HTML when only plain text remains native', async () => {
+    const slide = makeDocumentSlide();
+    slide.html = '<!DOCTYPE html><html><head></head><body><div class="card"><div data-edit-id="title-1">Title</div></div></body></html>';
+    slide.document!.elements = [
+      {
+        id: 'card-1',
+        kind: 'shape',
+        x: 48,
+        y: 180,
+        width: 592,
+        height: 850,
+        rotation: 0,
+        zIndex: 0,
+        opacity: 1,
+        locked: false,
+        exportDisposition: 'native',
+        shapeType: 'roundRectangle',
+        selector: 'div.card',
+        style: {
+          backgroundColor: 'rgb(42, 42, 40)',
+          borderColor: 'rgba(255, 255, 255, 0.12)',
+          borderWidth: 1,
+          borderRadius: 12,
+        },
+      },
+      {
+        id: 'title-1',
+        kind: 'text',
+        x: 73,
+        y: 304,
+        width: 542,
+        height: 32,
+        rotation: 0,
+        zIndex: 1,
+        opacity: 1,
+        locked: false,
+        exportDisposition: 'native',
+        text: 'Title',
+        paragraphs: [{ text: 'Title', runs: [{ text: 'Title' }] }],
+        editId: 'title-1',
+        selector: 'h3.card-title',
+        style: {
+          color: 'rgb(255, 255, 255)',
+          fontFamily: 'Inter, sans-serif',
+          fontSize: 28,
+          lineHeight: 32.2,
+          textAlign: 'left',
+        },
+      },
+    ];
+
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        presentationId: 'pres-123',
+        slides: [{ objectId: 'default-slide' }],
+        pageSize: {
+          width: { magnitude: 9144000, unit: 'EMU' },
+          height: { magnitude: 5143500, unit: 'EMU' },
+        },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        scope: 'https://www.googleapis.com/auth/presentations https://www.googleapis.com/auth/drive.file',
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'drive-file-1' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        slides: [{ slideProperties: { notesPage: { notesProperties: { speakerNotesObjectId: 'notes-1' } } } }],
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        slides: [{
+          objectId: 'slide_1_slide_1',
+          pageElements: [
+            {
+              objectId: 'background',
+              size: { width: { magnitude: 9144000, unit: 'EMU' }, height: { magnitude: 5143500, unit: 'EMU' } },
+              transform: { scaleX: 1, scaleY: 1, translateX: 0, translateY: 0, unit: 'EMU' },
+            },
+            {
+              objectId: 'native-title',
+              size: { width: { magnitude: 2500000, unit: 'EMU' }, height: { magnitude: 400000, unit: 'EMU' } },
+              transform: { scaleX: 1, scaleY: 1, translateX: 300000, translateY: 1500000, unit: 'EMU' },
+            },
+          ],
+        }],
+      }), { status: 200 }));
+
+    const { renderService, slideDocumentService } = makeServices();
+    renderService.renderSlideHtml.mockResolvedValue({
+      slideId: 'slide-1-background',
+      imageData: Buffer.from('png'),
+      format: 'png',
+      width: 1920,
+      height: 1080,
+      renderTimeMs: 5,
     });
+
+    const service = new GoogleSlidesExportService(
+      loadConfig({ googleAccessToken: 'token-123' }),
+      new Logger('test', 'error'),
+      renderService as never,
+      slideDocumentService as never,
+      fetchMock,
+    );
+
+    await service.export([slide], 'Editable Deck');
+
+    expect(slideDocumentService.render).not.toHaveBeenCalled();
+    expect(renderService.renderSlideHtml).toHaveBeenCalledWith(
+      expect.stringContaining('[data-edit-id="title-1"]'),
+      'slide-1-background',
+      expect.any(Object),
+    );
   });
 });

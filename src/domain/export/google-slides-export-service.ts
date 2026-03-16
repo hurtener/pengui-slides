@@ -318,6 +318,10 @@ function isEmojiOnlyText(value: string): boolean {
   return trimmed.length > 0 && /^[\p{Extended_Pictographic}\uFE0F\u200D]+$/u.test(trimmed);
 }
 
+function escapeCssString(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
 function expandTextFrame(element: SlideTextElement): SlideTextElement {
   const fontSize = element.style.fontSize ?? 18;
   const isSingleLine = isVisuallySingleLine(element);
@@ -642,9 +646,7 @@ export class GoogleSlidesExportService {
     }
 
     if (needsBackgroundFallback) {
-      const backgroundHtml = this.slideDocumentService.render(classifiedDocument, {
-        includeDispositions: ['background'],
-      });
+      const backgroundHtml = this.buildBackgroundHtml(slide, classifiedDocument, nativeElements);
       const render = await this.renderService.renderSlideHtml(
         backgroundHtml,
         `${String(slide.id)}-background`,
@@ -680,8 +682,58 @@ export class GoogleSlidesExportService {
     };
   }
 
+  private buildBackgroundHtml(
+    slide: Slide,
+    document: SlideDocument,
+    nativeElements: SlideElement[],
+  ): string {
+    if (this.canUseOriginalHtmlBackground(slide, nativeElements)) {
+      const nativeEditIds = nativeElements
+        .filter((element): element is SlideTextElement => element.kind === 'text' && typeof element.editId === 'string')
+        .map((element) => element.editId as string);
+      return this.buildOriginalHtmlBackground(slide.html, nativeEditIds);
+    }
+
+    return this.slideDocumentService.render(document, {
+      includeDispositions: ['background'],
+    });
+  }
+
+  private canUseOriginalHtmlBackground(slide: Slide, nativeElements: SlideElement[]): boolean {
+    if (!slide.html) {
+      return false;
+    }
+
+    return nativeElements.every((element) => (
+      element.kind === 'text'
+      && typeof element.editId === 'string'
+      && !hasBoxLikeTextStyle(element)
+    ));
+  }
+
+  private buildOriginalHtmlBackground(html: string, nativeEditIds: string[]): string {
+    if (nativeEditIds.length === 0) {
+      return html;
+    }
+
+    const rules = nativeEditIds.map((editId) => {
+      const selector = `[data-edit-id="${escapeCssString(editId)}"]`;
+      return [
+        `${selector}{color:transparent !important;text-shadow:none !important;caret-color:transparent !important;}`,
+        `${selector}::before{opacity:0 !important;color:transparent !important;}`,
+        `${selector}::after{opacity:0 !important;color:transparent !important;}`,
+      ].join('');
+    }).join('');
+
+    const styleTag = `<style data-pengui-background-hide>${rules}</style>`;
+    if (html.includes('</head>')) {
+      return html.replace('</head>', `${styleTag}</head>`);
+    }
+    return `${styleTag}${html}`;
+  }
+
   private async classifyDocumentForExport(accessToken: string, document: SlideDocument): Promise<SlideDocument> {
-    const hasRuntimeFallbackCandidates = document.elements.some((element) => this.runtimeFallbackReason(element));
+    const hasRuntimeFallbackCandidates = document.elements.some((element) => this.runtimeFallbackReason(element, document));
     if (!hasRuntimeFallbackCandidates) {
       return document;
     }
@@ -693,16 +745,16 @@ export class GoogleSlidesExportService {
 
     return {
       ...document,
-      elements: document.elements.map((element) => this.classifyElementForExport(element)),
+      elements: document.elements.map((element) => this.classifyElementForExport(element, document)),
     };
   }
 
-  private classifyElementForExport(element: SlideElement): SlideElement {
+  private classifyElementForExport(element: SlideElement, document: SlideDocument): SlideElement {
     if (element.exportDisposition && element.exportDisposition !== 'native') {
       return element;
     }
 
-    const runtimeFallbackReason = this.runtimeFallbackReason(element);
+    const runtimeFallbackReason = this.runtimeFallbackReason(element, document);
     if (!runtimeFallbackReason) {
       return element;
     }
@@ -714,12 +766,44 @@ export class GoogleSlidesExportService {
     };
   }
 
-  private runtimeFallbackReason(element: SlideElement): string | undefined {
+  private runtimeFallbackReason(element: SlideElement, document: SlideDocument): string | undefined {
+    const isDeliverablesCardLayout = this.isDeliverablesCardLayout(document);
+
     if (element.kind === 'text') {
+      if (isDeliverablesCardLayout) {
+        if (
+          element.selector === 'span.card-ordinal'
+        ) {
+          return 'deliverables-card-ordinal';
+        }
+      }
+
+      if (element.selector === 'span.card-ordinal') {
+        return 'decorative-card-text';
+      }
       return undefined;
     }
 
     if (element.kind === 'shape') {
+      if (isDeliverablesCardLayout) {
+        if (
+          element.selector === 'div.card'
+          || element.selector === 'div.card-footer'
+          || element.selector === 'span.badge'
+          || element.selector === 'span.badge-dot'
+        ) {
+          return 'deliverables-card-chrome';
+        }
+      }
+
+      if (
+        element.selector === 'div.card'
+        || element.selector === 'div.card-footer'
+        || element.selector === 'span.badge'
+        || element.selector === 'span.badge-dot'
+      ) {
+        return 'decorative-card-chrome';
+      }
       const borderStyle = element.style.borderStyle?.trim() ?? '';
       if (borderStyle.includes(' ') && borderStyle !== 'solid none none') {
         return 'complex-border-style';
@@ -730,6 +814,12 @@ export class GoogleSlidesExportService {
     }
 
     return undefined;
+  }
+
+  private isDeliverablesCardLayout(document: SlideDocument): boolean {
+    return document.elements.some((element) => element.selector === 'div.card')
+      && document.elements.some((element) => element.selector === 'span.month-label')
+      && document.elements.some((element) => element.selector === 'h3.card-title');
   }
 
   private async supportsRuntimeBackgroundFallback(accessToken: string): Promise<boolean> {
