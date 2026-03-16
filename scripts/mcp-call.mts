@@ -18,12 +18,13 @@ if (!toolName) {
 
 const args = argsJson ? JSON.parse(argsJson) : {};
 
-const PERSIST_DIR = './data';
+const PERSIST_DIR = process.env.PENGUI_PERSIST_DIR ?? './data';
 
 const transport = new StdioClientTransport({
   command: 'node',
   args: ['build/index.js', '--persist-dir', PERSIST_DIR],
   cwd: '/Users/santiagobenvenuto/Repos/pengui-slides',
+  env: process.env,
 });
 
 const client = new Client({ name: 'mcp-caller', version: '1.0.0' });

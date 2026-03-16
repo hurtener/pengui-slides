@@ -2,7 +2,7 @@
  * Export and rendering types for Pengui Slides.
  */
 
-export type ExportFormat = 'pptx' | 'pdf' | 'html';
+export type ExportFormat = 'pptx' | 'pdf' | 'html' | 'google_slides';
 export type ImageFormat = 'png' | 'jpeg';
 export type PdfMode = 'image' | 'direct';
 
@@ -87,5 +87,20 @@ export interface ExportResult {
   filename: string;
   slideCount: number;
   fileSizeBytes: number;
+  exportedAt: string;
+}
+
+export interface GoogleSlidesExportResult {
+  format: 'google_slides';
+  presentationId: string;
+  presentationUrl: string;
+  slideCount: number;
+  slides: Array<{
+    slideId: string;
+    title: string;
+    mode: 'native_only' | 'hybrid_background';
+    nativeObjectCount: number;
+    usedBackgroundFallback: boolean;
+  }>;
   exportedAt: string;
 }

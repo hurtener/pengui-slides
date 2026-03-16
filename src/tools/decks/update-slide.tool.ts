@@ -97,6 +97,8 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
         let validation;
         let validationDelta;
         let validationPresentation;
+        let sourceKind;
+        let translationIssues;
         if (shouldSyncMetadata) {
           const sourceHtml = html ?? slide.html;
           const embeddedHtml = container.metadataEmbedder.update(sourceHtml, slide.metadata);
@@ -118,12 +120,31 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
             lastValidation: validation,
           });
 
+          const refreshed = await container.deckService.getSlide(slide_id);
+          const compilation = await container.slideDocumentService.compileSlideHtml(
+            embeddedHtml,
+            refreshed.metadata.revisionHash,
+          );
+          const translationState = container.slideDocumentService.buildTranslationState(compilation);
+
+          await container.deckService.updateSlide({
+            deckId: deck_id,
+            slideId: slide_id,
+            sourceKind: translationState.sourceKind,
+            document: translationState.document ?? undefined,
+            translationIssues: translationState.translationIssues,
+          });
+          sourceKind = translationState.sourceKind;
+          translationIssues = translationState.translationIssues;
+
           validationDelta = buildValidationDelta(validation, previousValidation);
           validationPresentation = buildValidationPresentation(validationDelta);
         }
 
         return textResponse({
           slide_id: slide.id,
+          ...(sourceKind ? { source_kind: sourceKind } : {}),
+          ...(translationIssues ? { translation_issues: translationIssues } : {}),
           ...(validation ? { validation } : {}),
           ...(validationDelta ? { validation_delta: validationDelta } : {}),
           ...(validationPresentation ? { validation_presentation: validationPresentation } : {}),

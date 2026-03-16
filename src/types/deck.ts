@@ -5,6 +5,11 @@
 import type { DeckId, SlideId, SoulId, RevisionId, ISOTimestamp } from './common.js';
 import type { SlideMetadata } from './metadata.js';
 import type { ValidationResult } from './validation.js';
+import type {
+  SlideDocument,
+  SlideSourceKind,
+  SlideTranslationIssue,
+} from './slide-document.js';
 
 // ── Slide Entity ──────────────────────────────────────────────────
 
@@ -13,6 +18,9 @@ export interface Slide {
   deckId: DeckId;
   position: number;
   html: string;
+  sourceKind: SlideSourceKind;
+  document?: SlideDocument;
+  translationIssues: SlideTranslationIssue[];
   metadata: SlideMetadata;
   lastValidation?: ValidationResult;
   createdAt: ISOTimestamp;
@@ -116,6 +124,9 @@ export interface UpdateSlideInput {
   deckId: string;
   slideId: string;
   html?: string;
+  sourceKind?: SlideSourceKind;
+  document?: SlideDocument;
+  translationIssues?: SlideTranslationIssue[];
   metadata?: Partial<AddSlideInput['metadata']>;
   lastValidation?: ValidationResult;
 }

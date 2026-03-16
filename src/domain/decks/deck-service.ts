@@ -158,6 +158,8 @@ export class DeckService {
       deckId: deck.id,
       position,
       html: input.html,
+      sourceKind: 'legacy_html',
+      translationIssues: [],
       metadata,
       createdAt: now,
       updatedAt: now,
@@ -221,6 +223,21 @@ export class DeckService {
     if (input.html !== undefined) {
       slide.html = input.html;
       slide.metadata.revisionHash = sha256(input.html);
+    }
+
+    if (input.sourceKind !== undefined) {
+      slide.sourceKind = input.sourceKind;
+    }
+
+    if (input.document !== undefined) {
+      slide.document = input.document;
+    }
+
+    if (input.translationIssues !== undefined) {
+      slide.translationIssues = input.translationIssues;
+      if (input.translationIssues.length > 0 && input.document === undefined) {
+        delete slide.document;
+      }
     }
 
     // Update lastValidation if provided

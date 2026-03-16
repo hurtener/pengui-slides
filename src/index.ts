@@ -57,6 +57,15 @@ function parseArgs(): Partial<PenguiConfig> {
   if (!overrides.httpHost && process.env.PENGUI_HOST) {
     overrides.httpHost = process.env.PENGUI_HOST;
   }
+  if (!overrides.googleAccessToken && process.env.PENGUI_GOOGLE_ACCESS_TOKEN) {
+    overrides.googleAccessToken = process.env.PENGUI_GOOGLE_ACCESS_TOKEN;
+  }
+  if (!overrides.googleClientEmail && process.env.PENGUI_GOOGLE_CLIENT_EMAIL) {
+    overrides.googleClientEmail = process.env.PENGUI_GOOGLE_CLIENT_EMAIL;
+  }
+  if (!overrides.googlePrivateKey && process.env.PENGUI_GOOGLE_PRIVATE_KEY) {
+    overrides.googlePrivateKey = process.env.PENGUI_GOOGLE_PRIVATE_KEY;
+  }
 
   return overrides;
 }

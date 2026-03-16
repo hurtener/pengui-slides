@@ -1,6 +1,7 @@
 import type { DeckSummary } from './deck.js';
 import type { SlideMetadata } from './metadata.js';
 import type { ValidationDelta, ValidationPresentation, ValidationResult, SlideHealth } from './validation.js';
+import type { SlideDocument, SlideSourceKind, SlideTranslationIssue } from './slide-document.js';
 
 export interface EditorThumbnail {
   slideId: string;
@@ -20,6 +21,10 @@ export interface EditorSelectedSlide {
   slideId: string;
   position: number;
   html: string;
+  sourceKind: SlideSourceKind;
+  document: SlideDocument | null;
+  translationIssues: SlideTranslationIssue[];
+  editableExportReady: boolean;
   metadata: SlideMetadata;
   lastValidation: ValidationResult | null;
   validationPresentation: ValidationPresentation;

@@ -1,7 +1,11 @@
 import type { ServiceContainer } from '../../container.js';
 import type { Slide } from '../../types/deck.js';
 import { soulId } from '../../types/common.js';
-import { ErrorCode, PenguiError } from '../../types/errors.js';
+import {
+  ErrorCode,
+  ExportTranslationBlockedError,
+  PenguiError,
+} from '../../types/errors.js';
 
 export async function validateSlidesForExport(
   container: ServiceContainer,
@@ -57,4 +61,57 @@ export async function validateSlidesForExport(
       },
     );
   }
+}
+
+export async function ensureSlidesReadyForEditableExport(
+  container: ServiceContainer,
+  deckId: string,
+  slides: Slide[],
+): Promise<Slide[]> {
+  const refreshedSlides: Slide[] = [];
+  const blockedSlides: Array<Record<string, unknown>> = [];
+
+  for (const slide of slides) {
+    let workingSlide = slide;
+    if (container.slideDocumentService.needsCompilation(workingSlide)) {
+      const compilation = await container.slideDocumentService.compileSlideHtml(
+        workingSlide.html,
+        workingSlide.metadata.revisionHash,
+      );
+      const translationState = container.slideDocumentService.buildTranslationState(compilation);
+
+      await container.deckService.updateSlide({
+        deckId,
+        slideId: workingSlide.id as string,
+        sourceKind: translationState.sourceKind,
+        document: translationState.document ?? undefined,
+        translationIssues: translationState.translationIssues,
+      });
+
+      workingSlide = await container.deckService.getSlide(workingSlide.id as string);
+    }
+
+    if (
+      workingSlide.sourceKind !== 'document_v1'
+      || !workingSlide.document
+      || workingSlide.translationIssues.some((issue) => issue.severity === 'error')
+    ) {
+      blockedSlides.push({
+        slide_id: workingSlide.id,
+        title: workingSlide.metadata.title,
+        translation_issues: workingSlide.translationIssues,
+      });
+    }
+
+    refreshedSlides.push(workingSlide);
+  }
+
+  if (blockedSlides.length > 0) {
+    throw new ExportTranslationBlockedError(
+      'Cannot export editable Google Slides because one or more slides could not be translated into native slide objects.',
+      { failed_slides: blockedSlides },
+    );
+  }
+
+  return refreshedSlides;
 }
