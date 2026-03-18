@@ -108,7 +108,7 @@ export async function ensureSlidesReadyForEditableExport(
 
   if (blockedSlides.length > 0) {
     throw new ExportTranslationBlockedError(
-      'Cannot export editable Google Slides because one or more slides could not be translated into native slide objects.',
+      'Cannot export editable slides because one or more slides could not be translated into native slide objects.',
       { failed_slides: blockedSlides },
     );
   }

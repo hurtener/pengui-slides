@@ -163,6 +163,8 @@ export class HtmlSlideDocumentCompiler {
             .join('');
         };
 
+        const isBulletLike = (value: string): boolean => /^[•◦▪▸▹▶▷‣·\-–—]+$/.test(value.trim());
+
         const nextRotation = (transform: string): number => {
           if (!transform || transform === 'none') {
             return 0;
@@ -494,7 +496,9 @@ export class HtmlSlideDocumentCompiler {
           if (isTextLeaf) {
             const beforeText = parsePseudoContent(window.getComputedStyle(element, '::before').content) ?? '';
             const afterText = parsePseudoContent(window.getComputedStyle(element, '::after').content) ?? '';
-            const combinedText = `${beforeText}${element.innerText.replace(/\r\n/g, '\n')}${afterText}`;
+            const isListItem = tagName === 'LI';
+            const bulletText = isListItem && isBulletLike(beforeText) ? beforeText.trim() : '';
+            const combinedText = `${bulletText ? '' : beforeText}${element.innerText.replace(/\r\n/g, '\n')}${afterText}`;
             const base = createBase(element, 'text', computed, rect, index, {
               allowTextualPseudo: true,
             }) as Omit<SlideTextElement, 'text' | 'paragraphs' | 'editId'>;
@@ -512,6 +516,15 @@ export class HtmlSlideDocumentCompiler {
                   bold: (toNumber(computed.fontWeight) ?? 400) >= 600,
                   italic: computed.fontStyle === 'italic',
                 }],
+                ...(isListItem
+                  ? {
+                      bullet: {
+                        type: 'bullet' as const,
+                        ...(bulletText ? { characterCode: bulletText.codePointAt(0)?.toString(16).toUpperCase() } : {}),
+                        level: 0,
+                      },
+                    }
+                  : {}),
               })),
               editId: element.getAttribute('data-edit-id') || undefined,
             });

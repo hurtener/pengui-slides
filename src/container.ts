@@ -64,11 +64,16 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
   const metadataEmbedder = new MetadataEmbedder();
   const metadataExporter = new MetadataExporter();
   const assetService = new AssetService(assetStore, clock, logger.child('assets'));
-  const renderService = new RenderService(config, logger.child('rendering'), assetService);
   const slideDocumentService = new SlideDocumentService(
     logger.child('documents'),
     config.headless,
     assetService,
+  );
+  const renderService = new RenderService(
+    config,
+    logger.child('rendering'),
+    assetService,
+    soulService,
   );
   const editorService = new EditorService(
     deckService,
@@ -82,7 +87,6 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
     config,
     logger.child('google-slides-export'),
     renderService,
-    slideDocumentService,
   );
 
   return {

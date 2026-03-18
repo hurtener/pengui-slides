@@ -9,11 +9,13 @@
 import type { PenguiConfig } from '../../config.js';
 import type { Logger } from '../../infrastructure/logger.js';
 import type { AssetService } from '../assets/asset-service.js';
+import type { SoulService } from '../souls/soul-service.js';
 import type { Slide } from '../../types/deck.js';
 import type {
   PreviewResult,
   PreviewOptions,
   ExportResult,
+  PptxExportResult,
   ExportPptxOptions,
   PdfMode,
   RenderOptions,
@@ -24,7 +26,8 @@ import { PlaywrightPool } from './playwright-pool.js';
 import { SlideRenderer } from './slide-renderer.js';
 import { PreviewRenderer } from './preview-renderer.js';
 import type { PreviewInput } from './preview-renderer.js';
-import { PptxExporter } from './pptx-exporter.js';
+import { ImagePptxExporter } from './pptx-exporter.js';
+import { EditablePptxExporter } from './editable-pptx-exporter.js';
 import { PdfExporter } from './pdf-exporter.js';
 import { HtmlExporter } from './html-exporter.js';
 
@@ -34,7 +37,8 @@ export class RenderService {
   private pool: PlaywrightPool | null = null;
   private slideRenderer: SlideRenderer | null = null;
   private previewRenderer: PreviewRenderer | null = null;
-  private pptxExporter: PptxExporter | null = null;
+  private imagePptxExporter: ImagePptxExporter | null = null;
+  private editablePptxExporter: EditablePptxExporter | null = null;
   private pdfExporter: PdfExporter | null = null;
   private htmlExporter: HtmlExporter | null = null;
 
@@ -42,6 +46,7 @@ export class RenderService {
     private readonly config: PenguiConfig,
     private readonly logger: Logger,
     private readonly assetService?: AssetService,
+    private readonly soulService?: SoulService,
   ) {}
 
   // ── Preview ──────────────────────────────────────────────────
@@ -77,10 +82,22 @@ export class RenderService {
   async exportPptx(
     slides: Slide[],
     deckTitle: string,
+    soulId?: string,
     options?: Partial<ExportPptxOptions>,
-  ): Promise<ExportResult> {
-    const exporter = this.ensurePptxExporter();
-    return exporter.export(slides, deckTitle, options);
+  ): Promise<PptxExportResult> {
+    if (options?.mode === 'image') {
+      const exporter = this.ensureImagePptxExporter();
+      return exporter.export(slides, deckTitle, options);
+    }
+
+    if (options?.mode === undefined && slides.some((slide) => this.shouldFallbackToImagePptx(slide))) {
+      this.logger.info('Falling back to image PPTX export because one or more slides are not editable-export ready');
+      const exporter = this.ensureImagePptxExporter();
+      return exporter.export(slides, deckTitle, options);
+    }
+
+    const exporter = this.ensureEditablePptxExporter();
+    return exporter.export(slides, deckTitle, soulId, options);
   }
 
   // ── PDF Export ───────────────────────────────────────────────
@@ -138,11 +155,19 @@ export class RenderService {
     this.pool = null;
     this.slideRenderer = null;
     this.previewRenderer = null;
-    this.pptxExporter = null;
+    this.imagePptxExporter = null;
+    this.editablePptxExporter = null;
     this.pdfExporter = null;
     this.htmlExporter = null;
 
     this.logger.info('Render service shut down');
+  }
+
+  private shouldFallbackToImagePptx(slide: Slide): boolean {
+    return slide.sourceKind !== 'document_v1'
+      || !slide.document
+      || slide.translationIssues.some((issue) => issue.severity === 'error')
+      || slide.document.elements.some((element) => element.exportDisposition === 'blocked');
   }
 
   // ── Lazy Initialization ──────────────────────────────────────
@@ -179,15 +204,27 @@ export class RenderService {
     return this.previewRenderer;
   }
 
-  private ensurePptxExporter(): PptxExporter {
-    if (!this.pptxExporter) {
+  private ensureImagePptxExporter(): ImagePptxExporter {
+    if (!this.imagePptxExporter) {
       const renderer = this.ensureSlideRenderer();
-      this.pptxExporter = new PptxExporter(
+      this.imagePptxExporter = new ImagePptxExporter(
         renderer,
         this.logger.child('pptx-exporter'),
       );
     }
-    return this.pptxExporter;
+    return this.imagePptxExporter;
+  }
+
+  private ensureEditablePptxExporter(): EditablePptxExporter {
+    if (!this.editablePptxExporter) {
+      const renderer = this.ensureSlideRenderer();
+      this.editablePptxExporter = new EditablePptxExporter(
+        renderer,
+        this.logger.child('editable-pptx-exporter'),
+        this.soulService,
+      );
+    }
+    return this.editablePptxExporter;
   }
 
   private ensurePdfExporter(): PdfExporter {

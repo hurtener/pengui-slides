@@ -13,6 +13,37 @@ function makeSlide(id: string, html: string, position = 0): Slide {
     deckId: 'deck-1',
     position,
     html,
+    sourceKind: 'document_v1',
+    translationIssues: [],
+    document: {
+      version: '1',
+      sourceRevisionHash: 'abc',
+      width: 1920,
+      height: 1080,
+      backgroundColor: '#FFFFFF',
+      elements: [
+        {
+          id: 'title',
+          kind: 'text',
+          x: 120,
+          y: 120,
+          width: 500,
+          height: 80,
+          rotation: 0,
+          zIndex: 0,
+          opacity: 1,
+          locked: false,
+          exportDisposition: 'native',
+          text: 'Hello',
+          paragraphs: [{ text: 'Hello', runs: [{ text: 'Hello' }] }],
+          style: {
+            color: '#FF0000',
+            fontSize: 48,
+            fontFamily: 'Arial, sans-serif',
+          },
+        },
+      ],
+    },
     metadata: {
       title: `Slide ${id}`,
       type: 'content',
@@ -26,7 +57,6 @@ function makeSlide(id: string, html: string, position = 0): Slide {
       metaVersion: '1.0',
       revisionHash: 'abc',
     },
-    isValid: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -63,11 +93,71 @@ describe('RenderService', () => {
 
   it('exports PPTX via Playwright', async () => {
     const slides = [makeSlide('s1', simpleHtml, 0)];
-    const result = await service.exportPptx(slides, 'Test Deck');
+    const result = await service.exportPptx(slides, 'Test Deck', 'soul-1');
 
     expect(result.format).toBe('pptx');
+    expect(result.mode).toBe('editable_hybrid');
     expect(result.data.length).toBeGreaterThan(1000);
     expect(result.slideCount).toBe(1);
+  });
+
+  it('falls back to image PPTX when default mode is used with legacy slides', async () => {
+    const slides = [{
+      ...makeSlide('legacy', simpleHtml, 0),
+      sourceKind: 'legacy_html' as const,
+      document: undefined,
+    }];
+    const result = await service.exportPptx(slides, 'Legacy Deck', 'soul-1');
+
+    expect(result.format).toBe('pptx');
+    expect(result.mode).toBe('image');
+    expect(result.data.length).toBeGreaterThan(1000);
+    expect(result.slideCount).toBe(1);
+  });
+
+  it('falls back to image PPTX when default mode is used with blocked editable slides', async () => {
+    const blockedSlide = makeSlide('blocked', simpleHtml, 0);
+    blockedSlide.translationIssues = [{
+      severity: 'error',
+      code: 'blocked-export',
+      message: 'Cannot translate safely',
+    }];
+    blockedSlide.document = {
+      ...blockedSlide.document!,
+      elements: [{
+        ...blockedSlide.document!.elements[0],
+        exportDisposition: 'blocked',
+        fallbackReason: 'unsupported-element',
+      }],
+    };
+
+    const slides = [{
+      ...blockedSlide,
+      translationIssues: [{
+        severity: 'error',
+        code: 'blocked-export',
+        message: 'Cannot translate safely',
+      }],
+    }];
+
+    const result = await service.exportPptx(slides, 'Blocked Deck', 'soul-1');
+
+    expect(result.format).toBe('pptx');
+    expect(result.mode).toBe('image');
+    expect(result.data.length).toBeGreaterThan(1000);
+    expect(result.slideCount).toBe(1);
+  });
+
+  it('keeps explicit editable PPTX mode strict for slides without compiled documents', async () => {
+    const slides = [{
+      ...makeSlide('legacy-strict', simpleHtml, 0),
+      sourceKind: 'legacy_html' as const,
+      document: undefined,
+    }];
+
+    await expect(service.exportPptx(slides, 'Strict Legacy Deck', 'soul-1', {
+      mode: 'editable_hybrid',
+    })).rejects.toThrow('Slide document missing for editable PPTX export');
   });
 
   it('exports PDF via Playwright', async () => {

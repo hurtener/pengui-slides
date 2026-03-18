@@ -85,6 +85,14 @@ export interface SlideTextRun {
 export interface SlideParagraph {
   text: string;
   runs: SlideTextRun[];
+  bullet?: {
+    type?: 'bullet' | 'number';
+    characterCode?: string;
+    indent?: number;
+    level?: number;
+  };
+  spaceBefore?: number;
+  spaceAfter?: number;
 }
 
 export interface SlideTableCell {
