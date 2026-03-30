@@ -163,7 +163,6 @@ describe('GoogleSlidesExportService', () => {
       loadConfig({ googleAccessToken: 'token-123' }),
       new Logger('test', 'error'),
       renderService as never,
-      slideDocumentService as never,
       fetchMock,
     );
 
@@ -292,7 +291,6 @@ describe('GoogleSlidesExportService', () => {
       loadConfig({ googleAccessToken: 'token-123' }),
       new Logger('test', 'error'),
       renderService as never,
-      slideDocumentService as never,
       fetchMock,
     );
 
@@ -396,7 +394,6 @@ describe('GoogleSlidesExportService', () => {
       loadConfig({ googleAccessToken: 'token-123' }),
       new Logger('test', 'error'),
       renderService as never,
-      slideDocumentService as never,
       fetchMock,
     );
 
@@ -474,7 +471,6 @@ describe('GoogleSlidesExportService', () => {
       loadConfig({ googleAccessToken: 'token-123' }),
       new Logger('test', 'error'),
       renderService as never,
-      slideDocumentService as never,
       fetchMock,
     );
 
@@ -595,7 +591,6 @@ describe('GoogleSlidesExportService', () => {
       loadConfig({ googleAccessToken: 'token-123' }),
       new Logger('test', 'error'),
       renderService as never,
-      slideDocumentService as never,
       fetchMock,
     );
 
@@ -699,7 +694,6 @@ describe('GoogleSlidesExportService', () => {
       loadConfig({ googleAccessToken: 'token-123' }),
       new Logger('test', 'error'),
       renderService as never,
-      slideDocumentService as never,
       fetchMock,
     );
 
@@ -821,7 +815,6 @@ describe('GoogleSlidesExportService', () => {
       loadConfig({ googleAccessToken: 'token-123' }),
       new Logger('test', 'error'),
       renderService as never,
-      slideDocumentService as never,
       fetchMock,
     );
 
@@ -913,7 +906,6 @@ describe('GoogleSlidesExportService', () => {
       loadConfig({ googleAccessToken: 'token-123' }),
       new Logger('test', 'error'),
       renderService as never,
-      slideDocumentService as never,
       fetchMock,
     );
 
@@ -990,7 +982,6 @@ describe('GoogleSlidesExportService', () => {
       loadConfig({ googleAccessToken: 'token-123' }),
       new Logger('test', 'error'),
       renderService as never,
-      slideDocumentService as never,
       fetchMock,
     );
 
@@ -1071,7 +1062,6 @@ describe('GoogleSlidesExportService', () => {
       loadConfig({ googleAccessToken: 'token-123' }),
       new Logger('test', 'error'),
       renderService as never,
-      slideDocumentService as never,
       fetchMock,
     );
 
@@ -1190,7 +1180,6 @@ describe('GoogleSlidesExportService', () => {
       loadConfig({ googleAccessToken: 'token-123' }),
       new Logger('test', 'error'),
       renderService as never,
-      slideDocumentService as never,
       fetchMock,
     );
 
@@ -1304,7 +1293,6 @@ describe('GoogleSlidesExportService', () => {
       loadConfig({ googleAccessToken: 'token-123' }),
       new Logger('test', 'error'),
       renderService as never,
-      slideDocumentService as never,
       fetchMock,
     );
 

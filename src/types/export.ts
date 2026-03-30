@@ -5,6 +5,7 @@
 export type ExportFormat = 'pptx' | 'pdf' | 'html' | 'google_slides';
 export type ImageFormat = 'png' | 'jpeg';
 export type PdfMode = 'image' | 'direct';
+export type PptxExportMode = 'editable_hybrid' | 'image';
 
 // ── Render Options ────────────────────────────────────────────────
 
@@ -59,12 +60,14 @@ export interface PreviewResult {
 // ── Export Options ─────────────────────────────────────────────────
 
 export interface ExportPptxOptions {
+  mode: PptxExportMode;
   resolution: '1080p' | '4k';
   imageFormat: ImageFormat;
   jpegQuality: number;
 }
 
 export const DEFAULT_PPTX_OPTIONS: ExportPptxOptions = {
+  mode: 'editable_hybrid',
   resolution: '1080p',
   imageFormat: 'png',
   jpegQuality: 90,
@@ -88,6 +91,20 @@ export interface ExportResult {
   slideCount: number;
   fileSizeBytes: number;
   exportedAt: string;
+}
+
+export interface PptxSlideExportSummary {
+  slideId: string;
+  title: string;
+  mode: 'native_only' | 'hybrid_background';
+  nativeObjectCount: number;
+  usedBackgroundFallback: boolean;
+}
+
+export interface PptxExportResult extends ExportResult {
+  format: 'pptx';
+  mode: PptxExportMode;
+  slides: PptxSlideExportSummary[];
 }
 
 export interface GoogleSlidesExportResult {

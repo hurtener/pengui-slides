@@ -109,4 +109,54 @@ describe('SlideDocumentService', () => {
     expect(badge?.kind).toBe('text');
     expect(badge?.style.stretchX).toBe(true);
   }, 10000);
+
+  it('marks decorative pseudo-element visuals for background fallback', async () => {
+    const container = createContainer(loadConfig({ logLevel: 'error' }));
+    containers.push(container);
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    .slide {
+      width: 1920px;
+      height: 1080px;
+      position: relative;
+      background: #111;
+      overflow: hidden;
+    }
+    .slide::before {
+      content: '';
+      position: absolute;
+      width: 480px;
+      height: 480px;
+      top: 80px;
+      right: 120px;
+      border-radius: 9999px;
+      background: radial-gradient(circle, rgba(253, 49, 46, 0.28), transparent 70%);
+      filter: blur(60px);
+    }
+    h1 {
+      position: absolute;
+      left: 120px;
+      top: 120px;
+      color: white;
+      font-size: 72px;
+    }
+  </style>
+</head>
+<body>
+  <div class="slide">
+    <h1 data-edit-id="title">Glow</h1>
+  </div>
+</body>
+</html>`;
+
+    const result = await container.slideDocumentService.compileSlideHtml(html, 'rev-4');
+
+    expect(result.document).not.toBeNull();
+    expect(result.issues.some((issue) => issue.code === 'unsupported-root-pseudo-before-visual')).toBe(true);
+    expect(result.document?.elements.some((element) => element.exportDisposition === 'background')).toBe(true);
+  }, 10000);
 });

@@ -10,11 +10,14 @@ import type {
   SlideImageElement,
   SlideShapeElement,
   SlideTableElement,
-  SlideTextElement,
 } from '../../types/slide-document.js';
 import { MetadataExporter } from '../metadata/metadata-exporter.js';
 import type { RenderService } from '../rendering/render-service.js';
-import type { SlideDocumentService } from '../documents/slide-document-service.js';
+import {
+  DocumentExportPlanner,
+  type PlannedNativeElement,
+  type PlannedTextElement,
+} from './document-export-planner.js';
 
 interface GoogleDimension {
   magnitude?: number;
@@ -201,15 +204,6 @@ function cssColorToForeground(value?: string, backdrop?: string): Record<string,
   };
 }
 
-function colorTokenCount(value?: string): number {
-  if (!value) {
-    return 0;
-  }
-
-  const matches = value.match(/rgba?\([^)]*\)|color\([^)]*\)|#[0-9a-f]{3,8}/gi);
-  return matches?.length ?? 0;
-}
-
 function firstColorToken(value?: string): string | undefined {
   if (!value) {
     return undefined;
@@ -288,29 +282,10 @@ function isTransparent(value?: string): boolean {
   return !value || value === 'transparent' || value === 'rgba(0, 0, 0, 0)';
 }
 
-function hasBoxLikeTextStyle(element: SlideTextElement): boolean {
-  return !isTransparent(element.style.backgroundColor)
-    || (element.style.borderWidth ?? 0) > 0
-    || (element.style.borderRadius ?? 0) > 0;
-}
-
 function documentScale(document: SlideDocument, pageWidthEmu: number, pageHeightEmu: number): number {
   const widthScale = pageWidthEmu / pxToEmu(document.width);
   const heightScale = pageHeightEmu / pxToEmu(document.height);
   return Math.min(widthScale, heightScale);
-}
-
-function isVisuallySingleLine(element: SlideTextElement): boolean {
-  if (element.text.includes('\n')) {
-    return false;
-  }
-
-  const lineHeight = element.style.lineHeight ?? element.style.fontSize;
-  if (!lineHeight || lineHeight <= 0) {
-    return true;
-  }
-
-  return element.height <= lineHeight * 1.35;
 }
 
 function isEmojiOnlyText(value: string): boolean {
@@ -318,160 +293,15 @@ function isEmojiOnlyText(value: string): boolean {
   return trimmed.length > 0 && /^[\p{Extended_Pictographic}\uFE0F\u200D]+$/u.test(trimmed);
 }
 
-function escapeCssString(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
-function expandTextFrame(element: SlideTextElement): SlideTextElement {
-  const fontSize = element.style.fontSize ?? 18;
-  const isSingleLine = isVisuallySingleLine(element);
-  const longestLine = element.text.split('\n').reduce((longest, line) => (
-    line.length > longest.length ? line : longest
-  ), '');
-  const trimmedLength = longestLine.trim().length;
-  const isLargeSingleLine = isSingleLine && fontSize >= 24;
-  const shouldEstimateIntrinsicWidth = isSingleLine && trimmedLength <= 24;
-  const isMono = /mono|jetbrains/i.test(element.style.fontFamily ?? '');
-  const horizontalPadding = Math.max(
-    fontSize * (isLargeSingleLine ? 1.1 : 0.85),
-    isLargeSingleLine ? 24 : 12,
-  );
-  const verticalPadding = Math.max(fontSize * 0.35, 6);
-  const widthFactor = shouldEstimateIntrinsicWidth
-    ? (
-        isLargeSingleLine
-          ? (trimmedLength <= 16 ? 1.4 : 1.1)
-          : isMono
-            ? 1.05
-            : fontSize >= 24
-              ? 0.95
-              : 0.8
-      )
-    : 0;
-  const minimumSingleLineWidth = shouldEstimateIntrinsicWidth && isLargeSingleLine
-    ? fontSize * Math.max(8, trimmedLength + 4)
-    : 0;
-  const centeredLargeSingleLineWidth = isSingleLine
-    && element.style.textAlign === 'center'
-    && fontSize >= 40
-    ? element.width * 1.28
-    : 0;
-  const estimatedWidth = Math.max(
-    element.width + (horizontalPadding * (isLargeSingleLine ? 2 : 1)),
-    shouldEstimateIntrinsicWidth
-      ? fontSize * Math.max(4, longestLine.length * widthFactor)
-      : 0,
-    minimumSingleLineWidth,
-    centeredLargeSingleLineWidth,
-  );
-
-  const multiLineBottomPadding = !isSingleLine
-    ? Math.max((element.style.lineHeight ?? (fontSize * 1.4)) * 0.3, fontSize * 0.55, 8)
-    : 0;
-
-  let x = element.x;
-  if (element.style.textAlign === 'center') {
-    x -= (estimatedWidth - element.width) / 2;
-  } else if (element.style.textAlign === 'right') {
-    x -= estimatedWidth - element.width;
-  }
-
-  return {
-    ...element,
-    x: Math.max(0, x),
-    y: Math.max(0, element.y - verticalPadding / 3),
-    width: estimatedWidth,
-    height: element.height + verticalPadding + multiLineBottomPadding,
-  };
-}
-
-function tightenBoxLikeTextFrame(element: SlideTextElement): SlideTextElement {
-  if (element.style.stretchX || element.width >= 280) {
-    return element;
-  }
-
-  const fontSize = element.style.fontSize ?? 18;
-  const isSingleLine = isVisuallySingleLine(element);
-  const longestLine = element.text.split('\n').reduce((longest, line) => (
-    line.length > longest.length ? line : longest
-  ), '');
-  const trimmedLength = longestLine.trim().length;
-  if (!isSingleLine || trimmedLength === 0 || trimmedLength > 24) {
-    return element;
-  }
-
-  const paddingLeft = element.style.paddingLeft ?? 0;
-  const paddingRight = element.style.paddingRight ?? 0;
-  const chromeWidth = paddingLeft + paddingRight + Math.max(fontSize, 16);
-  const estimatedContentWidth = fontSize * Math.max(3, trimmedLength * (fontSize >= 18 ? 0.95 : 0.75));
-  const tightenedWidth = Math.max(chromeWidth + estimatedContentWidth, chromeWidth + 24);
-
-  if (tightenedWidth >= element.width * 0.85 || element.width <= tightenedWidth) {
-    return element;
-  }
-
-  let x = element.x;
-  if (element.style.textAlign === 'center') {
-    x += (element.width - tightenedWidth) / 2;
-  } else if (element.style.textAlign === 'right') {
-    x += element.width - tightenedWidth;
-  }
-
-  return {
-    ...element,
-    x,
-    width: tightenedWidth,
-  };
-}
-
-function resolveTextAlignment(element: SlideTextElement): 'START' | 'CENTER' | 'END' | 'JUSTIFIED' | undefined {
-  const explicitAlignment = alignmentToSlides(element.style.textAlign);
-  if (explicitAlignment) {
-    return explicitAlignment;
-  }
-
-  if (element.style.display === 'flex') {
-    if (element.style.justifyContent === 'center') {
-      return 'CENTER';
-    }
-    if (element.style.justifyContent === 'flex-end' || element.style.justifyContent === 'end') {
-      return 'END';
-    }
-  }
-
-  return undefined;
-}
-
-function resolveContentAlignment(element: SlideTextElement): 'TOP' | 'MIDDLE' | 'BOTTOM' | undefined {
-  const explicitAlignment = verticalAlignmentToSlides(element.style.verticalAlign);
-  if (explicitAlignment) {
-    return explicitAlignment;
-  }
-
-  if (element.style.display === 'flex') {
-    if (element.style.alignItems === 'center') {
-      return 'MIDDLE';
-    }
-    if (element.style.alignItems === 'flex-end' || element.style.alignItems === 'end') {
-      return 'BOTTOM';
-    }
-    if (element.style.alignItems === 'flex-start' || element.style.alignItems === 'start') {
-      return 'TOP';
-    }
-  }
-
-  return undefined;
-}
-
 export class GoogleSlidesExportService {
   private readonly metadataExporter = new MetadataExporter();
+  private readonly planner = new DocumentExportPlanner();
   private runtimeBackgroundFallbackSupport?: boolean;
 
   constructor(
     private readonly config: PenguiConfig,
     private readonly logger: Logger,
     private readonly renderService: RenderService,
-    private readonly slideDocumentService: SlideDocumentService,
     private readonly fetchImpl: typeof fetch = globalThis.fetch,
   ) {}
 
@@ -626,18 +456,19 @@ export class GoogleSlidesExportService {
     pageWidthEmu: number,
     pageHeightEmu: number,
   ): Promise<SlideExportPlan> {
-    const classifiedDocument = await this.classifyDocumentForExport(accessToken, document);
     const requests: Array<Record<string, unknown>> = [];
-    const nativeElements = classifiedDocument.elements.filter((element) => (element.exportDisposition ?? 'native') === 'native');
-    const blockedElements = classifiedDocument.elements.filter((element) => element.exportDisposition === 'blocked');
-    const needsBackgroundFallback = Boolean(classifiedDocument.backgroundImage)
-      || classifiedDocument.elements.some((element) => element.exportDisposition === 'background');
+    const allowRuntimeBackgroundFallback = this.planner.hasRuntimeBackgroundFallbackCandidates(document)
+      ? await this.supportsRuntimeBackgroundFallback(accessToken)
+      : false;
+    const plan = this.planner.plan(slide, document, {
+      allowRuntimeBackgroundFallback,
+    });
 
-    if (blockedElements.length > 0) {
+    if (plan.blockedElements.length > 0) {
       throw new ExportError('Slide contains elements that cannot be exported safely.', {
         slideId: slide.id,
         title: slide.metadata.title,
-        blocked_elements: blockedElements.map((element) => ({
+        blocked_elements: plan.blockedElements.map((element) => ({
           element_id: element.id,
           selector: element.selector,
           reason: element.fallbackReason,
@@ -645,14 +476,13 @@ export class GoogleSlidesExportService {
       });
     }
 
-    if (needsBackgroundFallback) {
-      const backgroundHtml = this.buildBackgroundHtml(slide, classifiedDocument, nativeElements);
+    if (plan.usedBackgroundFallback && plan.backgroundHtml) {
       const render = await this.renderService.renderSlideHtml(
-        backgroundHtml,
+        plan.backgroundHtml,
         `${String(slide.id)}-background`,
         {
-          width: Math.round(classifiedDocument.width),
-          height: Math.round(classifiedDocument.height),
+          width: Math.round(plan.document.width),
+          height: Math.round(plan.document.height),
           format: 'png',
         },
       );
@@ -671,155 +501,15 @@ export class GoogleSlidesExportService {
       });
     }
 
-    requests.push(...this.buildElementRequests(slideObjectId, nativeElements, classifiedDocument, pageWidthEmu, pageHeightEmu));
+    requests.push(...this.buildElementRequests(slideObjectId, plan.nativeElements, plan.document, pageWidthEmu, pageHeightEmu));
 
     return {
       slideObjectId,
       requests,
-      nativeObjectCount: nativeElements.filter((element) => element.kind !== 'group').length,
-      usedBackgroundFallback: needsBackgroundFallback,
-      expectedPageElementCount: (needsBackgroundFallback ? 1 : 0) + nativeElements.filter((element) => element.kind !== 'group').length,
+      nativeObjectCount: plan.nativeObjectCount,
+      usedBackgroundFallback: plan.usedBackgroundFallback,
+      expectedPageElementCount: (plan.usedBackgroundFallback ? 1 : 0) + plan.nativeElements.length,
     };
-  }
-
-  private buildBackgroundHtml(
-    slide: Slide,
-    document: SlideDocument,
-    nativeElements: SlideElement[],
-  ): string {
-    if (this.canUseOriginalHtmlBackground(slide, nativeElements)) {
-      const nativeEditIds = nativeElements
-        .filter((element): element is SlideTextElement => element.kind === 'text' && typeof element.editId === 'string')
-        .map((element) => element.editId as string);
-      return this.buildOriginalHtmlBackground(slide.html, nativeEditIds);
-    }
-
-    return this.slideDocumentService.render(document, {
-      includeDispositions: ['background'],
-    });
-  }
-
-  private canUseOriginalHtmlBackground(slide: Slide, nativeElements: SlideElement[]): boolean {
-    if (!slide.html) {
-      return false;
-    }
-
-    return nativeElements.every((element) => (
-      element.kind === 'text'
-      && typeof element.editId === 'string'
-      && !hasBoxLikeTextStyle(element)
-    ));
-  }
-
-  private buildOriginalHtmlBackground(html: string, nativeEditIds: string[]): string {
-    if (nativeEditIds.length === 0) {
-      return html;
-    }
-
-    const rules = nativeEditIds.map((editId) => {
-      const selector = `[data-edit-id="${escapeCssString(editId)}"]`;
-      return [
-        `${selector}{color:transparent !important;text-shadow:none !important;caret-color:transparent !important;}`,
-        `${selector}::before{opacity:0 !important;color:transparent !important;}`,
-        `${selector}::after{opacity:0 !important;color:transparent !important;}`,
-      ].join('');
-    }).join('');
-
-    const styleTag = `<style data-pengui-background-hide>${rules}</style>`;
-    if (html.includes('</head>')) {
-      return html.replace('</head>', `${styleTag}</head>`);
-    }
-    return `${styleTag}${html}`;
-  }
-
-  private async classifyDocumentForExport(accessToken: string, document: SlideDocument): Promise<SlideDocument> {
-    const hasRuntimeFallbackCandidates = document.elements.some((element) => this.runtimeFallbackReason(element, document));
-    if (!hasRuntimeFallbackCandidates) {
-      return document;
-    }
-
-    const supportsRuntimeBackgroundFallback = await this.supportsRuntimeBackgroundFallback(accessToken);
-    if (!supportsRuntimeBackgroundFallback) {
-      return document;
-    }
-
-    return {
-      ...document,
-      elements: document.elements.map((element) => this.classifyElementForExport(element, document)),
-    };
-  }
-
-  private classifyElementForExport(element: SlideElement, document: SlideDocument): SlideElement {
-    if (element.exportDisposition && element.exportDisposition !== 'native') {
-      return element;
-    }
-
-    const runtimeFallbackReason = this.runtimeFallbackReason(element, document);
-    if (!runtimeFallbackReason) {
-      return element;
-    }
-
-    return {
-      ...element,
-      exportDisposition: 'background',
-      fallbackReason: runtimeFallbackReason,
-    };
-  }
-
-  private runtimeFallbackReason(element: SlideElement, document: SlideDocument): string | undefined {
-    const isDeliverablesCardLayout = this.isDeliverablesCardLayout(document);
-
-    if (element.kind === 'text') {
-      if (isDeliverablesCardLayout) {
-        if (
-          element.selector === 'span.card-ordinal'
-        ) {
-          return 'deliverables-card-ordinal';
-        }
-      }
-
-      if (element.selector === 'span.card-ordinal') {
-        return 'decorative-card-text';
-      }
-      return undefined;
-    }
-
-    if (element.kind === 'shape') {
-      if (isDeliverablesCardLayout) {
-        if (
-          element.selector === 'div.card'
-          || element.selector === 'div.card-footer'
-          || element.selector === 'span.badge'
-          || element.selector === 'span.badge-dot'
-        ) {
-          return 'deliverables-card-chrome';
-        }
-      }
-
-      if (
-        element.selector === 'div.card'
-        || element.selector === 'div.card-footer'
-        || element.selector === 'span.badge'
-        || element.selector === 'span.badge-dot'
-      ) {
-        return 'decorative-card-chrome';
-      }
-      const borderStyle = element.style.borderStyle?.trim() ?? '';
-      if (borderStyle.includes(' ') && borderStyle !== 'solid none none') {
-        return 'complex-border-style';
-      }
-      if (colorTokenCount(element.style.borderColor) > 1) {
-        return 'multi-color-border';
-      }
-    }
-
-    return undefined;
-  }
-
-  private isDeliverablesCardLayout(document: SlideDocument): boolean {
-    return document.elements.some((element) => element.selector === 'div.card')
-      && document.elements.some((element) => element.selector === 'span.month-label')
-      && document.elements.some((element) => element.selector === 'h3.card-title');
   }
 
   private async supportsRuntimeBackgroundFallback(accessToken: string): Promise<boolean> {
@@ -853,7 +543,7 @@ export class GoogleSlidesExportService {
 
   private buildElementRequests(
     slideObjectId: string,
-    elements: SlideElement[],
+    elements: PlannedNativeElement[],
     document: SlideDocument,
     pageWidthEmu: number,
     pageHeightEmu: number,
@@ -874,8 +564,6 @@ export class GoogleSlidesExportService {
         case 'table':
           requests.push(...this.buildTableRequests(slideObjectId, element, document, pageWidthEmu, pageHeightEmu));
           break;
-        case 'group':
-          break;
       }
     }
 
@@ -884,173 +572,73 @@ export class GoogleSlidesExportService {
 
   private buildTextRequests(
     slideObjectId: string,
-    element: SlideTextElement,
+    element: PlannedTextElement,
     document: SlideDocument,
     pageWidthEmu: number,
     pageHeightEmu: number,
   ): Array<Record<string, unknown>> {
     const requests: Array<Record<string, unknown>> = [];
-    const normalizedElement = hasBoxLikeTextStyle(element)
-      ? tightenBoxLikeTextFrame(element)
-      : element;
-    const splitBackground = hasBoxLikeTextStyle(normalizedElement);
-    const baseTextElement = splitBackground ? this.toPlainTextElement(normalizedElement) : normalizedElement;
-    const textElement = splitBackground && !baseTextElement.text.includes('\n')
-      ? baseTextElement
-      : expandTextFrame(baseTextElement);
-    const objectId = compactObjectId(slideObjectId, 'txt', textElement.id);
-    const fillColor = cssColorToOpaque(normalizedElement.style.backgroundColor);
-    const outlineColor = cssColorToOpaque(normalizedElement.style.borderColor);
-    const outlineWeight = normalizedElement.style.borderWidth ?? 0;
-    const scale = documentScale(document, pageWidthEmu, pageHeightEmu);
-    const contentAlignment = splitBackground && !textElement.text.includes('\n')
-      ? 'MIDDLE'
-      : resolveContentAlignment(textElement);
-    const textBackdrop = splitBackground
-      ? normalizedElement.style.backgroundColor ?? document.backgroundColor
-      : document.backgroundColor;
-
-    if (splitBackground) {
-      const backgroundObjectId = compactObjectId(slideObjectId, 'txtbg', element.id);
-      const shapeType = (normalizedElement.style.borderRadius ?? 0) > 0 ? 'ROUND_RECTANGLE' : 'RECTANGLE';
-      requests.push({
-        createShape: {
-          objectId: backgroundObjectId,
-          shapeType,
-          elementProperties: this.toElementProperties(slideObjectId, normalizedElement, document, pageWidthEmu, pageHeightEmu),
-        },
-      });
-      requests.push({
-        updateShapeProperties: {
-          objectId: backgroundObjectId,
-          shapeProperties: {
-            ...(fillColor
-              ? {
-                  shapeBackgroundFill: {
-                    propertyState: 'RENDERED',
-                    solidFill: {
-                      color: fillColor,
-                      ...(cssColorToAlpha(normalizedElement.style.backgroundColor) !== undefined
-                        ? { alpha: { value: cssColorToAlpha(normalizedElement.style.backgroundColor) } }
-                        : {}),
-                    },
-                  },
-                }
-              : {
-                  shapeBackgroundFill: {
-                    propertyState: 'NOT_RENDERED',
-                  },
-                }),
-            ...(outlineColor && outlineWeight > 0
-              ? {
-                  outline: {
-                    outlineFill: {
-                      solidFill: {
-                        color: outlineColor,
-                      },
-                    },
-                    weight: {
-                      magnitude: pxToPt(outlineWeight * scale),
-                      unit: 'PT',
-                    },
-                  },
-                }
-              : {}),
-          },
-          fields: 'shapeBackgroundFill.propertyState,shapeBackgroundFill.solidFill.color,shapeBackgroundFill.solidFill.alpha,outline.outlineFill.solidFill,outline.weight',
-        },
-      });
-    }
+    const objectId = compactObjectId(slideObjectId, 'txt', element.id);
 
     requests.push({
       createShape: {
         objectId,
         shapeType: 'TEXT_BOX',
-        elementProperties: this.toElementProperties(slideObjectId, textElement, document, pageWidthEmu, pageHeightEmu),
+        elementProperties: this.toElementProperties(slideObjectId, element, document, pageWidthEmu, pageHeightEmu),
       },
     });
     requests.push({
       updateShapeProperties: {
         objectId,
         shapeProperties: {
-          ...(contentAlignment ? { contentAlignment } : {}),
-          ...(splitBackground || !fillColor
-            ? {
-                shapeBackgroundFill: {
-                  propertyState: 'NOT_RENDERED',
-                },
-              }
-            : {
-                shapeBackgroundFill: {
-                  propertyState: 'RENDERED',
-                  solidFill: {
-                    color: fillColor,
-                    ...(cssColorToAlpha(normalizedElement.style.backgroundColor) !== undefined
-                      ? { alpha: { value: cssColorToAlpha(normalizedElement.style.backgroundColor) } }
-                      : {}),
-                  },
-                },
-              }),
-          ...(splitBackground || !(outlineColor && outlineWeight > 0)
-            ? {
-                outline: {
-                  propertyState: 'NOT_RENDERED',
-                },
-              }
-            : {
-                outline: {
-                  outlineFill: {
-                    solidFill: {
-                      color: outlineColor,
-                    },
-                  },
-                  weight: {
-                    magnitude: pxToPt(outlineWeight * scale),
-                    unit: 'PT',
-                  },
-                },
-              }),
+          ...(element.contentAlignment ? { contentAlignment: verticalAlignmentToSlides(element.contentAlignment) } : {}),
+          shapeBackgroundFill: {
+            propertyState: 'NOT_RENDERED',
+          },
+          outline: {
+            propertyState: 'NOT_RENDERED',
+          },
         },
         fields: 'contentAlignment,shapeBackgroundFill.propertyState,shapeBackgroundFill.solidFill.color,shapeBackgroundFill.solidFill.alpha,outline.propertyState,outline.outlineFill.solidFill,outline.weight',
       },
     });
 
-    if (textElement.text.length > 0) {
+    if (element.text.length > 0) {
       requests.push({
         insertText: {
           objectId,
           insertionIndex: 0,
-          text: textElement.text,
+          text: element.text,
         },
       });
       requests.push({
         updateTextStyle: {
           objectId,
           style: {
-            ...(isEmojiOnlyText(textElement.text)
+            ...(isEmojiOnlyText(element.text)
               ? {}
-              : textElement.style.fontFamily
-                ? { fontFamily: textElement.style.fontFamily.split(',')[0].replace(/['"]/g, '').trim() }
+              : element.style.fontFamily
+                ? { fontFamily: element.style.fontFamily.split(',')[0].replace(/['"]/g, '').trim() }
                 : {}),
-            ...(textElement.style.fontSize !== undefined
+            ...(element.style.fontSize !== undefined
               ? {
                   fontSize: {
-                    magnitude: pxToPt(textElement.style.fontSize * scale),
+                    magnitude: pxToPt(element.style.fontSize * documentScale(document, pageWidthEmu, pageHeightEmu)),
                     unit: 'PT',
                   },
                 }
               : {}),
-            ...(textElement.style.color ? { foregroundColor: cssColorToForeground(textElement.style.color, textBackdrop) } : {}),
-            ...(textElement.style.fontWeight !== undefined ? { bold: textElement.style.fontWeight >= 600 } : {}),
-            ...(textElement.style.fontStyle ? { italic: textElement.style.fontStyle === 'italic' } : {}),
+            ...(element.style.color ? { foregroundColor: cssColorToForeground(element.style.color, element.textBackdrop) } : {}),
+            ...(element.style.fontWeight !== undefined ? { bold: element.style.fontWeight >= 600 } : {}),
+            ...(element.style.fontStyle ? { italic: element.style.fontStyle === 'italic' } : {}),
           },
           textRange: { type: 'ALL' },
           fields: 'fontFamily,fontSize,foregroundColor,bold,italic',
         },
       });
 
-      const alignment = resolveTextAlignment(textElement);
-      const lineSpacing = this.toLineSpacing(textElement);
+      const alignment = alignmentToSlides(element.textAlignment);
+      const lineSpacing = element.lineSpacingPercent;
       if (alignment || lineSpacing !== undefined) {
         requests.push({
           updateParagraphStyle: {
@@ -1067,46 +655,6 @@ export class GoogleSlidesExportService {
     }
 
     return requests;
-  }
-
-  private toPlainTextElement(element: SlideTextElement): SlideTextElement {
-    const paddingTop = element.style.paddingTop ?? 0;
-    const paddingRight = element.style.paddingRight ?? 0;
-    const paddingBottom = element.style.paddingBottom ?? 0;
-    const paddingLeft = element.style.paddingLeft ?? 0;
-    const isSingleLine = !element.text.includes('\n');
-
-    return {
-      ...element,
-      id: `${element.id}_content`,
-      x: element.x + paddingLeft,
-      y: isSingleLine ? element.y : element.y + paddingTop,
-      width: Math.max(1, element.width - paddingLeft - paddingRight),
-      height: Math.max(1, isSingleLine ? element.height : element.height - paddingTop - paddingBottom),
-      style: {
-        ...element.style,
-        backgroundColor: undefined,
-        borderColor: undefined,
-        borderWidth: 0,
-        borderStyle: undefined,
-        borderRadius: undefined,
-        paddingTop: 0,
-        paddingRight: 0,
-        paddingBottom: 0,
-        paddingLeft: 0,
-        fill: undefined,
-        line: undefined,
-      },
-    };
-  }
-
-  private toLineSpacing(element: SlideTextElement): number | undefined {
-    const fontSize = element.style.fontSize;
-    const lineHeight = element.style.lineHeight;
-    if (fontSize === undefined || lineHeight === undefined || fontSize <= 0) {
-      return undefined;
-    }
-    return Math.round((lineHeight / fontSize) * 100);
   }
 
   private buildShapeRequests(

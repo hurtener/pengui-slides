@@ -20,7 +20,7 @@ import type { SlideRenderer } from './slide-renderer.js';
 import type { Slide } from '../../types/deck.js';
 import type {
   ExportPptxOptions,
-  ExportResult,
+  PptxExportResult,
   RenderOptions,
 } from '../../types/export.js';
 import { DEFAULT_PPTX_OPTIONS } from '../../types/export.js';
@@ -38,7 +38,7 @@ const RESOLUTION_MAP: Record<string, { width: number; height: number }> = {
 
 // ── PPTX Exporter ────────────────────────────────────────────────
 
-export class PptxExporter {
+export class ImagePptxExporter {
   private readonly metadataExporter = new MetadataExporter();
 
   constructor(
@@ -53,7 +53,7 @@ export class PptxExporter {
     slides: Slide[],
     deckTitle: string,
     options?: Partial<ExportPptxOptions>,
-  ): Promise<ExportResult> {
+  ): Promise<PptxExportResult> {
     const opts: ExportPptxOptions = { ...DEFAULT_PPTX_OPTIONS, ...options };
     const resolution = RESOLUTION_MAP[opts.resolution] ?? RESOLUTION_MAP['1080p'];
 
@@ -122,12 +122,20 @@ export class PptxExporter {
 
     return {
       format: 'pptx',
+      mode: 'image',
       data,
       mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       filename,
       slideCount: slides.length,
       fileSizeBytes: data.length,
       exportedAt: new Date().toISOString(),
+      slides: slides.map((slide) => ({
+        slideId: String(slide.id),
+        title: slide.metadata.title,
+        mode: 'hybrid_background',
+        nativeObjectCount: 0,
+        usedBackgroundFallback: true,
+      })),
     };
   }
 
@@ -151,3 +159,5 @@ export class PptxExporter {
       || 'presentation';
   }
 }
+
+export { ImagePptxExporter as PptxExporter };
