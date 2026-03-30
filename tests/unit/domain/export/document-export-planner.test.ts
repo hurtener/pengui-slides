@@ -256,4 +256,58 @@ describe('DocumentExportPlanner', () => {
     expect(plan.backgroundHtml).toContain('background-position:center');
     expect(plan.backgroundHtml).toContain('background-repeat:no-repeat');
   });
+
+  it('classifies background-image shapes into hybrid background fallback', () => {
+    const planner = new DocumentExportPlanner();
+    const slide = makeSlide();
+    slide.document!.elements = [
+      {
+        id: 'gradient-card',
+        kind: 'shape',
+        x: 80,
+        y: 100,
+        width: 640,
+        height: 360,
+        rotation: 0,
+        zIndex: 0,
+        opacity: 1,
+        locked: false,
+        exportDisposition: 'native',
+        selector: 'div.card',
+        shapeType: 'rectangle',
+        style: {
+          backgroundImage: 'linear-gradient(180deg, #111111, #2a2a2a)',
+          backgroundSize: 'cover',
+        },
+      },
+      {
+        id: 'native-title',
+        kind: 'text',
+        x: 120,
+        y: 140,
+        width: 300,
+        height: 50,
+        rotation: 0,
+        zIndex: 1,
+        opacity: 1,
+        locked: false,
+        exportDisposition: 'native',
+        selector: 'h2.title',
+        text: 'Editable title',
+        paragraphs: [{ text: 'Editable title', runs: [{ text: 'Editable title' }] }],
+        editId: 'native-title',
+        style: {
+          color: '#ffffff',
+          fontSize: 32,
+        },
+      },
+    ];
+
+    const plan = planner.plan(slide, slide.document!, { allowRuntimeBackgroundFallback: true });
+
+    expect(plan.usedBackgroundFallback).toBe(true);
+    expect(plan.document.elements[0].exportDisposition).toBe('background');
+    expect(plan.nativeElements).toHaveLength(1);
+    expect(plan.nativeElements[0].kind).toBe('text');
+  });
 });

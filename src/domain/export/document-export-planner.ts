@@ -9,7 +9,6 @@ import type {
 } from '../../types/slide-document.js';
 import {
   colorTokenCount,
-  isEmojiOnlyText,
   isTransparent,
 } from './export-style-utils.js';
 
@@ -333,8 +332,12 @@ export class DocumentExportPlanner {
 
   private runtimeFallbackReason(element: SlideElement, document: SlideDocument): string | undefined {
     const isDeliverablesCardLayout = this.isDeliverablesCardLayout(document);
+    const hasBackgroundImage = Boolean(element.style.backgroundImage && element.style.backgroundImage !== 'none');
 
     if (element.kind === 'text') {
+      if (hasBackgroundImage) {
+        return 'background-image-text-chrome';
+      }
       if (isDeliverablesCardLayout && element.selector === 'span.card-ordinal') {
         return 'deliverables-card-ordinal';
       }
@@ -345,6 +348,9 @@ export class DocumentExportPlanner {
     }
 
     if (element.kind === 'shape') {
+      if (hasBackgroundImage) {
+        return 'background-image-shape';
+      }
       if (
         isDeliverablesCardLayout
         && (
@@ -389,10 +395,7 @@ export class DocumentExportPlanner {
     nativeElements: SlideElement[],
   ): string {
     if (this.canUseOriginalHtmlBackground(slide, nativeElements)) {
-      const nativeEditIds = nativeElements
-        .filter((element): element is SlideTextElement => element.kind === 'text' && typeof element.editId === 'string')
-        .map((element) => element.editId as string);
-      return this.buildOriginalHtmlBackground(slide.html, nativeEditIds);
+      return this.buildOriginalHtmlBackground(slide.html, nativeElements);
     }
 
     const elements = document.elements
@@ -485,24 +488,31 @@ export class DocumentExportPlanner {
     }
 
     return nativeElements.every((element) => (
-      element.kind === 'text'
-      && typeof element.editId === 'string'
-      && !this.hasBoxLikeTextStyle(element)
-      && !isEmojiOnlyText(element.text)
+      (typeof element.domPath === 'string' && element.domPath.length > 0)
+      || (element.kind === 'text' && typeof element.editId === 'string')
     ));
   }
 
-  private buildOriginalHtmlBackground(html: string, nativeEditIds: string[]): string {
-    if (nativeEditIds.length === 0) {
+  private buildOriginalHtmlBackground(html: string, nativeElements: SlideElement[]): string {
+    if (nativeElements.length === 0) {
       return html;
     }
 
-    const rules = nativeEditIds.map((editId) => {
-      const selector = `[data-edit-id="${this.escapeCssString(editId)}"]`;
+    const selectors = Array.from(new Set(nativeElements.flatMap((element) => {
+      if (typeof element.domPath === 'string' && element.domPath.length > 0) {
+        return [element.domPath];
+      }
+      if (element.kind === 'text' && typeof element.editId === 'string') {
+        return [`[data-edit-id="${this.escapeCssString(element.editId)}"]`];
+      }
+      return [];
+    })));
+
+    const rules = selectors.map((selector) => {
       return [
-        `${selector}{color:transparent !important;text-shadow:none !important;caret-color:transparent !important;}`,
-        `${selector}::before{opacity:0 !important;color:transparent !important;}`,
-        `${selector}::after{opacity:0 !important;color:transparent !important;}`,
+        `${selector}{visibility:hidden !important;opacity:0 !important;caret-color:transparent !important;}`,
+        `${selector}::before{opacity:0 !important;color:transparent !important;visibility:hidden !important;}`,
+        `${selector}::after{opacity:0 !important;color:transparent !important;visibility:hidden !important;}`,
       ].join('');
     }).join('');
 

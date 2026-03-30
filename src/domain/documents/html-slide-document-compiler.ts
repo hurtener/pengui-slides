@@ -222,6 +222,24 @@ export class HtmlSlideDocumentCompiler {
           return Number.isFinite(parsed) ? parsed : undefined;
         };
 
+        const hasPseudoVisualStyle = (style: CSSStyleDeclaration): boolean => {
+          const backgroundColor = style.backgroundColor;
+          const borderWidth = toNumber(style.borderWidth) ?? 0;
+          const hasVisibleBackgroundColor = Boolean(
+            backgroundColor
+            && backgroundColor !== 'transparent'
+            && backgroundColor !== 'rgba(0, 0, 0, 0)'
+            && backgroundColor !== 'rgba(0,0,0,0)',
+          );
+
+          return hasVisibleBackgroundColor
+            || Boolean(style.backgroundImage && style.backgroundImage !== 'none')
+            || Boolean(style.filter && style.filter !== 'none')
+            || Boolean(style.boxShadow && style.boxShadow !== 'none')
+            || borderWidth > 0
+            || Boolean(style.mixBlendMode && style.mixBlendMode !== 'normal');
+        };
+
         const inferStretch = (element: HTMLElement, computed: CSSStyleDeclaration): { stretchX: boolean; stretchY: boolean } => {
           const parent = element.parentElement;
           if (!parent) {
@@ -295,8 +313,10 @@ export class HtmlSlideDocumentCompiler {
             );
           }
 
-          const beforeContent = window.getComputedStyle(element, '::before').content;
-          const afterContent = window.getComputedStyle(element, '::after').content;
+          const beforeStyle = window.getComputedStyle(element, '::before');
+          const afterStyle = window.getComputedStyle(element, '::after');
+          const beforeContent = beforeStyle.content;
+          const afterContent = afterStyle.content;
           const beforeText = parsePseudoContent(beforeContent);
           const afterText = parsePseudoContent(afterContent);
           if (beforeText && !options?.allowTextualPseudo) {
@@ -325,6 +345,18 @@ export class HtmlSlideDocumentCompiler {
               'unsupported-pseudo-after',
               'Decorative pseudo-element content (::after) will be flattened into the slide background.',
               afterContent,
+            );
+          }
+          if (hasPseudoVisualStyle(beforeStyle)) {
+            setBackground(
+              'unsupported-pseudo-before-visual',
+              'Decorative pseudo-element visuals (::before) will be flattened into the slide background.',
+            );
+          }
+          if (hasPseudoVisualStyle(afterStyle)) {
+            setBackground(
+              'unsupported-pseudo-after-visual',
+              'Decorative pseudo-element visuals (::after) will be flattened into the slide background.',
             );
           }
 
@@ -421,6 +453,61 @@ export class HtmlSlideDocumentCompiler {
             },
           };
         };
+
+        const rootBeforeStyle = window.getComputedStyle(root, '::before');
+        const rootAfterStyle = window.getComputedStyle(root, '::after');
+        if (hasPseudoVisualStyle(rootBeforeStyle)) {
+          pushIssue({
+            code: 'unsupported-root-pseudo-before-visual',
+            severity: 'warning',
+            selector: '.slide',
+            message: 'Decorative root pseudo-element visuals (::before) will be flattened into the slide background.',
+          });
+          elements.push({
+            id: 'root-pseudo-before',
+            kind: 'shape',
+            x: 0,
+            y: 0,
+            width: Math.round(rootRect.width * 1000) / 1000,
+            height: Math.round(rootRect.height * 1000) / 1000,
+            rotation: 0,
+            zIndex: -2,
+            opacity: 1,
+            locked: false,
+            selector: '.slide',
+            domPath: '.slide',
+            exportDisposition: 'background',
+            fallbackReason: 'unsupported-root-pseudo-before-visual',
+            shapeType: 'rectangle',
+            style: {},
+          });
+        }
+        if (hasPseudoVisualStyle(rootAfterStyle)) {
+          pushIssue({
+            code: 'unsupported-root-pseudo-after-visual',
+            severity: 'warning',
+            selector: '.slide',
+            message: 'Decorative root pseudo-element visuals (::after) will be flattened into the slide background.',
+          });
+          elements.push({
+            id: 'root-pseudo-after',
+            kind: 'shape',
+            x: 0,
+            y: 0,
+            width: Math.round(rootRect.width * 1000) / 1000,
+            height: Math.round(rootRect.height * 1000) / 1000,
+            rotation: 0,
+            zIndex: -1,
+            opacity: 1,
+            locked: false,
+            selector: '.slide',
+            domPath: '.slide',
+            exportDisposition: 'background',
+            fallbackReason: 'unsupported-root-pseudo-after-visual',
+            shapeType: 'rectangle',
+            style: {},
+          });
+        }
 
         const all = Array.from(root.querySelectorAll<HTMLElement>('*'));
         all.forEach((element, index) => {
@@ -563,6 +650,8 @@ export class HtmlSlideDocumentCompiler {
             (computed.backgroundColor && computed.backgroundColor !== 'rgba(0, 0, 0, 0)')
             || (computed.borderWidth && computed.borderWidth !== '0px')
             || (computed.boxShadow && computed.boxShadow !== 'none')
+            || hasPseudoVisualStyle(window.getComputedStyle(element, '::before'))
+            || hasPseudoVisualStyle(window.getComputedStyle(element, '::after'))
           );
 
           if (hasVisualShape) {
