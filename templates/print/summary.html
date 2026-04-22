@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en" data-pengui-medium="print">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      /* Soul tokens are injected here by the recipe generator */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .slide {
+      width: 1240px;
+      height: 1754px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-normal);
+      line-height: var(--leading-body);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Page header */
+    .page-header {
+      margin-bottom: var(--space-xxl);
+      padding-bottom: var(--space-lg);
+      border-bottom: var(--border-width) solid var(--color-border);
+      flex-shrink: 0;
+    }
+
+    .page-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      color: var(--color-accent-primary);
+      letter-spacing: var(--letter-spacing-heading);
+      text-transform: uppercase;
+      margin-bottom: var(--space-sm);
+    }
+
+    .page-heading {
+      font-family: var(--font-display);
+      font-size: var(--text-h1);
+      font-weight: var(--weight-bold);
+      letter-spacing: var(--letter-spacing-heading);
+      line-height: var(--line-height-heading);
+      color: var(--color-text-primary);
+    }
+
+    /* Takeaways section */
+    .takeaways-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .takeaways-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-bold);
+      color: var(--color-accent-primary);
+      letter-spacing: var(--letter-spacing-heading);
+      text-transform: uppercase;
+      margin-bottom: var(--space-lg);
+    }
+
+    /* Numbered takeaway list */
+    .takeaways-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-lg);
+      margin-bottom: var(--space-xxl);
+    }
+
+    .takeaway-item {
+      display: flex;
+      gap: var(--space-lg);
+      align-items: flex-start;
+    }
+
+    .takeaway-number {
+      font-family: var(--font-mono);
+      font-size: var(--text-h2);
+      font-weight: var(--weight-bold);
+      color: var(--color-accent-primary);
+      line-height: 1;
+      min-width: var(--space-xxl);
+      flex-shrink: 0;
+    }
+
+    .takeaway-text-block {
+      flex: 1;
+      padding-top: var(--space-xs);
+    }
+
+    .takeaway-headline {
+      font-family: var(--font-display);
+      font-size: var(--text-h3);
+      font-weight: var(--weight-bold);
+      color: var(--color-text-primary);
+      margin-bottom: var(--space-xs);
+    }
+
+    .takeaway-detail {
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      line-height: var(--leading-body);
+    }
+
+    /* Quote block — optional pull quote or closing thought */
+    .quote-block {
+      margin-top: var(--space-xxl);
+      padding: var(--space-xl);
+      background: var(--color-surface);
+      border-left: var(--space-xs) solid var(--color-accent-primary);
+      border-radius: var(--radius-md);
+    }
+
+    .quote-text {
+      font-family: var(--font-display);
+      font-size: var(--text-h3);
+      font-weight: var(--weight-medium);
+      color: var(--color-text-primary);
+      line-height: var(--line-height-heading);
+      font-style: italic;
+      margin-bottom: var(--space-md);
+    }
+
+    .quote-attribution {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      color: var(--color-text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: var(--letter-spacing-heading);
+    }
+  </style>
+</head>
+<body>
+  <!-- @slide-meta {"title":"Summary","type":"summary","narrative":"Closing page with a numbered list of key takeaways and an optional pull-quote block. Use this as the last content page before the bibliography.","tags":["summary","conclusion","takeaways","closing","print"]} -->
+  <div class="slide">
+    <!-- Page header -->
+    <div class="page-header">
+      <div class="page-label">Conclusion</div>
+      <h1 class="page-heading">Key Takeaways</h1>
+    </div>
+
+    <div class="takeaways-section">
+      <div class="takeaways-label">What You Should Remember</div>
+
+      <!-- Takeaway list — typically 3–5 items. Each has a number, headline, and detail. -->
+      <ol class="takeaways-list">
+        <li class="takeaway-item">
+          <div class="takeaway-number">01</div>
+          <div class="takeaway-text-block">
+            <div class="takeaway-headline">Core principle restated concisely</div>
+            <p class="takeaway-detail">
+              A one- or two-sentence elaboration that reinforces why this point matters
+              and how it connects to the rest of the document.
+            </p>
+          </div>
+        </li>
+
+        <li class="takeaway-item">
+          <div class="takeaway-number">02</div>
+          <div class="takeaway-text-block">
+            <div class="takeaway-headline">Second most important insight</div>
+            <p class="takeaway-detail">
+              Summarise the key finding or method from the body of the document.
+              Keep language active and concrete.
+            </p>
+          </div>
+        </li>
+
+        <li class="takeaway-item">
+          <div class="takeaway-number">03</div>
+          <div class="takeaway-text-block">
+            <div class="takeaway-headline">Third insight or recommended action</div>
+            <p class="takeaway-detail">
+              Tie this to a practical implication or next step the reader can take
+              after completing the document.
+            </p>
+          </div>
+        </li>
+
+        <li class="takeaway-item">
+          <div class="takeaway-number">04</div>
+          <div class="takeaway-text-block">
+            <div class="takeaway-headline">Fourth point — optional; remove if not needed</div>
+            <p class="takeaway-detail">
+              Limit to four or five takeaways to maintain impact. More than five dilutes the message.
+            </p>
+          </div>
+        </li>
+      </ol>
+
+      <!-- Optional pull-quote — remove the entire block if not needed -->
+      <div class="quote-block">
+        <p class="quote-text">
+          "A short, memorable quote that captures the essence of the document's central argument or finding."
+        </p>
+        <div class="quote-attribution">— Source Author, Year</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

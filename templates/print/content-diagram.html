@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" data-pengui-medium="print">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      /* Soul tokens are injected here by the recipe generator */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .slide {
+      width: 1240px;
+      height: 1754px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-normal);
+      line-height: var(--leading-body);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Page header */
+    .page-header {
+      margin-bottom: var(--space-xl);
+      padding-bottom: var(--space-lg);
+      border-bottom: var(--border-width) solid var(--color-border);
+      flex-shrink: 0;
+    }
+
+    .page-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      color: var(--color-accent-primary);
+      letter-spacing: var(--letter-spacing-heading);
+      text-transform: uppercase;
+      margin-bottom: var(--space-sm);
+    }
+
+    .page-heading {
+      font-family: var(--font-display);
+      font-size: var(--text-h1);
+      font-weight: var(--weight-bold);
+      letter-spacing: var(--letter-spacing-heading);
+      line-height: var(--line-height-heading);
+      color: var(--color-text-primary);
+    }
+
+    /* Introductory body text */
+    .body-text {
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      line-height: var(--leading-body);
+      margin-bottom: var(--space-xl);
+      flex-shrink: 0;
+    }
+
+    /* Diagram wrapper */
+    .diagram-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .diagram-title {
+      font-family: var(--font-display);
+      font-size: var(--text-h3);
+      font-weight: var(--weight-medium);
+      color: var(--color-text-primary);
+      margin-bottom: var(--space-md);
+    }
+
+    .diagram-container {
+      flex: 1;
+      background: var(--color-surface);
+      border-radius: var(--radius-card);
+      border: var(--border-width) solid var(--color-border);
+      padding: var(--space-lg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+    }
+
+    .diagram-svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Diagram caption */
+    .diagram-caption {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      color: var(--color-text-tertiary);
+      margin-top: var(--space-md);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <!-- @slide-meta {"title":"Content + Diagram","type":"content_diagram","narrative":"Content page with a heading, brief body text, and an inline SVG flow diagram showing a simple 3-node process. Wave 2A will ship a full tree/mind-map upgrade. This is a minimal illustrative stand-in.","tags":["diagram","flow","process","visualization","print"]} -->
+  <div class="slide">
+    <!-- Page header -->
+    <div class="page-header">
+      <div class="page-label">Section 4.1</div>
+      <h1 class="page-heading">Process Flow Overview</h1>
+    </div>
+
+    <!-- Brief contextual body text — 2–4 sentences -->
+    <p class="body-text">
+      The diagram below illustrates the three-stage process from initial input through
+      processing to the final output state. Each node represents a discrete phase with
+      defined entry and exit criteria. Wave 2A will replace this stand-in with a full
+      tree and mind-map diagram template.
+    </p>
+
+    <!-- Diagram section -->
+    <div class="diagram-wrapper">
+      <div class="diagram-title">Three-Stage Process Model</div>
+
+      <div class="diagram-container">
+        <!--
+          Minimal 3-node left-to-right flow diagram.
+          Wave 2A will upgrade this to a full tree/mind-map with category grouping
+          and orthogonal connectors per SPEC §8.2.
+          All fills use soul tokens; viewBox coordinates are geometry, not styling.
+        -->
+        <svg
+          class="diagram-svg"
+          viewBox="0 0 900 300"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-label="Three-node flow diagram: Input → Process → Output"
+          role="img"
+        >
+          <style>
+            /* Node styles */
+            .node-rect      { fill: var(--color-surface); stroke: var(--color-border); stroke-width: 1.5; }
+            .node-root      { fill: var(--color-accent-primary); stroke: var(--color-accent-primary); }
+            .node-mid       { fill: var(--color-accent-secondary); stroke: var(--color-accent-secondary); }
+            .node-output    { fill: var(--color-accent-warm); stroke: var(--color-accent-warm); }
+            /* Connector style */
+            .connector      { stroke: var(--color-border); stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+            /* Text styles */
+            .node-label     { font-family: var(--font-display); font-size: var(--text-h3); font-weight: var(--weight-bold); fill: var(--color-text-inverse); }
+            .node-sublabel  { font-family: var(--font-body); font-size: var(--text-caption); fill: var(--color-text-inverse); opacity: 0.85; }
+          </style>
+
+          <!-- Arrowhead marker -->
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="var(--color-border)" />
+            </marker>
+          </defs>
+
+          <!-- Connector: Node 1 → Node 2 -->
+          <line class="connector" x1="240" y1="150" x2="330" y2="150" />
+
+          <!-- Connector: Node 2 → Node 3 -->
+          <line class="connector" x1="570" y1="150" x2="660" y2="150" />
+
+          <!-- Node 1: Input -->
+          <rect class="node-root" x="40" y="80" width="200" height="140" rx="12" />
+          <text class="node-label" x="140" y="148" text-anchor="middle" dominant-baseline="middle">Input</text>
+          <text class="node-sublabel" x="140" y="178" text-anchor="middle">Raw data / trigger</text>
+
+          <!-- Node 2: Process -->
+          <rect class="node-mid" x="330" y="80" width="240" height="140" rx="12" />
+          <text class="node-label" x="450" y="148" text-anchor="middle" dominant-baseline="middle">Process</text>
+          <text class="node-sublabel" x="450" y="178" text-anchor="middle">Transform &amp; validate</text>
+
+          <!-- Node 3: Output -->
+          <rect class="node-output" x="660" y="80" width="200" height="140" rx="12" />
+          <text class="node-label" x="760" y="148" text-anchor="middle" dominant-baseline="middle">Output</text>
+          <text class="node-sublabel" x="760" y="178" text-anchor="middle">Result / artefact</text>
+        </svg>
+      </div>
+
+      <!-- Caption -->
+      <div class="diagram-caption">
+        Figure 1: Simplified three-stage process model. Wave 2A will expand this to a full tree/mind-map layout.
+      </div>
+    </div>
+  </div>
+</body>
+</html>

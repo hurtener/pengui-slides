@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en" data-pengui-medium="print">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      /* Soul tokens are injected here by the recipe generator */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .slide {
+      width: 1240px;
+      height: 1754px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-normal);
+      line-height: var(--leading-body);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Decorative top stripe — soul-themed accent band */
+    .cover-stripe {
+      width: 100%;
+      height: var(--space-xxl);
+      background: var(--color-accent-primary);
+      border-radius: var(--radius-sm);
+      margin-bottom: var(--space-xxxl);
+    }
+
+    /* Main content area */
+    .cover-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .cover-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      color: var(--color-accent-primary);
+      letter-spacing: var(--letter-spacing-heading);
+      text-transform: uppercase;
+      margin-bottom: var(--space-lg);
+    }
+
+    .cover-title {
+      font-family: var(--font-display);
+      font-size: var(--text-display);
+      font-weight: var(--weight-bold);
+      line-height: var(--line-height-heading);
+      letter-spacing: var(--letter-spacing-heading);
+      color: var(--color-text-primary);
+      margin-bottom: var(--space-lg);
+    }
+
+    .cover-subtitle {
+      font-size: var(--text-h2);
+      font-weight: var(--weight-normal);
+      color: var(--color-text-secondary);
+      line-height: var(--leading-body);
+      max-width: 80%;
+      margin-bottom: var(--space-xxxl);
+    }
+
+    /* Decorative horizontal rule */
+    .cover-rule {
+      width: var(--space-xxxl);
+      height: var(--space-xs);
+      background: var(--color-accent-secondary);
+      border-radius: var(--radius-full);
+      margin-bottom: var(--space-xxxl);
+    }
+
+    /* Footer: author and date */
+    .cover-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-top: var(--space-lg);
+      border-top: var(--border-width) solid var(--color-border);
+    }
+
+    .cover-author {
+      font-size: var(--text-h3);
+      font-weight: var(--weight-medium);
+      color: var(--color-text-primary);
+    }
+
+    .cover-meta {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      color: var(--color-text-tertiary);
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <!-- @slide-meta {"title":"Cover Page","type":"cover","narrative":"Title page for a print document. Displays the document title, subtitle, author name, and date with a soul-themed decorative stripe at the top.","tags":["cover","title","opening","print"]} -->
+  <div class="slide">
+    <!-- Soul-themed decorative top stripe -->
+    <div class="cover-stripe"></div>
+
+    <div class="cover-body">
+      <!-- Optional category/series label — remove if not needed -->
+      <div class="cover-label">Study Guide</div>
+
+      <!-- Main document title — adjust font size via --text-display override if needed -->
+      <h1 class="cover-title">Document Title Goes Here</h1>
+
+      <!-- Supporting subtitle — 1–2 sentences of context -->
+      <p class="cover-subtitle">A concise subtitle that describes the scope and purpose of this document.</p>
+
+      <!-- Decorative accent rule — soul colored -->
+      <div class="cover-rule"></div>
+    </div>
+
+    <!-- Footer: author on left, date and version on right -->
+    <div class="cover-footer">
+      <div class="cover-author">Author Name</div>
+      <div class="cover-meta">
+        <div>April 2026</div>
+        <div>Version 1.0</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

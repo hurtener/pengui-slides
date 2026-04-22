@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en" data-pengui-medium="print">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      /* Soul tokens are injected here by the recipe generator */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .slide {
+      width: 1240px;
+      height: 1754px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-normal);
+      line-height: var(--leading-body);
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Two-column layout: main content left, callout sidebar right */
+    .content-layout {
+      display: flex;
+      gap: var(--space-xl);
+      height: 100%;
+    }
+
+    /* Main content column (wider) */
+    .content-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Page header */
+    .page-header {
+      margin-bottom: var(--space-xxl);
+      padding-bottom: var(--space-lg);
+      border-bottom: var(--border-width) solid var(--color-border);
+    }
+
+    .page-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      color: var(--color-accent-primary);
+      letter-spacing: var(--letter-spacing-heading);
+      text-transform: uppercase;
+      margin-bottom: var(--space-sm);
+    }
+
+    .page-heading {
+      font-family: var(--font-display);
+      font-size: var(--text-h1);
+      font-weight: var(--weight-bold);
+      letter-spacing: var(--letter-spacing-heading);
+      line-height: var(--line-height-heading);
+      color: var(--color-text-primary);
+    }
+
+    /* Body text blocks */
+    .body-text {
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      line-height: var(--leading-body);
+      margin-bottom: var(--space-lg);
+    }
+
+    /* Subheading within main content */
+    .subheading {
+      font-family: var(--font-display);
+      font-size: var(--text-h3);
+      font-weight: var(--weight-bold);
+      color: var(--color-text-primary);
+      margin-top: var(--space-xl);
+      margin-bottom: var(--space-md);
+    }
+
+    /* Bullet list */
+    .bullet-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+      margin-bottom: var(--space-lg);
+    }
+
+    .bullet-list li {
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      line-height: var(--leading-body);
+      padding-left: var(--space-lg);
+      position: relative;
+    }
+
+    .bullet-list li::before {
+      content: "\25CF";
+      position: absolute;
+      left: 0;
+      color: var(--color-accent-primary);
+      font-size: var(--text-caption);
+      top: var(--space-xs);
+    }
+
+    /* Sidebar callout column */
+    .content-sidebar {
+      width: calc(var(--space-xxxl) * 3);
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-lg);
+      padding-top: var(--space-xxl);
+    }
+
+    /* Callout box */
+    .callout {
+      background: var(--color-surface);
+      border-left: var(--border-width) solid var(--color-accent-primary);
+      border-radius: var(--radius-md);
+      padding: var(--space-lg);
+    }
+
+    .callout-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-bold);
+      color: var(--color-accent-primary);
+      text-transform: uppercase;
+      letter-spacing: var(--letter-spacing-heading);
+      margin-bottom: var(--space-sm);
+    }
+
+    .callout-text {
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      line-height: var(--leading-body);
+    }
+
+    /* Key term box */
+    .key-term {
+      background: var(--color-surface-alt);
+      border-radius: var(--radius-md);
+      padding: var(--space-md);
+    }
+
+    .key-term-word {
+      font-weight: var(--weight-bold);
+      color: var(--color-text-primary);
+      font-size: var(--text-body);
+      margin-bottom: var(--space-xs);
+    }
+
+    .key-term-def {
+      font-size: var(--text-caption);
+      color: var(--color-text-secondary);
+      line-height: var(--leading-body);
+    }
+  </style>
+</head>
+<body>
+  <!-- @slide-meta {"title":"Content Page","type":"content","narrative":"Generic text content page with a heading, body paragraphs, and an optional sidebar callout. The sidebar holds key terms or supplementary notes. Replace placeholder text with actual content.","tags":["content","text","body","sidebar","print"]} -->
+  <div class="slide">
+    <div class="content-layout">
+      <!-- Main content area -->
+      <div class="content-main">
+        <div class="page-header">
+          <div class="page-label">Section 2.1</div>
+          <h1 class="page-heading">Foundational Principles</h1>
+        </div>
+
+        <!-- Body text — replace with actual content. Use multiple .body-text paragraphs. -->
+        <p class="body-text">
+          Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut
+          labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco
+          laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in
+          voluptate velit esse cillum dolore eu fugiat nulla pariatur.
+        </p>
+
+        <p class="body-text">
+          Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit
+          anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium
+          doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis.
+        </p>
+
+        <!-- Optional subheading — add when introducing a new concept within the page -->
+        <h2 class="subheading">Key Properties</h2>
+
+        <!-- Bullet list — remove if not needed -->
+        <ul class="bullet-list">
+          <li>First key principle — a concise statement of the concept.</li>
+          <li>Second key principle — expand as needed for clarity.</li>
+          <li>Third key principle — keep bullets parallel in structure.</li>
+          <li>Fourth key principle — avoid more than six bullets per list.</li>
+        </ul>
+
+        <p class="body-text">
+          Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia
+          consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.
+        </p>
+      </div>
+
+      <!-- Sidebar — optional; remove the entire .content-sidebar div if not used -->
+      <div class="content-sidebar">
+        <!-- Callout: note, tip, or warning -->
+        <div class="callout">
+          <div class="callout-label">Note</div>
+          <p class="callout-text">
+            A supplementary note that adds context without interrupting the main flow.
+            Keep this concise — two to three sentences maximum.
+          </p>
+        </div>
+
+        <!-- Key term definition — repeat for each important term on this page -->
+        <div class="key-term">
+          <div class="key-term-word">Key Term</div>
+          <div class="key-term-def">A precise definition of this term as used in the document. Avoid circular definitions.</div>
+        </div>
+
+        <!-- Second key term -->
+        <div class="key-term">
+          <div class="key-term-word">Second Term</div>
+          <div class="key-term-def">Definition of the second important concept introduced on this page.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

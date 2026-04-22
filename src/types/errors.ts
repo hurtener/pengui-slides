@@ -38,6 +38,8 @@ export enum ErrorCode {
   EXPORT_FAILED = 'EXPORT_FAILED',
   EXPORT_NO_SLIDES = 'EXPORT_NO_SLIDES',
   EXPORT_TRANSLATION_BLOCKED = 'EXPORT_TRANSLATION_BLOCKED',
+  FORMAT_NOT_EXPORTABLE = 'FORMAT_NOT_EXPORTABLE',
+  UNKNOWN_FORMAT = 'UNKNOWN_FORMAT',
   GOOGLE_AUTH_MISSING = 'GOOGLE_AUTH_MISSING',
 
   // Asset errors
@@ -139,6 +141,26 @@ export class GoogleAuthMissingError extends PenguiError {
     super(
       ErrorCode.GOOGLE_AUTH_MISSING,
       'Google Slides export requires either PENGUI_GOOGLE_ACCESS_TOKEN or service account credentials.',
+    );
+  }
+}
+
+export class FormatNotExportableError extends PenguiError {
+  constructor(deckFormat: string, attemptedTool: string, suggestedTool: string) {
+    super(
+      ErrorCode.FORMAT_NOT_EXPORTABLE,
+      `Deck format "${deckFormat}" cannot be exported by ${attemptedTool}. Use ${suggestedTool} instead.`,
+      { deckFormat, attemptedTool, suggestedTool },
+    );
+  }
+}
+
+export class UnknownFormatError extends PenguiError {
+  constructor(format: string, known: string[]) {
+    super(
+      ErrorCode.UNKNOWN_FORMAT,
+      `Unknown format "${format}". Known formats: ${known.join(', ')}.`,
+      { format, known },
     );
   }
 }

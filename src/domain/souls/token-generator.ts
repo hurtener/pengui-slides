@@ -3,6 +3,31 @@
  *
  * Converts SoulLayers into CSS custom properties (:root block)
  * for use in layout recipes and rendered slides.
+ *
+ * ## Print-mode typography strategy
+ *
+ * Souls are medium-agnostic: the same soul definition is used for both slide
+ * and print decks. To avoid forking souls or forcing all slide templates to
+ * change, the generator emits a **single additional scoped CSS block** for
+ * print mode, keyed by the attribute selector `[data-pengui-medium="print"]`
+ * on the `<html>` element.
+ *
+ * The slide `:root` block retains the soul's native typography scale (suitable
+ * for 1920×1080 presentation canvases). The print block overrides only the
+ * typographic tokens that differ at A4/Letter reading distance (per SPEC §5.1),
+ * plus `--space-safe-area`.
+ *
+ * **Why `[data-pengui-medium="print"]` instead of `:root.pengui-print`?**
+ * - Data attributes are idiomatic HTML and easier to set via `<html data-pengui-medium="print">`.
+ * - The selector specificity matches `:root.class`, so no risk of accidental
+ *   override battles with the base `:root` block.
+ * - Slide templates need no change: they don't carry the attribute, so only the
+ *   base `:root` tokens apply.
+ * - The generated CSS is compact: only 8 tokens are overridden, not the full ~40.
+ *
+ * Both blocks are always emitted in the returned `cssString`. A print deck's
+ * recipe templates include `<html data-pengui-medium="print">` so the print
+ * scope activates. Slide recipes use plain `<html>` and are unaffected.
  */
 
 import type { SoulLayers } from '../../types/design-soul.js';
@@ -10,9 +35,9 @@ import type { SoulLayers } from '../../types/design-soul.js';
 // ── Public Interface ────────────────────────────────────────────
 
 export interface TokenGeneratorResult {
-  /** Complete :root { ... } CSS block */
+  /** Complete CSS block: :root slide tokens + [data-pengui-medium="print"] overrides */
   cssString: string;
-  /** Array of all generated CSS custom property names */
+  /** Array of all generated CSS custom property names (from the :root block) */
   tokenNames: string[];
   /** Extracted font family names from the typography layer */
   allowedFonts: string[];
@@ -160,13 +185,64 @@ function extractFontFamilies(typography: SoulLayers['typography']): string[] {
   return Array.from(families);
 }
 
+// ── Print-mode overrides ─────────────────────────────────────────
+
+/**
+ * Print-mode typography scale per SPEC §5.1.
+ *
+ * These values are fixed — they are the canonical print defaults regardless
+ * of the soul's slide-mode sizes. The soul's type scale (sizeH1 etc.) is
+ * intentionally ignored here: a soul's character comes from color, shape,
+ * depth, and component tokens which are shared across mediums. Typography
+ * sizes must be smaller on A4 to remain readable at reading distance.
+ *
+ * NOTE: `--text-display` maps to the soul's "hero" concept at print scale.
+ * The token name `--text-display` is introduced for print; slide templates
+ * continue using `--text-hero`. Both are declared in the print scope.
+ */
+function buildPrintTypographyOverrides(): TokenEntry[] {
+  return [
+    // Text sizes
+    { name: '--text-display', value: '56px' },
+    { name: '--text-hero',    value: '56px' }, // alias so print recipes can use either name
+    { name: '--text-h1',      value: '36px' },
+    { name: '--text-h2',      value: '24px' },
+    { name: '--text-h3',      value: '18px' },
+    { name: '--text-body',    value: '12px' },
+    { name: '--text-caption', value: '9px'  },
+    // Line-height override
+    { name: '--leading-body', value: '1.55' },
+    // Safe-area override (96px for A4/Letter vs 48px for slides)
+    { name: '--space-safe-area', value: '96px' },
+  ];
+}
+
+/**
+ * Build the [data-pengui-medium="print"] scoped CSS block.
+ *
+ * This block overrides only the tokens that differ between slide and print
+ * mediums. All other soul tokens (colors, shapes, depth, components, motion,
+ * fonts) are inherited from the :root block and remain unchanged.
+ */
+function buildPrintScopeBlock(): string {
+  const overrides = buildPrintTypographyOverrides();
+  const declarations = overrides.map((e) => `  ${e.name}: ${e.value};`).join('\n');
+  return `[data-pengui-medium="print"] {\n${declarations}\n}`;
+}
+
 // ── Main Export ──────────────────────────────────────────────────
 
 /**
  * Generate CSS custom properties from a DesignSoul's layers.
  *
- * Returns a complete :root {} block, the list of token names,
- * and the allowed font families extracted from the typography layer.
+ * Returns a CSS string containing two blocks:
+ * 1. A `:root {}` block with the full soul token set (slide-scale typography).
+ * 2. A `[data-pengui-medium="print"] {}` block that overrides typography and
+ *    `--space-safe-area` for A4/Letter print canvases (per SPEC §5.1).
+ *
+ * Print recipe templates set `<html data-pengui-medium="print">` so the print
+ * scope activates automatically. Slide templates use plain `<html>` and are
+ * unaffected — zero template changes required.
  */
 export function generateTokens(layers: SoulLayers): TokenGeneratorResult {
   const allEntries: TokenEntry[] = [
@@ -183,7 +259,9 @@ export function generateTokens(layers: SoulLayers): TokenGeneratorResult {
 
   const declarations = allEntries.map((e) => `  ${e.name}: ${e.value};`).join('\n');
 
-  const cssString = `:root {\n${declarations}\n}`;
+  const rootBlock = `:root {\n${declarations}\n}`;
+  const printBlock = buildPrintScopeBlock();
+  const cssString = `${rootBlock}\n\n${printBlock}`;
 
   const allowedFonts = extractFontFamilies(layers.typography);
 

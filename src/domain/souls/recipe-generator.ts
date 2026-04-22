@@ -1,17 +1,48 @@
 /**
  * Recipe Generator for Design Souls.
  *
- * Generates 6 layout recipe HTML documents that use utility CSS classes
+ * Generates layout recipe HTML documents that use utility CSS classes
  * and inline HTML comments (instead of @slot markers). Each recipe is
  * a complete, working HTML page with example content that an LLM can
  * modify freely.
+ *
+ * ## Slide recipes (6)
+ * Generated programmatically from inline body/style builders. The soul's
+ * CSS tokens are injected into the `<style>` block.
+ *
+ * ## Print recipes (11)
+ * Loaded from pre-authored HTML files in `templates/print/`. The soul's
+ * CSS tokens are injected into the `:root { }` placeholder comment inside
+ * each template's `<style>` block. This preserves the rich layout and
+ * narrative already in each template while still giving each recipe the
+ * soul's color, spacing, shape, and font tokens.
+ *
+ * Both recipe sets are always generated when `generateAll` is called.
+ * The caller (soul-service / approve_soul tool) decides which to expose
+ * based on the deck's format medium.
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { SoulId } from '../../types/common.js';
 import type { LayoutRecipe } from '../../types/design-soul.js';
 import type { Clock } from '../../infrastructure/clock.js';
 import { generateTemplateId } from '../../infrastructure/id-generator.js';
 import { generateUtilityCss } from './utility-css-generator.js';
+
+// ── Print template loader ───────────────────────────────────────
+
+/**
+ * Resolve the `templates/print/` directory relative to this source file.
+ * Works in both:
+ * - vitest (source TypeScript): src/domain/souls/ → ../../../ = repo root
+ * - compiled (build/domain/souls/): → ../../../ = repo root
+ */
+const TEMPLATES_PRINT_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../templates/print',
+);
 
 // ── Recipe Metadata ─────────────────────────────────────────────
 
@@ -297,22 +328,137 @@ const RECIPE_SPECS: RecipeSpec[] = [
   },
 ];
 
+// ── Print recipe specifications ─────────────────────────────────
+
+interface PrintRecipeSpec {
+  filename: string;
+  type: string;
+  name: string;
+  description: string;
+  tags: string[];
+}
+
+const PRINT_RECIPE_SPECS: PrintRecipeSpec[] = [
+  {
+    filename: 'cover.html',
+    type: 'cover',
+    name: 'Print Cover Page',
+    description: 'Title page for a print document: deck title, subtitle, author, date, and a soul-themed decorative stripe.',
+    tags: ['cover', 'title', 'opening', 'print'],
+  },
+  {
+    filename: 'toc.html',
+    type: 'toc',
+    name: 'Table of Contents',
+    description: 'Table of contents with numbered entries and dotted leaders to page numbers. Supports sub-entries.',
+    tags: ['toc', 'navigation', 'index', 'print'],
+  },
+  {
+    filename: 'chapter-intro.html',
+    type: 'chapter_intro',
+    name: 'Chapter Introduction',
+    description: 'Chapter opener with a large chapter number, chapter title, one-paragraph overview, and optional learning objectives.',
+    tags: ['chapter', 'opener', 'section', 'intro', 'print'],
+  },
+  {
+    filename: 'content.html',
+    type: 'content',
+    name: 'Content Page',
+    description: 'Generic text page with heading, body paragraphs, subheadings, bullet lists, and an optional sidebar callout.',
+    tags: ['content', 'text', 'body', 'sidebar', 'print'],
+  },
+  {
+    filename: 'content-chart.html',
+    type: 'content_chart',
+    name: 'Content + Chart',
+    description: 'Content page with heading, body text, and an inline SVG bar chart. Soul tokens style the chart colors.',
+    tags: ['chart', 'data', 'bar-chart', 'visualization', 'print'],
+  },
+  {
+    filename: 'content-diagram.html',
+    type: 'content_diagram',
+    name: 'Content + Diagram',
+    description: 'Content page with heading, body text, and an inline SVG three-node flow diagram.',
+    tags: ['diagram', 'flow', 'process', 'visualization', 'print'],
+  },
+  {
+    filename: 'compare.html',
+    type: 'compare',
+    name: 'Two-Column Comparison',
+    description: 'Side-by-side A vs B comparison with column headers, bulleted lists, and an optional summary verdict.',
+    tags: ['compare', 'versus', 'two-column', 'contrast', 'print'],
+  },
+  {
+    filename: 'glossary.html',
+    type: 'glossary',
+    name: 'Glossary',
+    description: 'Term–definition list with bolded terms, dash separators, and optional alphabetical section breaks.',
+    tags: ['glossary', 'definitions', 'terms', 'reference', 'print'],
+  },
+  {
+    filename: 'timeline.html',
+    type: 'timeline',
+    name: 'Timeline',
+    description: 'Horizontal timeline with six labeled events alternating above and below the axis. Soul tokens color the nodes.',
+    tags: ['timeline', 'history', 'chronology', 'events', 'print'],
+  },
+  {
+    filename: 'summary.html',
+    type: 'summary',
+    name: 'Summary',
+    description: 'Closing page with a numbered key-takeaways list and an optional pull-quote block.',
+    tags: ['summary', 'conclusion', 'takeaways', 'closing', 'print'],
+  },
+  {
+    filename: 'bibliography.html',
+    type: 'bibliography',
+    name: 'Bibliography',
+    description: 'Numbered reference list in APA-like format with authors, year, title, source, and optional DOI.',
+    tags: ['bibliography', 'references', 'citations', 'sources', 'print'],
+  },
+];
+
+/**
+ * Inject the soul's CSS tokens into a print template HTML string.
+ *
+ * Each print template contains a sentinel `:root {}` block:
+ *
+ *   ```css
+ *   :root {
+ *     /* Soul tokens are injected here by the recipe generator *\/
+ *   }
+ *   ```
+ *
+ * This function replaces that entire sentinel `:root { ... }` block (including
+ * its braces) with the full `cssTokens` string from the token generator, which
+ * includes both the slide-scale `:root {}` block and the print-override
+ * `[data-pengui-medium="print"] {}` block. The template's own CSS rules
+ * (below the sentinel) are preserved unchanged.
+ */
+function injectTokensIntoPrintTemplate(templateHtml: string, cssTokens: string): string {
+  // Match the sentinel :root block that contains only the injection comment.
+  // The regex uses a non-greedy match between :root { and } so it captures
+  // only the sentinel block, not the first real CSS rule's closing brace.
+  const SENTINEL_RE = /:root\s*\{[^}]*\/\*\s*Soul tokens are injected here by the recipe generator\s*\*\/[^}]*\}/;
+  return templateHtml.replace(SENTINEL_RE, cssTokens);
+}
+
 // ── Recipe Generator Class ──────────────────────────────────────
 
 export class RecipeGenerator {
   /**
-   * Generate all 6 built-in layout recipes for a given soul.
+   * Generate all 6 slide layout recipes for a given soul.
    *
    * Each recipe is a complete HTML document that includes:
    * 1. CSS tokens (:root { ... })
    * 2. Reset styles
-   * 3. Slide base styles
+   * 3. Slide base styles (1920×1080)
    * 4. The full utility CSS library
    * 5. Any per-recipe extra styles (minimal — most styling via utility classes)
    * 6. The body with inline HTML comments explaining flexibility
    *
    * @param soulId - The ID of the soul these recipes belong to
-   * @param cssTokens - The :root CSS custom properties block
+   * @param cssTokens - The full CSS block (root + print scope) from token-generator
    * @param clock - Clock for timestamp generation
    * @returns Array of 6 LayoutRecipe objects with source: 'built-in'
    */
@@ -331,5 +477,40 @@ export class RecipeGenerator {
       html: wrapDocument(cssTokens, utilityCss, spec.buildStyles(), spec.buildBody()),
       createdAt: now,
     }));
+  }
+
+  /**
+   * Generate all 11 print layout recipes for a given soul.
+   *
+   * Each recipe is loaded from a pre-authored HTML file in `templates/print/`.
+   * The soul's CSS tokens are injected into the template's `:root {}` placeholder.
+   * The resulting HTML is a self-contained A4-portrait document (1240×1754 px)
+   * that the LLM can modify as a starting point.
+   *
+   * @param soulId - The ID of the soul these recipes belong to
+   * @param cssTokens - The full CSS block (root + print scope) from token-generator
+   * @param clock - Clock for timestamp generation
+   * @returns Array of 11 LayoutRecipe objects with source: 'built-in'
+   */
+  generatePrintAll(soulId: SoulId, cssTokens: string, clock: Clock): LayoutRecipe[] {
+    const now = clock.now();
+
+    return PRINT_RECIPE_SPECS.map((spec) => {
+      const templatePath = path.join(TEMPLATES_PRINT_DIR, spec.filename);
+      const rawHtml = fs.readFileSync(templatePath, 'utf-8');
+      const html = injectTokensIntoPrintTemplate(rawHtml, cssTokens);
+
+      return {
+        id: generateTemplateId(),
+        soulId,
+        type: spec.type,
+        name: spec.name,
+        description: spec.description,
+        tags: spec.tags,
+        source: 'built-in' as const,
+        html,
+        createdAt: now,
+      };
+    });
   }
 }

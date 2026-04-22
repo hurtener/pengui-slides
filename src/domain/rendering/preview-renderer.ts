@@ -2,7 +2,8 @@
  * Preview Renderer for Pengui Slides.
  *
  * Generates lightweight base64-encoded thumbnails suitable
- * for quick previews in the MCP client.
+ * for quick previews in the MCP client. Native canvas dimensions
+ * are derived from the deck's format geometry when provided.
  */
 
 import type { Logger } from '../../infrastructure/logger.js';
@@ -41,8 +42,8 @@ export class PreviewRenderer {
     options?: Partial<PreviewOptions>,
   ): Promise<PreviewResult> {
     const opts: PreviewOptions = { ...DEFAULT_PREVIEW_OPTIONS, ...options };
-    const nativeWidth = DEFAULT_RENDER_OPTIONS.width;
-    const nativeHeight = DEFAULT_RENDER_OPTIONS.height;
+    const nativeWidth = opts.nativeWidth ?? DEFAULT_RENDER_OPTIONS.width;
+    const nativeHeight = opts.nativeHeight ?? DEFAULT_RENDER_OPTIONS.height;
     const scale = Math.min(opts.width / nativeWidth, opts.height / nativeHeight);
 
     const previewHtml = this.injectPreviewScaling(input.html, nativeWidth, nativeHeight, scale);

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en" data-pengui-medium="print">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      /* Soul tokens are injected here by the recipe generator */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .slide {
+      width: 1240px;
+      height: 1754px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-normal);
+      line-height: var(--leading-body);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Page header */
+    .page-header {
+      margin-bottom: var(--space-xl);
+      padding-bottom: var(--space-lg);
+      border-bottom: var(--border-width) solid var(--color-border);
+      flex-shrink: 0;
+    }
+
+    .page-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      color: var(--color-accent-primary);
+      letter-spacing: var(--letter-spacing-heading);
+      text-transform: uppercase;
+      margin-bottom: var(--space-sm);
+    }
+
+    .page-heading {
+      font-family: var(--font-display);
+      font-size: var(--text-h1);
+      font-weight: var(--weight-bold);
+      letter-spacing: var(--letter-spacing-heading);
+      line-height: var(--line-height-heading);
+      color: var(--color-text-primary);
+    }
+
+    /* Introductory body text */
+    .body-text {
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      line-height: var(--leading-body);
+      margin-bottom: var(--space-xl);
+      flex-shrink: 0;
+    }
+
+    /* Chart wrapper */
+    .chart-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .chart-title {
+      font-family: var(--font-display);
+      font-size: var(--text-h3);
+      font-weight: var(--weight-medium);
+      color: var(--color-text-primary);
+      margin-bottom: var(--space-md);
+    }
+
+    .chart-container {
+      flex: 1;
+      background: var(--color-surface);
+      border-radius: var(--radius-card);
+      border: var(--border-width) solid var(--color-border);
+      padding: var(--space-lg);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    /* SVG bar chart — fills the container */
+    .chart-svg {
+      flex: 1;
+      width: 100%;
+    }
+
+    /* Chart caption / source note */
+    .chart-caption {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      color: var(--color-text-tertiary);
+      margin-top: var(--space-md);
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <!-- @slide-meta {"title":"Content + Chart","type":"content_chart","narrative":"Content page with a heading, introductory body text, and an inline SVG bar chart. The chart uses soul tokens for color. Wave 2A will ship more complete chart templates; this is a minimal illustrative stand-in.","tags":["chart","data","bar-chart","visualization","print"]} -->
+  <div class="slide">
+    <!-- Page header -->
+    <div class="page-header">
+      <div class="page-label">Section 3.2</div>
+      <h1 class="page-heading">Data Analysis &amp; Trends</h1>
+    </div>
+
+    <!-- Brief contextual body text — 2–4 sentences situating the chart -->
+    <p class="body-text">
+      The following chart illustrates the distribution of key metrics across four categories
+      for the study period. Values are normalised to a common baseline for fair comparison.
+      Refer to Appendix A for the full dataset and methodology notes.
+    </p>
+
+    <!-- Chart section -->
+    <div class="chart-wrapper">
+      <div class="chart-title">Category Performance — Q1 2026</div>
+
+      <div class="chart-container">
+        <!--
+          Minimal illustrative bar chart (vertical, 5 bars).
+          Wave 2A will replace this with a fully-documented chart template.
+          All fills reference soul tokens; no literal hex values.
+          viewBox is geometry-only and is exempt from the no-literal-px rule.
+        -->
+        <svg
+          class="chart-svg"
+          viewBox="0 0 900 480"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-label="Bar chart showing category performance"
+          role="img"
+        >
+          <!-- Y-axis gridlines (stroke via currentColor inheriting from token) -->
+          <style>
+            .chart-axis   { stroke: var(--color-border); stroke-width: 1; }
+            .chart-grid   { stroke: var(--color-border); stroke-width: 1; stroke-dasharray: 4 4; }
+            .chart-label  { font-family: var(--font-mono); font-size: var(--text-caption); fill: var(--color-text-tertiary); }
+            .chart-value  { font-family: var(--font-mono); font-size: var(--text-caption); fill: var(--color-text-secondary); }
+            .bar-a        { fill: var(--color-accent-primary); }
+            .bar-b        { fill: var(--color-accent-secondary); }
+            .bar-c        { fill: var(--color-accent-warm); }
+            .bar-d        { fill: var(--color-success); }
+            .bar-e        { fill: var(--color-info); }
+          </style>
+
+          <!-- Horizontal gridlines at 25%, 50%, 75%, 100% of chart height -->
+          <line class="chart-grid" x1="80" y1="360" x2="880" y2="360" />
+          <line class="chart-grid" x1="80" y1="270" x2="880" y2="270" />
+          <line class="chart-grid" x1="80" y1="180" x2="880" y2="180" />
+          <line class="chart-grid" x1="80" y1="90"  x2="880" y2="90"  />
+
+          <!-- Y-axis baseline -->
+          <line class="chart-axis" x1="80" y1="30" x2="80" y2="400" />
+          <!-- X-axis baseline -->
+          <line class="chart-axis" x1="80" y1="400" x2="880" y2="400" />
+
+          <!-- Y-axis labels -->
+          <text class="chart-label" x="70" y="404" text-anchor="end">0</text>
+          <text class="chart-label" x="70" y="364" text-anchor="end">25</text>
+          <text class="chart-label" x="70" y="274" text-anchor="end">50</text>
+          <text class="chart-label" x="70" y="184" text-anchor="end">75</text>
+          <text class="chart-label" x="70" y="94"  text-anchor="end">100</text>
+
+          <!-- Bar A — Category Alpha: 82% height = 328px, top at 400-328=72 -->
+          <rect class="bar-a" x="120" y="72" width="100" height="328" rx="4" />
+          <text class="chart-value" x="170" y="60" text-anchor="middle">82</text>
+          <text class="chart-label" x="170" y="420" text-anchor="middle">Alpha</text>
+
+          <!-- Bar B — Category Beta: 64% height = 256px, top at 400-256=144 -->
+          <rect class="bar-b" x="270" y="144" width="100" height="256" rx="4" />
+          <text class="chart-value" x="320" y="132" text-anchor="middle">64</text>
+          <text class="chart-label" x="320" y="420" text-anchor="middle">Beta</text>
+
+          <!-- Bar C — Category Gamma: 91% height = 364px, top at 400-364=36 -->
+          <rect class="bar-c" x="420" y="36" width="100" height="364" rx="4" />
+          <text class="chart-value" x="470" y="24" text-anchor="middle">91</text>
+          <text class="chart-label" x="470" y="420" text-anchor="middle">Gamma</text>
+
+          <!-- Bar D — Category Delta: 47% height = 188px, top at 400-188=212 -->
+          <rect class="bar-d" x="570" y="212" width="100" height="188" rx="4" />
+          <text class="chart-value" x="620" y="200" text-anchor="middle">47</text>
+          <text class="chart-label" x="620" y="420" text-anchor="middle">Delta</text>
+
+          <!-- Bar E — Category Epsilon: 73% height = 292px, top at 400-292=108 -->
+          <rect class="bar-e" x="720" y="108" width="100" height="292" rx="4" />
+          <text class="chart-value" x="770" y="96" text-anchor="middle">73</text>
+          <text class="chart-label" x="770" y="420" text-anchor="middle">Epsilon</text>
+
+          <!-- Legend (required when chart has multiple series / colors) -->
+          <g class="legend" transform="translate(100, 450)">
+            <rect class="bar-a" x="0"   y="0" width="14" height="14" rx="2" />
+            <text class="chart-label" x="20" y="12">Alpha</text>
+            <rect class="bar-b" x="90"  y="0" width="14" height="14" rx="2" />
+            <text class="chart-label" x="110" y="12">Beta</text>
+            <rect class="bar-c" x="175" y="0" width="14" height="14" rx="2" />
+            <text class="chart-label" x="195" y="12">Gamma</text>
+            <rect class="bar-d" x="270" y="0" width="14" height="14" rx="2" />
+            <text class="chart-label" x="290" y="12">Delta</text>
+            <rect class="bar-e" x="355" y="0" width="14" height="14" rx="2" />
+            <text class="chart-label" x="375" y="12">Epsilon</text>
+          </g>
+        </svg>
+      </div>
+
+      <!-- Optional source / footnote -->
+      <div class="chart-caption">Source: Internal dataset, Q1 2026. Values are illustrative stand-ins.</div>
+    </div>
+  </div>
+</body>
+</html>

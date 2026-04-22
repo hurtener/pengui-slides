@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en" data-pengui-medium="print">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      /* Soul tokens are injected here by the recipe generator */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .slide {
+      width: 1240px;
+      height: 1754px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-normal);
+      line-height: var(--leading-body);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Page header */
+    .page-header {
+      margin-bottom: var(--space-xl);
+      padding-bottom: var(--space-lg);
+      border-bottom: var(--border-width) solid var(--color-border);
+      flex-shrink: 0;
+    }
+
+    .page-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      color: var(--color-accent-primary);
+      letter-spacing: var(--letter-spacing-heading);
+      text-transform: uppercase;
+      margin-bottom: var(--space-sm);
+    }
+
+    .page-heading {
+      font-family: var(--font-display);
+      font-size: var(--text-h1);
+      font-weight: var(--weight-bold);
+      letter-spacing: var(--letter-spacing-heading);
+      line-height: var(--line-height-heading);
+      color: var(--color-text-primary);
+    }
+
+    /* Optional context paragraph */
+    .context-text {
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      line-height: var(--leading-body);
+      margin-bottom: var(--space-xl);
+      flex-shrink: 0;
+    }
+
+    /* Two-column comparison layout */
+    .compare-columns {
+      flex: 1;
+      display: flex;
+      gap: var(--space-lg);
+      min-height: 0;
+    }
+
+    /* Individual column */
+    .compare-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--color-surface);
+      border-radius: var(--radius-card);
+      border: var(--border-width) solid var(--color-border);
+      overflow: hidden;
+    }
+
+    /* Column header strip */
+    .compare-col-header {
+      padding: var(--space-lg);
+      background: var(--color-surface-alt);
+      border-bottom: var(--border-width) solid var(--color-border);
+      flex-shrink: 0;
+    }
+
+    .compare-col-header-left {
+      border-top: var(--space-xs) solid var(--color-accent-primary);
+    }
+
+    .compare-col-header-right {
+      border-top: var(--space-xs) solid var(--color-accent-secondary);
+    }
+
+    .compare-col-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      color: var(--color-text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: var(--letter-spacing-heading);
+      margin-bottom: var(--space-xs);
+    }
+
+    .compare-col-title {
+      font-family: var(--font-display);
+      font-size: var(--text-h2);
+      font-weight: var(--weight-bold);
+      color: var(--color-text-primary);
+    }
+
+    /* Column body with bullet list */
+    .compare-col-body {
+      flex: 1;
+      padding: var(--space-lg);
+      overflow: hidden;
+    }
+
+    .compare-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-md);
+    }
+
+    .compare-list li {
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      line-height: var(--leading-body);
+      padding-left: var(--space-lg);
+      position: relative;
+    }
+
+    .compare-list-left li::before {
+      content: "\2022";
+      position: absolute;
+      left: 0;
+      color: var(--color-accent-primary);
+      font-weight: var(--weight-bold);
+    }
+
+    .compare-list-right li::before {
+      content: "\2022";
+      position: absolute;
+      left: 0;
+      color: var(--color-accent-secondary);
+      font-weight: var(--weight-bold);
+    }
+
+    /* VS divider badge */
+    .vs-badge {
+      width: var(--space-xxl);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .vs-badge-inner {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-bold);
+      color: var(--color-text-tertiary);
+      border: var(--border-width) solid var(--color-border);
+      border-radius: var(--radius-full);
+      width: var(--space-xxl);
+      height: var(--space-xxl);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Summary row — optional verdict at the bottom */
+    .compare-summary {
+      margin-top: var(--space-lg);
+      padding: var(--space-md) var(--space-lg);
+      background: var(--color-surface);
+      border-radius: var(--radius-md);
+      border: var(--border-width) solid var(--color-border);
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      line-height: var(--leading-body);
+      flex-shrink: 0;
+    }
+
+    .compare-summary strong {
+      font-weight: var(--weight-bold);
+      color: var(--color-text-primary);
+    }
+  </style>
+</head>
+<body>
+  <!-- @slide-meta {"title":"Two-Column Comparison","type":"compare","narrative":"Side-by-side comparison page (A vs B) with column headers, bulleted lists, and an optional summary verdict. Left column uses the primary accent, right uses the secondary accent.","tags":["compare","versus","two-column","contrast","print"]} -->
+  <div class="slide">
+    <!-- Page header -->
+    <div class="page-header">
+      <div class="page-label">Analysis</div>
+      <h1 class="page-heading">Approach A vs. Approach B</h1>
+    </div>
+
+    <!-- Optional context sentence -->
+    <p class="context-text">
+      The table below compares the two main approaches across practical considerations.
+      Choose based on the constraints of your specific context.
+    </p>
+
+    <!-- Two-column compare layout -->
+    <div class="compare-columns">
+      <!-- Left column — Option A -->
+      <div class="compare-col">
+        <div class="compare-col-header compare-col-header-left">
+          <div class="compare-col-label">Option</div>
+          <div class="compare-col-title">Approach A</div>
+        </div>
+        <div class="compare-col-body">
+          <ul class="compare-list compare-list-left">
+            <li>First advantage or characteristic of Approach A — keep to one clear idea.</li>
+            <li>Second point — supports the overall assessment.</li>
+            <li>Third point — relevant trade-off or clarification.</li>
+            <li>Fourth point — use parallel grammatical structure throughout.</li>
+            <li>Fifth point — stop at six to avoid visual overwhelm.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- VS divider -->
+      <div class="vs-badge">
+        <div class="vs-badge-inner">VS</div>
+      </div>
+
+      <!-- Right column — Option B -->
+      <div class="compare-col">
+        <div class="compare-col-header compare-col-header-right">
+          <div class="compare-col-label">Option</div>
+          <div class="compare-col-title">Approach B</div>
+        </div>
+        <div class="compare-col-body">
+          <ul class="compare-list compare-list-right">
+            <li>First advantage or characteristic of Approach B — parallel to left column.</li>
+            <li>Second point — counterpart to the corresponding left-column item.</li>
+            <li>Third point — note any shared constraints.</li>
+            <li>Fourth point — highlight the key differentiator.</li>
+            <li>Fifth point — end with the bottom-line implication.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Optional summary verdict — remove if not needed -->
+    <div class="compare-summary">
+      <strong>When to choose A:</strong> Prefer Approach A when speed is the primary constraint and accuracy can be traded off.
+      <strong> When to choose B:</strong> Prefer Approach B when precision is non-negotiable and additional setup time is acceptable.
+    </div>
+  </div>
+</body>
+</html>

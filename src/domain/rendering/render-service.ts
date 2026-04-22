@@ -23,6 +23,7 @@ import type {
   SlideRenderResult,
 } from '../../types/export.js';
 
+import { getFormat } from '../formats/format-registry.js';
 import { PlaywrightPool } from './playwright-pool.js';
 import { SlideRenderer } from './slide-renderer.js';
 import { PreviewRenderer } from './preview-renderer.js';
@@ -54,10 +55,16 @@ export class RenderService {
 
   /**
    * Render preview thumbnails for the given slides.
+   *
+   * When `format` is provided, the renderer's native canvas dimensions
+   * and thumbnail aspect derive from the format's geometry. This keeps
+   * print deck thumbnails portrait-shaped (A4/Letter) instead of falling
+   * back to the 16:9 defaults.
    */
   async renderPreview(
     slides: Slide[],
     options?: Partial<PreviewOptions>,
+    format?: FormatKind,
   ): Promise<PreviewResult[]> {
     const renderer = this.ensurePreviewRenderer();
 
@@ -67,10 +74,20 @@ export class RenderService {
       html: slide.html,
     }));
 
+    const geometry = format ? getFormat(format).geometry : undefined;
+    const shortEdge = this.config.previewHeight;
+    const defaultWidth = geometry
+      ? Math.round(shortEdge * geometry.thumbnailAspect)
+      : this.config.previewWidth;
+    const defaultHeight = shortEdge;
+
     return renderer.renderPreviews(inputs, {
-      width: this.config.previewWidth,
-      height: this.config.previewHeight,
+      width: defaultWidth,
+      height: defaultHeight,
       format: 'png',
+      ...(geometry
+        ? { nativeWidth: geometry.widthPx, nativeHeight: geometry.heightPx }
+        : {}),
       ...options,
     });
   }

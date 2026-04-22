@@ -1,0 +1,78 @@
+/*
+ * Pengui Slides — Design Tokens (Cozy Premium)
+ *
+ * Ported from study-audio-mcp/frontend/src/styles/tokens.css.
+ * No token renames were required: the sibling source contained no
+ * "studio" or project-specific prefixes — all tokens already use
+ * generic semantic names (--canvas, --mint, --ink-*, etc.).
+ *
+ * Wave 2B will import this file and the accompanying globals.css /
+ * motion.css when rebuilding DeckEditorApp.svelte.
+ */
+
+:root {
+  /* Canvas */
+  --canvas: #F7F2EA;
+  --surface-1: #FBF7F1;
+  --surface-2: #F1EAE0;
+  --surface-3: #ECE4D8;
+
+  /* Ink */
+  --ink-1: #1F2328;
+  --ink-2: #4B5563;
+  --ink-3: #6B7280;
+
+  /* Lines */
+  --border-subtle: #E6DDCF;
+  --border-hairline: #EFE7DA;
+
+  /* Accent */
+  --mint: #2FB8A6;
+  --mint-hover: #27A797;
+  --mint-tint: #D9F3EF;
+  --link: #3B82A6;
+  --terracotta: #D97A5B;
+  --terracotta-tint: #F7E3DB;
+  --slate: #5B7280;
+  --slate-tint: #E3E8EC;
+
+  /* Semantic */
+  --success: #2E9E6F;
+  --success-tint: #DBF2E7;
+  --warning: #C98A2E;
+  --warning-tint: #F8EED9;
+  --error: #C84B4B;
+  --error-tint: #F7DCDC;
+
+  /* Radius */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-xl: 24px;
+  --r-pill: 999px;
+
+  /* Spacing */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 40px;
+  --s-8: 48px;
+  --s-9: 64px;
+
+  /* Elevation */
+  --e1: 0 8px 24px rgba(31, 35, 40, 0.06);
+  --e2: 0 14px 40px rgba(31, 35, 40, 0.10);
+  --e3: 0 20px 60px rgba(31, 35, 40, 0.14);
+
+  /* Motion */
+  --dur-micro: 150ms;
+  --dur-popover: 210ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Typography */
+  --font-ui: "Inter", "SF Pro Text", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", "Menlo", "Consolas", monospace;
+}

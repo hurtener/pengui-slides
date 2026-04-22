@@ -109,7 +109,7 @@ export class EditorService {
       summary.slides.map((slideSummary) => this.deckService.getSlide(slideSummary.id as string)),
     );
 
-    const previews = await this.renderService.renderPreview(slides);
+    const previews = await this.renderService.renderPreview(slides, undefined, summary.format);
     const previewMap = new Map(previews.map((preview) => [preview.slideId, preview]));
     const slideSummaryMap = new Map(summary.slides.map((slideSummary) => [slideSummary.id as string, slideSummary]));
 
@@ -277,9 +277,12 @@ export class EditorService {
 
     await this.deckService.updateSlide(updateInput);
 
+    const deckSummary = await this.deckService.getDeckSummary(deckId);
     const validation = await this.validationService.validateSlide(
       embeddedHtml,
-      soulId(soulIdStr ?? ((await this.deckService.getDeckSummary(deckId)).soulId as string)),
+      soulId(soulIdStr ?? (deckSummary.soulId as string)),
+      'lint',
+      deckSummary.format,
     );
 
     await this.deckService.updateSlide({
