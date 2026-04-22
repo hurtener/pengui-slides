@@ -21,6 +21,12 @@ export async function validateSlidesForExport(
     );
   }
 
+  // Resolve the deck's format so Stage 1 / Stage 2 checks receive the
+  // correct page geometry. Without this, print decks would be validated
+  // against 1920×1080 slide defaults and overflow-detection would flag
+  // A4-sized content as off-canvas.
+  const deckFormat = await container.deckService.getDeckFormat(deckId);
+
   const failedSlides: Array<{
     slide_id: string;
     title: string;
@@ -33,6 +39,7 @@ export async function validateSlidesForExport(
       slide.html,
       soulId(soulIdStr),
       'full',
+      deckFormat,
     );
 
     await container.deckService.updateSlide({

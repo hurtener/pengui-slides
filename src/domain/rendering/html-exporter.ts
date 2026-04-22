@@ -2,15 +2,35 @@
  * HTML Exporter for Pengui Slides.
  *
  * Produces a self-contained HTML file with all slides rendered
- * as inline sections. Optionally includes JavaScript navigation
- * for arrow key control and a slide counter overlay.
+ * as inline sections. Two layout modes:
+ *
+ *   - **Slide layout** (slides_16_9): one slide at a time, scaled to
+ *     fit the viewport, with optional arrow-key navigation + counter.
+ *   - **Print layout** (print_a4_portrait / print_letter_portrait):
+ *     a continuous vertical stack of pages at native size, with CSS
+ *     @page rules so the browser's print dialog produces a proper PDF.
+ *     Navigation/counter overlays are suppressed in print layout.
+ *
+ * Layout is chosen from the deck's format geometry. Omitting geometry
+ * preserves the pre-v2.0 slide layout (1920×1080) so existing behavior
+ * is byte-identical.
  */
 
 import type { Logger } from '../../infrastructure/logger.js';
 import type { AssetService } from '../assets/asset-service.js';
 import { resolveAssetRefs } from '../assets/asset-resolver.js';
 import type { Slide } from '../../types/deck.js';
+import type { FormatGeometry, FormatKind } from '../../types/format.js';
 import type { ExportResult } from '../../types/export.js';
+import { FORMAT_REGISTRY, getFormat } from '../formats/format-registry.js';
+
+const DEFAULT_GEOMETRY: FormatGeometry = FORMAT_REGISTRY.slides_16_9.geometry;
+
+export interface HtmlExportOptions {
+  includeNavigation?: boolean;
+  format?: FormatKind;
+  geometry?: FormatGeometry;
+}
 
 // ── HTML Exporter ────────────────────────────────────────────────
 
@@ -23,21 +43,37 @@ export class HtmlExporter {
   /**
    * Export slides as a self-contained HTML buffer.
    *
-   * @param slides             Ordered array of slides.
-   * @param deckTitle          Title for the document.
-   * @param includeNavigation  When true, adds keyboard navigation and slide counter.
+   * @param slides   Ordered array of slides.
+   * @param deckTitle Title for the document.
+   * @param options  Layout options. `format` (or fully-resolved `geometry`)
+   *                 selects slide vs. print layout. `includeNavigation` is
+   *                 honored only for slide layout (print layout never shows
+   *                 a counter or arrow-key navigation).
    */
   async export(
     slides: Slide[],
     deckTitle: string,
-    includeNavigation: boolean = true,
+    options: HtmlExportOptions | boolean = {},
   ): Promise<ExportResult> {
+    // Backward compat: callers that passed `includeNavigation: boolean` still work.
+    const opts: HtmlExportOptions =
+      typeof options === 'boolean' ? { includeNavigation: options } : options;
+    const geometry =
+      opts.geometry ??
+      (opts.format ? getFormat(opts.format).geometry : DEFAULT_GEOMETRY);
+    const isPrint = geometry.medium === 'print';
+    const includeNavigation = isPrint ? false : opts.includeNavigation ?? true;
+
     this.logger.info('Starting HTML export', {
       slideCount: slides.length,
       includeNavigation,
+      layout: isPrint ? 'print' : 'slide',
+      geometry: { width: geometry.widthPx, height: geometry.heightPx },
     });
 
-    const html = await this.buildHtml(slides, deckTitle, includeNavigation);
+    const html = isPrint
+      ? await this.buildPrintHtml(slides, deckTitle, geometry)
+      : await this.buildHtml(slides, deckTitle, includeNavigation, geometry);
     const data = Buffer.from(html, 'utf-8');
     const filename = this.sanitizeFilename(deckTitle) + '.html';
 
@@ -64,6 +100,7 @@ export class HtmlExporter {
     slides: Slide[],
     deckTitle: string,
     includeNavigation: boolean,
+    geometry: FormatGeometry = DEFAULT_GEOMETRY,
   ): Promise<string> {
     // Extract body content and styles from each slide's full HTML document
     const extracted = slides.map((slide) => this.extractSlideContent(slide.html));
@@ -131,8 +168,8 @@ ${linkTags}
       background: #111;
     }
     .slide-frame {
-      width: 1920px;
-      height: 1080px;
+      width: ${geometry.widthPx}px;
+      height: ${geometry.heightPx}px;
       position: absolute;
       top: 50%;
       left: 50%;
@@ -157,7 +194,7 @@ ${counterHtml}
     (function() {
       var slides = document.querySelectorAll('.slide-frame');
       function scaleSlides() {
-        var sw = 1920, sh = 1080;
+        var sw = ${geometry.widthPx}, sh = ${geometry.heightPx};
         var vw = window.innerWidth, vh = window.innerHeight;
         var scale = Math.min(vw / sw, vh / sh);
         for (var i = 0; i < slides.length; i++) {
@@ -175,6 +212,98 @@ ${counterHtml}
     })();
 ${navigationScript}
   </script>
+</body>
+</html>`;
+  }
+
+  // ── Print Layout ─────────────────────────────────────────────
+
+  /**
+   * Continuous multi-page stack for print decks. Each page renders at
+   * its native format dimensions with CSS @page rules so printing from
+   * the browser produces a proper paginated PDF.
+   */
+  private async buildPrintHtml(
+    slides: Slide[],
+    deckTitle: string,
+    geometry: FormatGeometry,
+  ): Promise<string> {
+    const extracted = slides.map((slide) => this.extractSlideContent(slide.html));
+    const scopedStyles = extracted
+      .map((ex, index) => {
+        const slideId = `page-${index + 1}`;
+        return ex.styles.map((style) => this.scopeCssToSlide(style, slideId)).join('\n');
+      })
+      .join('\n\n');
+
+    const allLinks = new Set<string>();
+    for (const { links } of extracted) {
+      for (const link of links) allLinks.add(link.trim());
+    }
+    const linkTags = Array.from(allLinks)
+      .map((l) => `  ${l}`)
+      .join('\n');
+
+    if (this.assetService) {
+      for (let i = 0; i < extracted.length; i++) {
+        extracted[i].body = await resolveAssetRefs(extracted[i].body, this.assetService);
+      }
+    }
+
+    const sections = extracted
+      .map(
+        (ex, index) =>
+          `    <section class="page-frame" id="page-${index + 1}" data-slide-id="${slides[index].id}">\n${this.indentHtml(ex.body, 6)}\n    </section>`,
+      )
+      .join('\n\n');
+
+    const pageSize = geometry.physicalPage
+      ? `${geometry.physicalPage} ${geometry.orientation}`
+      : `${geometry.widthPx}px ${geometry.heightPx}px`;
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${this.escapeHtml(deckTitle)}</title>
+${linkTags}
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    @page { size: ${pageSize}; margin: 0; }
+    html, body {
+      background: #e9e5de;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    body {
+      padding: 24px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
+    .page-frame {
+      width: ${geometry.widthPx}px;
+      height: ${geometry.heightPx}px;
+      background: white;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      overflow: hidden;
+      position: relative;
+      page-break-after: always;
+    }
+    .page-frame:last-child { page-break-after: auto; }
+    @media print {
+      html, body { background: white; }
+      body { padding: 0; gap: 0; }
+      .page-frame { box-shadow: none; }
+    }
+  </style>
+  <style>
+${scopedStyles}
+  </style>
+</head>
+<body>
+${sections}
 </body>
 </html>`;
   }

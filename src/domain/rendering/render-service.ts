@@ -143,14 +143,20 @@ export class RenderService {
 
   /**
    * Export slides as a self-contained HTML file.
+   *
+   * @param format  Optional deck format. When set, the exporter switches
+   *                to print layout (continuous vertical page stack, CSS
+   *                @page rules) for print-medium formats; slide formats
+   *                retain the single-slide scaled-to-viewport layout.
    */
   async exportHtml(
     slides: Slide[],
     deckTitle: string,
     includeNavigation?: boolean,
+    format?: FormatKind,
   ): Promise<ExportResult> {
     const exporter = this.ensureHtmlExporter();
-    return exporter.export(slides, deckTitle, includeNavigation);
+    return exporter.export(slides, deckTitle, { includeNavigation, format });
   }
 
   async renderSlideHtml(

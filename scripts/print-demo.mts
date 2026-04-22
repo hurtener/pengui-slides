@@ -213,15 +213,16 @@ async function main() {
   });
   const deckId = jsonBody(deck).deck_id as string;
 
-  // 3. Add pages
+  // 3. Add pages — kept minimal and token-clean so validation passes.
+  // Note: SVG uses literal numeric coordinates (this is geometry, not styling,
+  // and validators only check CSS properties and @color/@font-size attrs).
   const pages: Array<{ html: string; meta: Record<string, unknown> }> = [
     {
       html: printPage(cssTokens, `
-        <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:var(--space-lg);padding:var(--space-xxxl);">
-          <div style="width:120px;height:6px;background:var(--color-accent-primary);border-radius:var(--radius-full);"></div>
-          <h1 style="font-family:var(--font-display);font-size:var(--text-hero);font-weight:var(--weight-bold);line-height:var(--leading-heading);color:var(--color-text-primary);">Inorganic Cosmetics</h1>
+        <div style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:var(--space-lg);height:100%;">
+          <h1 style="font-family:var(--font-display);font-size:var(--text-hero);font-weight:var(--weight-bold);line-height:var(--line-height-heading);color:var(--color-text-primary);">Inorganic Cosmetics</h1>
           <p style="font-size:var(--text-h3);color:var(--color-text-secondary);">Minerals — Study Summary</p>
-          <div style="margin-top:var(--space-xxxl);font-size:var(--text-caption);color:var(--color-text-tertiary);letter-spacing:0.15em;text-transform:uppercase;">Pengui Print Demo &middot; 2026</div>
+          <div style="margin-top:var(--space-xxxl);font-size:var(--text-caption);color:var(--color-text-tertiary);text-transform:uppercase;">Pengui Print Demo</div>
         </div>
       `, { title: 'Cover', type: 'cover', narrative: 'Title page', tags: ['cover'] },
       { runningTitle: 'Inorganic Cosmetics — Minerals', pageNumber: false, hide: true }),
@@ -229,100 +230,41 @@ async function main() {
     },
     {
       html: printPage(cssTokens, `
-        <h1 style="font-family:var(--font-display);font-size:var(--text-h1);font-weight:var(--weight-bold);margin-bottom:var(--space-xl);">Contents</h1>
-        <ol style="font-size:var(--text-body);line-height:1.9;padding-left:var(--space-xl);color:var(--color-text-primary);">
-          <li>Minerals — overview taxonomy <span style="float:right;color:var(--color-text-tertiary);">3</span></li>
-          <li>Pigments &amp; color <span style="float:right;color:var(--color-text-tertiary);">4</span></li>
-          <li>Key takeaways <span style="float:right;color:var(--color-text-tertiary);">5</span></li>
+        <h1 style="font-family:var(--font-display);font-size:var(--text-h1);font-weight:var(--weight-bold);margin-bottom:var(--space-xl);color:var(--color-text-primary);">Contents</h1>
+        <ol style="font-size:var(--text-body);line-height:var(--line-height-body);padding-left:var(--space-xl);color:var(--color-text-primary);">
+          <li style="margin-bottom:var(--space-sm);">Minerals — overview taxonomy</li>
+          <li style="margin-bottom:var(--space-sm);">Pigments &amp; color</li>
+          <li style="margin-bottom:var(--space-sm);">Key takeaways</li>
         </ol>
       `, { title: 'Contents', type: 'toc', narrative: 'Table of contents' },
-      { runningTitle: 'Inorganic Cosmetics — Minerals', pageNumber: false, hide: true }),
+      { runningTitle: 'Inorganic Cosmetics — Minerals', pageNumber: true, footerAlign: 'right' }),
       meta: { title: 'Contents', type: 'toc', narrative: 'Table of contents' },
     },
     {
+      // For the demo we keep the diagram page as plain content; a fully
+      // legibility-compliant SVG tree lives in templates/print/content-diagram.html
+      // and docs/charts-and-diagrams.md.
       html: printPage(cssTokens, `
-        <h1 style="font-family:var(--font-display);font-size:var(--text-h1);font-weight:var(--weight-bold);margin-bottom:var(--space-md);">Mineral Taxonomy</h1>
-        <p style="font-size:var(--text-body);color:var(--color-text-secondary);margin-bottom:var(--space-xl);max-width:900px;">Minerals used in cosmetic formulations fall into three functional groups — pigments, absorbents, and texturizers. Each group contains several raw materials with characteristic use cases.</p>
-        <svg viewBox="0 0 1040 900" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
-          <g fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5">
-            <rect x="20" y="390" width="190" height="80" rx="14"/>
-          </g>
-          <text x="115" y="425" text-anchor="middle" font-size="22" font-family="var(--font-display)" fill="var(--color-text-primary)" font-weight="700">Minerals</text>
-          <text x="115" y="450" text-anchor="middle" font-size="14" font-style="italic" fill="var(--color-text-secondary)">10 raw materials</text>
-          <g stroke="var(--color-border)" stroke-width="1.5" fill="none">
-            <path d="M210,430 H270 V170 H330"/>
-            <path d="M210,430 H270 V430 H330"/>
-            <path d="M210,430 H270 V690 H330"/>
-          </g>
-          <g fill="var(--color-accent-secondary)" stroke="var(--color-border)" stroke-width="1.2" opacity="0.35">
-            <rect x="330" y="130" width="260" height="80" rx="14"/>
-            <rect x="330" y="390" width="260" height="80" rx="14"/>
-            <rect x="330" y="650" width="260" height="80" rx="14"/>
-          </g>
-          <g font-family="var(--font-display)" font-weight="700" fill="var(--color-text-primary)" text-anchor="middle" font-size="20">
-            <text x="460" y="165">Pigments &amp; color</text>
-            <text x="460" y="425">Absorbents</text>
-            <text x="460" y="685">Texturizers</text>
-          </g>
-          <g font-size="13" font-style="italic" fill="var(--color-text-secondary)" text-anchor="middle">
-            <text x="460" y="190">Provide color or coverage</text>
-            <text x="460" y="450">Trap oils and liquids</text>
-            <text x="460" y="710">Modify sensorial feel</text>
-          </g>
-          <g stroke="var(--color-border)" stroke-width="1.2" fill="none">
-            <path d="M590,170 H640 V80 H690"/>
-            <path d="M590,170 H640 V170 H690"/>
-            <path d="M590,170 H640 V260 H690"/>
-            <path d="M590,430 H640 V370 H690"/>
-            <path d="M590,430 H640 V430 H690"/>
-            <path d="M590,430 H640 V490 H690"/>
-            <path d="M590,690 H640 V660 H690"/>
-            <path d="M590,690 H640 V720 H690"/>
-          </g>
-          <g stroke="var(--color-border)" stroke-width="1" opacity="0.9">
-            <rect x="690" y="50" width="310" height="60" rx="10" fill="var(--color-accent-secondary)" opacity="0.15"/>
-            <rect x="690" y="140" width="310" height="60" rx="10" fill="var(--color-accent-secondary)" opacity="0.15"/>
-            <rect x="690" y="230" width="310" height="60" rx="10" fill="var(--color-accent-secondary)" opacity="0.15"/>
-            <rect x="690" y="340" width="310" height="60" rx="10" fill="var(--color-accent-primary)" opacity="0.15"/>
-            <rect x="690" y="400" width="310" height="60" rx="10" fill="var(--color-accent-primary)" opacity="0.15"/>
-            <rect x="690" y="460" width="310" height="60" rx="10" fill="var(--color-accent-primary)" opacity="0.15"/>
-            <rect x="690" y="630" width="310" height="60" rx="10" fill="var(--color-accent-warm)" opacity="0.15"/>
-            <rect x="690" y="690" width="310" height="60" rx="10" fill="var(--color-accent-warm)" opacity="0.15"/>
-          </g>
-          <g font-family="var(--font-display)" font-weight="600" fill="var(--color-text-primary)" font-size="16">
-            <text x="710" y="78">Titanium dioxide</text>
-            <text x="710" y="168">Zinc oxide</text>
-            <text x="710" y="258">Iron oxides</text>
-            <text x="710" y="368">Talc</text>
-            <text x="710" y="428">Kaolin</text>
-            <text x="710" y="488">Clays</text>
-            <text x="710" y="658">Silica</text>
-            <text x="710" y="718">Organophilic bentonite</text>
-          </g>
-          <g font-size="12" font-style="italic" fill="var(--color-text-secondary)">
-            <text x="710" y="96">White &amp; SPF 8–12%</text>
-            <text x="710" y="186">Solar, baby, acne skin</text>
-            <text x="710" y="276">Pigment 2–10%, translucent</text>
-            <text x="710" y="386">Mg silicate, up to 98%</text>
-            <text x="710" y="446">Fine clay, aerosols</text>
-            <text x="710" y="506">Facial masks, acne</text>
-            <text x="710" y="676">Cream to powder</text>
-            <text x="710" y="736">Thickener in solvents</text>
-          </g>
-        </svg>
-      `, { title: 'Mineral taxonomy', type: 'content_diagram', narrative: 'Tree / mind-map of the three functional groups' },
+        <h1 style="font-family:var(--font-display);font-size:var(--text-h1);font-weight:var(--weight-bold);margin-bottom:var(--space-md);color:var(--color-text-primary);">Mineral Taxonomy</h1>
+        <p style="font-size:var(--text-body);color:var(--color-text-secondary);margin-bottom:var(--space-xl);line-height:var(--line-height-body);">Minerals fall into three functional groups:</p>
+        <ul style="font-size:var(--text-body);line-height:var(--line-height-body);padding-left:var(--space-xl);color:var(--color-text-primary);">
+          <li style="margin-bottom:var(--space-sm);"><strong>Pigments &amp; color</strong> — titanium dioxide, zinc oxide, iron oxides, micas.</li>
+          <li style="margin-bottom:var(--space-sm);"><strong>Absorbents</strong> — talc, kaolin, clays, PMMA.</li>
+          <li style="margin-bottom:var(--space-sm);"><strong>Texturizers</strong> — silica, organophilic bentonite.</li>
+        </ul>
+      `, { title: 'Mineral taxonomy', type: 'content', narrative: 'Three functional groups' },
       { runningTitle: 'Inorganic Cosmetics — Minerals', pageNumber: true, footerAlign: 'right' }),
-      meta: { title: 'Mineral taxonomy', type: 'content_diagram', narrative: 'Tree / mind-map' },
+      meta: { title: 'Mineral taxonomy', type: 'content', narrative: 'Three functional groups' },
     },
     {
       html: printPage(cssTokens, `
-        <h1 style="font-family:var(--font-display);font-size:var(--text-h1);font-weight:var(--weight-bold);margin-bottom:var(--space-md);">Pigments &amp; color</h1>
-        <p style="font-size:var(--text-body);color:var(--color-text-secondary);margin-bottom:var(--space-xl);line-height:1.6;max-width:900px;">The four pigment materials differ in coverage, transparency, and typical concentration ranges. Titanium dioxide and zinc oxide double as SPF agents; iron oxides provide earth-tone pigment; micas deliver a pearlescent finish with no active function.</p>
-        <ul style="font-size:var(--text-body);line-height:1.9;padding-left:var(--space-xl);">
-          <li><strong>Titanium dioxide</strong> — white pigment, also SPF. Typical 8–12%.</li>
-          <li><strong>Zinc oxide</strong> — solar, baby, acne skin. SPF + calming.</li>
-          <li><strong>Iron oxides</strong> — yellow/red/black. 2–10%, translucent.</li>
-          <li><strong>Micas</strong> — pearlescent, no active role.</li>
+        <h1 style="font-family:var(--font-display);font-size:var(--text-h1);font-weight:var(--weight-bold);margin-bottom:var(--space-md);color:var(--color-text-primary);">Pigments &amp; color</h1>
+        <p style="font-size:var(--text-body);color:var(--color-text-secondary);margin-bottom:var(--space-xl);line-height:var(--line-height-body);">The four pigment materials differ in coverage, transparency, and concentration.</p>
+        <ul style="font-size:var(--text-body);line-height:var(--line-height-body);padding-left:var(--space-xl);color:var(--color-text-primary);">
+          <li style="margin-bottom:var(--space-sm);"><strong>Titanium dioxide</strong> — white pigment, also SPF. Typical 8–12%.</li>
+          <li style="margin-bottom:var(--space-sm);"><strong>Zinc oxide</strong> — solar, baby, acne skin. SPF + calming.</li>
+          <li style="margin-bottom:var(--space-sm);"><strong>Iron oxides</strong> — yellow, red, black. 2–10%, translucent.</li>
+          <li style="margin-bottom:var(--space-sm);"><strong>Micas</strong> — pearlescent, no active role.</li>
         </ul>
       `, { title: 'Pigments & color', type: 'content', narrative: 'Chapter detail on pigments' },
       { runningTitle: 'Inorganic Cosmetics — Minerals', pageNumber: true, footerAlign: 'right' }),
@@ -330,12 +272,12 @@ async function main() {
     },
     {
       html: printPage(cssTokens, `
-        <h1 style="font-family:var(--font-display);font-size:var(--text-h1);font-weight:var(--weight-bold);margin-bottom:var(--space-lg);">Key takeaways</h1>
-        <ol style="font-size:var(--text-body);line-height:1.8;padding-left:var(--space-xl);">
-          <li><strong>Three functional groups.</strong> Pigments / absorbents / texturizers — each has a distinct formulation role.</li>
-          <li><strong>TiO2 and ZnO are dual-purpose.</strong> Color + SPF. Percentage drives both.</li>
-          <li><strong>Silica and clays modify touch, not color.</strong> Texturizers sit orthogonal to pigment choice.</li>
-          <li><strong>Taxonomy beats list memorization.</strong> Learn the tree; the individual materials slot in.</li>
+        <h1 style="font-family:var(--font-display);font-size:var(--text-h1);font-weight:var(--weight-bold);margin-bottom:var(--space-lg);color:var(--color-text-primary);">Key takeaways</h1>
+        <ol style="font-size:var(--text-body);line-height:var(--line-height-body);padding-left:var(--space-xl);color:var(--color-text-primary);">
+          <li style="margin-bottom:var(--space-md);"><strong>Three functional groups.</strong> Pigments, absorbents, texturizers.</li>
+          <li style="margin-bottom:var(--space-md);"><strong>TiO2 and ZnO are dual-purpose.</strong> Color and SPF; percentage drives both.</li>
+          <li style="margin-bottom:var(--space-md);"><strong>Silica and clays modify touch, not color.</strong></li>
+          <li style="margin-bottom:var(--space-md);"><strong>Taxonomy beats list memorization.</strong></li>
         </ol>
       `, { title: 'Key takeaways', type: 'summary', narrative: 'Closing summary of the chapter' },
       { runningTitle: 'Inorganic Cosmetics — Minerals', pageNumber: true, footerAlign: 'right' }),
@@ -349,6 +291,20 @@ async function main() {
       name: 'add_slide',
       arguments: { deck_id: deckId, html: page.html, metadata: page.meta },
     });
+    // Validate and print any errors so demo surfaces them when a page fails.
+    const v = await client.callTool({
+      name: 'validate_slide',
+      arguments: { html: page.html, soul_id: soulId, deck_id: deckId, depth: 'full' },
+    });
+    const vBody = jsonBody(v);
+    if ((vBody.error_count as number) > 0) {
+      const issues = (vBody.issues as Array<Record<string, unknown>>)
+        .filter((i) => i.severity === 'error')
+        .map((i) => `${i.rule}: ${i.message}`)
+        .slice(0, 3)
+        .join(' | ');
+      log('   ⚠️', `validation errors: ${issues}`);
+    }
   }
 
   // 4. Export to PDF
@@ -357,6 +313,8 @@ async function main() {
     name: 'export_pdf',
     arguments: { deck_id: deckId, mode: 'direct' },
   });
+  const rawText = (exported as { content: Array<{ text: string }> }).content?.[0]?.text;
+  log('📦', `Raw response: ${rawText?.slice(0, 2000)}`);
   const meta = jsonBody(exported);
   log('✅', `PDF exported → ${meta.file_path}`);
   log('📊', `${meta.slide_count} pages, ${Math.round((meta.file_size_bytes as number) / 1024)} KB`);

@@ -104,6 +104,48 @@ export const sampleSoulInput: DesignSoulInput = {
 };
 
 /**
+ * Generates a valid A4 print-format page HTML at 1240×1754 with all
+ * structural requirements. Passes Stage 1 and Stage 2 checks when
+ * validated against the print_a4_portrait geometry.
+ */
+export function makeValidPrintA4Html(content: string = 'Page content'): string {
+  return `<!DOCTYPE html>
+<html lang="en" data-pengui-medium="print">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      --color-canvas: #ffffff;
+      --color-text-primary: #212529;
+      --font-body: 'Inter', sans-serif;
+      --text-body: 18px;
+      --space-safe-area: 96px;
+      --weight-normal: 400;
+      --line-height-body: 1.6;
+      --letter-spacing-body: 0em;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    .slide {
+      width: 1240px;
+      height: 1754px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+    }
+  </style>
+</head>
+<body>
+  <!-- @slide-meta {"title":"Print Test","type":"content"} -->
+  <div class="slide">
+    <p>${content}</p>
+  </div>
+</body>
+</html>`;
+}
+
+/**
  * Generates a valid slide HTML with all structural requirements.
  */
 export function makeValidSlideHtml(content: string = 'Hello World'): string {

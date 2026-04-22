@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import Sidebar from './lib/primitives/Sidebar.svelte';
   import Toast from './lib/primitives/Toast.svelte';
   import Editor from './routes/Editor.svelte';
@@ -21,8 +21,9 @@
   let route = $state<'decks' | 'editor' | 'export'>('editor');
 
   // Create deck store — wraps all bridge-to-state logic.
-  // Capture the initial bridge reference (bridge is immutable after mount).
-  const initialBridge = bridge;
+  // The bridge is a singleton created once at mount; untrack() tells Svelte
+  // this one-time capture is intentional and silences the reactivity warning.
+  const initialBridge = untrack(() => bridge);
   const deck = createDeckStore(initialBridge);
 
   // Loading / error display state (before any editor state arrives).
