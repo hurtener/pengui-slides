@@ -181,16 +181,23 @@ async function main() {
       layers: soulLayers,
     },
   });
-  const soulId = jsonBody(register).soulId as string;
+  const soulId = jsonBody(register).soul_id as string;
+  log('✅', `Soul registered: ${soulId}`);
 
-  log('✅', `Approving soul ${soulId}...`);
-  const approve = await client.callTool({
+  log('🔨', 'Approving soul...');
+  await client.callTool({
     name: 'approve_design_soul',
     arguments: { soul_id: soulId },
   });
-  const cssTokens = (jsonBody(approve).cssTokens as string) ?? '';
+
+  log('📥', 'Fetching soul to get css tokens...');
+  const getSoul = await client.callTool({
+    name: 'get_design_soul',
+    arguments: { soul_id: soulId, include_skeletons: true },
+  });
+  const cssTokens = ((jsonBody(getSoul).soul as { css_tokens: string }).css_tokens) ?? '';
   if (!cssTokens) {
-    throw new Error('approval did not return cssTokens — cannot proceed without tokens');
+    throw new Error('get_design_soul did not return css_tokens — cannot proceed');
   }
 
   // 2. Create print deck

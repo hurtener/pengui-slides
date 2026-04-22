@@ -1,19 +1,30 @@
 # Pengui Slides
 
-**HTML-first presentation generation with Design Soul constraint system.**
+**HTML-first presentation and print-document generation with Design Soul constraint system.**
 
-An MCP (Model Context Protocol) server that enables AI agents to generate beautiful, brand-consistent presentations using HTML and CSS. The core insight: LLMs are exceptionally skilled at generating HTML/CSS but struggle with programmatic presentation APIs. By letting the LLM generate styled HTML and handling format conversion server-side, we achieve presentation quality that was previously impossible through direct PPTX generation.
+An MCP (Model Context Protocol) server that enables AI agents to generate beautiful, brand-consistent presentations _and_ printable PDF documents using HTML and CSS. The core insight: LLMs are exceptionally skilled at generating HTML/CSS but struggle with programmatic presentation APIs. By letting the LLM generate styled HTML and handling format conversion server-side, we achieve document quality that was previously impossible through direct PPTX or matplotlib-driven generation.
+
+## Two output mediums
+
+| Medium       | Format(s)                                              | Geometry              | Use cases                                    |
+|--------------|--------------------------------------------------------|-----------------------|----------------------------------------------|
+| **Slides**   | `slides_16_9` (default)                                | 1920×1080 landscape   | Presentations, pitch decks                   |
+| **Print**    | `print_a4_portrait`, `print_letter_portrait`           | A4 / US Letter        | Study summaries, handouts, whitepapers       |
+
+Both share Design Souls, asset pipeline, validation engine, and MCP App editor. Slide decks export to PPTX / PDF / HTML / Google Slides; print decks are PDF-only and include first-class inline-SVG diagrams and charts. See [`SPEC.md`](./SPEC.md) for the full v2.0 spec.
 
 ## How It Works
 
 ```
-User Brief → LLM generates HTML/CSS → MCP validates against Design Soul → Render to PNG → Assemble PPTX/PDF
+User Brief → LLM generates HTML/CSS → MCP validates against Design Soul → Render to PNG / PDF → Export
 ```
 
-1. A **Design Soul** defines visual identity: colors, typography, spacing, shadows, components
-2. The LLM generates slides as self-contained HTML documents (1920x1080) using the soul's CSS tokens
-3. The MCP server **validates** each slide against the soul's constraints and returns issues for self-correction
-4. On export, slides are rendered to high-resolution PNGs via Playwright and assembled into PPTX, PDF, or HTML
+1. A **Design Soul** defines visual identity: colors, typography, spacing, shadows, components.
+2. The LLM generates pages as self-contained HTML documents (1920×1080 for slides; 1240×1754 for A4; 1275×1650 for Letter) using the soul's CSS tokens.
+3. The MCP server **validates** each page against the soul's constraints and format geometry, returning issues for self-correction.
+4. On export, pages are rendered via Playwright and assembled into PPTX, PDF, or HTML.
+
+For print decks, pages can opt into running headers + page numbers via a `<!-- @page-chrome {...} -->` directive; cross-page state resolves at export time.
 
 ## Quick Start
 
@@ -108,6 +119,24 @@ With file persistence:
 }
 ```
 
+## Print Mode quickstart
+
+```ts
+// 1. Register + approve a soul as usual
+// 2. Create the deck with a print format
+create_deck({ soul_id, title: 'Exam summary', format: 'print_a4_portrait' })
+
+// 3. Add pages using the print recipes (cover, toc, chapter_intro, content,
+//    content_chart, content_diagram, compare, glossary, timeline, summary,
+//    bibliography). Each page is self-contained HTML at 1240×1754.
+// 4. Export to PDF
+export_pdf({ deck_id })  // mode defaults to 'direct' for print
+```
+
+The LLM authors diagrams and charts as inline SVG styled with soul tokens. Templates for the tree/mind-map, flow, bar/line/pie charts, comparison matrix, and horizontal timeline live at the `pengui://docs/charts-and-diagrams` resource. A dedicated `create-print-document` MCP prompt walks an LLM through the full print workflow.
+
+`export_pptx` and `export_google_slides` reject print decks with a `FORMAT_NOT_EXPORTABLE` error pointing to `export_pdf`.
+
 ## Tools (21)
 
 ### Design Soul Management
@@ -158,7 +187,7 @@ With file persistence:
 
 ## Resources & Prompts
 
-### MCP Resources (8)
+### MCP Resources (10)
 
 Documentation available at `pengui://docs/{name}`:
 
@@ -172,8 +201,10 @@ Documentation available at `pengui://docs/{name}`:
 | `css-utilities` | ~38 generated utility CSS classes |
 | `recipes` | 6 built-in layout templates |
 | `workflows` | Step-by-step guides for common tasks |
+| `print-mode` | Print authoring guide: A4 / Letter recipe index, page-chrome directive reference |
+| `charts-and-diagrams` | Inline-SVG templates for tree / mind-map, flow, bar / line / pie charts, timeline |
 
-### MCP Prompts (4)
+### MCP Prompts (5)
 
 | Prompt | Description |
 |---|---|
@@ -181,6 +212,7 @@ Documentation available at `pengui://docs/{name}`:
 | `create-presentation` | Full workflow guide with customizable parameters |
 | `design-soul-guide` | How to craft a thorough Design Soul |
 | `slide-html-quickref` | Copy-paste-ready HTML template with checklist |
+| `create-print-document` | Print-mode workflow: soul → A4/Letter deck → cover/TOC/chapters/diagrams → PDF export |
 
 ## Design Soul System
 
