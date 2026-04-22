@@ -157,6 +157,83 @@ After registering, approve the soul to generate tokens and recipes.`,
   }));
 
   /* ---------------------------------------------------------------- */
+  /*  create-print-document — print-mode workflow                     */
+  /* ---------------------------------------------------------------- */
+  server.registerPrompt('create-print-document', {
+    title: 'Create a Print Document (Study Summary, Handout, Whitepaper)',
+    description:
+      'Guided workflow for creating a printable PDF document (A4 / Letter portrait). Use this for exam summaries, study handouts, whitepapers, and any content meant to be read on paper rather than projected.',
+    argsSchema: {
+      topic: z.string().describe('The topic of the document'),
+      page_count: z.string().optional().describe('Approximate page count (default: 8)'),
+      style_description: z.string().optional().describe('Visual style description (e.g., "academic, warm paper feel, mint accents")'),
+      page_format: z.string().optional().describe('"a4" (default) or "letter"'),
+    },
+  }, (args) => ({
+    messages: [
+      {
+        role: 'user',
+        content: {
+          type: 'text',
+          text: `Create a printable PDF document about: "${args.topic}"
+${args.page_count ? `Page count: ${args.page_count}` : 'Page count: 8'}
+${args.style_description ? `Visual style: ${args.style_description}` : ''}
+Page format: ${args.page_format?.toLowerCase() === 'letter' ? 'print_letter_portrait (US Letter)' : 'print_a4_portrait (A4)'}
+
+PRINT MODE is a second medium of Pengui Slides. Pages are A4/Letter portrait, validation and rendering are geometry-aware, and the only supported export is PDF (PPTX / Google Slides will refuse print decks).
+
+Follow this workflow:
+
+STEP 1 — Read the print authoring guide
+- Read resource pengui://docs/print-mode for the recipe index and authoring rules.
+- Read resource pengui://docs/charts-and-diagrams for tree/mind-map, flow, bar/line/pie chart, and timeline SVG templates.
+- Read resource pengui://docs/design-souls for the 7-layer soul schema.
+
+STEP 2 — Design Soul
+Register a Design Soul tuned for print reading (smaller body type, more generous leading). Typography defaults differ for print — the soul token generator emits a print-scoped block automatically, so the same soul can serve both slides and print. Approve the soul.
+
+STEP 3 — Create the deck with a print format
+Use create_deck with format: "${args.page_format?.toLowerCase() === 'letter' ? 'print_letter_portrait' : 'print_a4_portrait'}".
+
+STEP 4 — Build the document pages
+Use the print recipe family (one HTML document per page). Typical structure for a study summary:
+  1. cover          — title, subtitle, author, date
+  2. toc            — table of contents
+  3. chapter_intro  — chapter 1 opener
+  4. content        — chapter 1 body (can span multiple content pages)
+  5. content_diagram — a tree / mind-map for the key taxonomy
+  6. content_chart  — a bar or line chart if there's quantitative data
+  7. compare        — A vs B for any dichotomies
+  8. glossary       — key terms
+  9. summary        — key takeaways
+ 10. bibliography   — sources
+
+Every page is a self-contained HTML document sized 1240×1754 (A4) or 1275×1650 (Letter), padded by var(--space-safe-area). The HTML includes \`<html data-pengui-medium="print">\` so the soul's print typography tokens activate.
+
+For pages you want the running title + page number on, include a directive:
+    <!-- @page-chrome {"runningTitle":"${args.topic}","pageNumber":true,"footerAlign":"right"} -->
+
+For the cover and TOC, add \`"hide": true\` to suppress chrome on those pages.
+
+STEP 5 — Charts and diagrams
+All charts and diagrams are inline SVG with soul-token styling (colors, type, spacing from var(--*)). The diagram-legibility validator gently warns on missing legends, literal hex fills, and unreferenced font sizes. Use the templates in pengui://docs/charts-and-diagrams — especially the tree/mind-map for hierarchical taxonomies, which is ideal for study material.
+
+STEP 6 — Validate and export
+Validate each page as you add it. When the document reads end-to-end, call export_pdf. For print decks, the default PDF mode is "direct" (vector text, crisp charts, smaller files).
+
+KEY RULES for print:
+- Every page is a standalone HTML document at the deck's format geometry.
+- Token-only CSS — no literal hex, no literal px (except width/height on the root .slide container).
+- Use \`<html data-pengui-medium="print">\` to activate the print typography scope.
+- Diagrams and charts are inline SVG using soul tokens — no external chart libraries.
+- export_pptx and export_google_slides will refuse print decks — use export_pdf.
+`,
+        },
+      },
+    ],
+  }));
+
+  /* ---------------------------------------------------------------- */
   /*  slide-html-quickref — copy-paste ready template                 */
   /* ---------------------------------------------------------------- */
   server.registerPrompt('slide-html-quickref', {

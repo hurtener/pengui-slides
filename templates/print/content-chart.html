@@ -29,7 +29,7 @@
       flex-direction: column;
     }
 
-    /* Page header */
+    /* ── Page header ─────────────────────────────────────────────── */
     .page-header {
       margin-bottom: var(--space-xl);
       padding-bottom: var(--space-lg);
@@ -56,7 +56,7 @@
       color: var(--color-text-primary);
     }
 
-    /* Introductory body text */
+    /* ── Body text ───────────────────────────────────────────────── */
     .body-text {
       font-size: var(--text-body);
       color: var(--color-text-secondary);
@@ -65,7 +65,7 @@
       flex-shrink: 0;
     }
 
-    /* Chart wrapper */
+    /* ── Chart wrapper ───────────────────────────────────────────── */
     .chart-wrapper {
       flex: 1;
       display: flex;
@@ -92,36 +92,61 @@
       min-height: 0;
     }
 
-    /* SVG bar chart — fills the container */
+    /* SVG fills container */
     .chart-svg {
       flex: 1;
       width: 100%;
+      min-height: 0;
     }
 
-    /* Chart caption / source note */
+    /* ── Chart caption ───────────────────────────────────────────── */
     .chart-caption {
       font-family: var(--font-mono);
       font-size: var(--text-caption);
       color: var(--color-text-tertiary);
       margin-top: var(--space-md);
       text-align: right;
+      flex-shrink: 0;
     }
+
+    /*
+     * Bar chart conventions:
+     * - viewBox="0 0 960 520"
+     * - Chart area: x 80–920, y 20–420  (width 840, height 400)
+     * - X-axis at y=420, Y-axis at x=80
+     * - 5 bars, each 100px wide with 60px gaps, grouped at x: 120,260,400,540,680
+     * - Bar max height 400px (y=20). Each percent point = 4px height.
+     * - Legend at y=455 (below axis)
+     *
+     * Token conventions:
+     * - Grid and axis: var(--color-border)
+     * - Axis labels: var(--color-text-tertiary), var(--text-caption)
+     * - Value labels above bars: var(--color-text-secondary), var(--text-caption)
+     * - Bar fills: var(--color-category-a/b/c/d) + var(--color-accent-primary)
+     * - Legend swatches: same fill as the corresponding bar
+     *
+     * Swap in your data by:
+     * 1. Adjusting bar heights (y="top of bar" = 420 - value*4, height="value*4")
+     * 2. Updating label text
+     * 3. Keeping fill references on var(--color-*) tokens
+     */
   </style>
 </head>
 <body>
-  <!-- @slide-meta {"title":"Content + Chart","type":"content_chart","narrative":"Content page with a heading, introductory body text, and an inline SVG bar chart. The chart uses soul tokens for color. Wave 2A will ship more complete chart templates; this is a minimal illustrative stand-in.","tags":["chart","data","bar-chart","visualization","print"]} -->
+  <!-- @slide-meta {"title":"Data Analysis — Vertical Bar Chart","type":"content_chart","narrative":"A polished vertical bar chart with five bars, axis labels, gridlines, value labels on each bar, and a single-series legend. All fills and typography reference soul tokens. The chart demonstrates category performance data with a source note. Replace values, labels, and bar counts to match your dataset.","tags":["chart","data","bar-chart","vertical","visualization","print"]} -->
   <div class="slide">
+
     <!-- Page header -->
     <div class="page-header">
       <div class="page-label">Section 3.2</div>
       <h1 class="page-heading">Data Analysis &amp; Trends</h1>
     </div>
 
-    <!-- Brief contextual body text — 2–4 sentences situating the chart -->
+    <!-- Contextual body text — 2–4 sentences situating the chart -->
     <p class="body-text">
-      The following chart illustrates the distribution of key metrics across four categories
-      for the study period. Values are normalised to a common baseline for fair comparison.
-      Refer to Appendix A for the full dataset and methodology notes.
+      The chart below shows performance across five categories for the study period.
+      Values represent the percentage of the maximum baseline score, normalised for
+      fair comparison. Refer to Appendix A for the full dataset and methodology.
     </p>
 
     <!-- Chart section -->
@@ -130,93 +155,139 @@
 
       <div class="chart-container">
         <!--
-          Minimal illustrative bar chart (vertical, 5 bars).
-          Wave 2A will replace this with a fully-documented chart template.
-          All fills reference soul tokens; no literal hex values.
-          viewBox is geometry-only and is exempt from the no-literal-px rule.
+          VERTICAL BAR CHART — 5 bars, single series
+          ────────────────────────────────────────────
+          viewBox="0 0 960 520"
+
+          Chart boundaries:
+            Left margin (Y-axis + labels): x 0–80
+            Chart area: x 80–920, y 20–420 (h 400)
+            Legend area: y 455–495
+
+          Bar layout (5 bars, width 100, gap 60):
+            Bar 1 centre: x 150  (x start 100)
+            Bar 2 centre: x 290  (x start 240)
+            Bar 3 centre: x 430  (x start 380)
+            Bar 4 centre: x 570  (x start 520)
+            Bar 5 centre: x 710  (x start 660)
+
+          Y scale: 0–100, each unit = 4px
+            0   → y 420 (axis bottom)
+            25  → y 320
+            50  → y 220
+            75  → y 120
+            100 → y 20
+
+          Bar heights (examples):
+            82% → height 328, top y 92   (420-328=92)
+            64% → height 256, top y 164
+            91% → height 364, top y 56
+            47% → height 188, top y 232
+            73% → height 292, top y 128
         -->
         <svg
           class="chart-svg"
-          viewBox="0 0 900 480"
+          viewBox="0 0 960 520"
           xmlns="http://www.w3.org/2000/svg"
-          aria-label="Bar chart showing category performance"
+          aria-label="Vertical bar chart: category performance Q1 2026"
           role="img"
         >
-          <!-- Y-axis gridlines (stroke via currentColor inheriting from token) -->
           <style>
-            .chart-axis   { stroke: var(--color-border); stroke-width: 1; }
-            .chart-grid   { stroke: var(--color-border); stroke-width: 1; stroke-dasharray: 4 4; }
-            .chart-label  { font-family: var(--font-mono); font-size: var(--text-caption); fill: var(--color-text-tertiary); }
-            .chart-value  { font-family: var(--font-mono); font-size: var(--text-caption); fill: var(--color-text-secondary); }
-            .bar-a        { fill: var(--color-accent-primary); }
-            .bar-b        { fill: var(--color-accent-secondary); }
-            .bar-c        { fill: var(--color-accent-warm); }
-            .bar-d        { fill: var(--color-success); }
-            .bar-e        { fill: var(--color-info); }
+            /* Axes and gridlines */
+            .chart-axis  { stroke: var(--color-border); stroke-width: var(--border-width); }
+            .chart-grid  { stroke: var(--color-border); stroke-width: var(--border-width); stroke-dasharray: 4 4; opacity: 0.6; }
+            /* Axis labels (Y ticks, X category names) */
+            .axis-label  { font-family: var(--font-mono); font-size: var(--text-caption); fill: var(--color-text-tertiary); }
+            /* Value labels above each bar */
+            .value-label { font-family: var(--font-mono); font-size: var(--text-caption); fill: var(--color-text-secondary); font-weight: 600; }
+            /* Y-axis title */
+            .axis-title  { font-family: var(--font-body); font-size: var(--text-caption); fill: var(--color-text-tertiary); font-style: italic; }
+            /* Bar fills — use category token family for visual identity */
+            .bar-1 { fill: var(--color-category-a); }
+            .bar-2 { fill: var(--color-category-b); }
+            .bar-3 { fill: var(--color-category-c); }
+            .bar-4 { fill: var(--color-category-d); }
+            .bar-5 { fill: var(--color-accent-primary); }
+            /* Legend text */
+            .legend-label { font-family: var(--font-body); font-size: var(--text-caption); fill: var(--color-text-secondary); }
           </style>
 
-          <!-- Horizontal gridlines at 25%, 50%, 75%, 100% of chart height -->
-          <line class="chart-grid" x1="80" y1="360" x2="880" y2="360" />
-          <line class="chart-grid" x1="80" y1="270" x2="880" y2="270" />
-          <line class="chart-grid" x1="80" y1="180" x2="880" y2="180" />
-          <line class="chart-grid" x1="80" y1="90"  x2="880" y2="90"  />
+          <!-- ── Y-axis title (rotated) ─────────────────────────── -->
+          <text class="axis-title" transform="rotate(-90)" x="-220" y="18" text-anchor="middle">Score (%)</text>
 
-          <!-- Y-axis baseline -->
-          <line class="chart-axis" x1="80" y1="30" x2="80" y2="400" />
-          <!-- X-axis baseline -->
-          <line class="chart-axis" x1="80" y1="400" x2="880" y2="400" />
+          <!-- ── Horizontal gridlines at 25 / 50 / 75 / 100 ──────── -->
+          <line class="chart-grid" x1="80" y1="320" x2="920" y2="320" />  <!-- 25 -->
+          <line class="chart-grid" x1="80" y1="220" x2="920" y2="220" />  <!-- 50 -->
+          <line class="chart-grid" x1="80" y1="120" x2="920" y2="120" />  <!-- 75 -->
+          <line class="chart-grid" x1="80" y1="20"  x2="920" y2="20"  />  <!-- 100 -->
 
-          <!-- Y-axis labels -->
-          <text class="chart-label" x="70" y="404" text-anchor="end">0</text>
-          <text class="chart-label" x="70" y="364" text-anchor="end">25</text>
-          <text class="chart-label" x="70" y="274" text-anchor="end">50</text>
-          <text class="chart-label" x="70" y="184" text-anchor="end">75</text>
-          <text class="chart-label" x="70" y="94"  text-anchor="end">100</text>
+          <!-- ── Axes ───────────────────────────────────────────── -->
+          <line class="chart-axis" x1="80" y1="20"  x2="80"  y2="420" />  <!-- Y-axis -->
+          <line class="chart-axis" x1="80" y1="420" x2="920" y2="420" />  <!-- X-axis -->
 
-          <!-- Bar A — Category Alpha: 82% height = 328px, top at 400-328=72 -->
-          <rect class="bar-a" x="120" y="72" width="100" height="328" rx="4" />
-          <text class="chart-value" x="170" y="60" text-anchor="middle">82</text>
-          <text class="chart-label" x="170" y="420" text-anchor="middle">Alpha</text>
+          <!-- ── Y-axis tick labels ─────────────────────────────── -->
+          <text class="axis-label" x="72" y="424" text-anchor="end">0</text>
+          <text class="axis-label" x="72" y="324" text-anchor="end">25</text>
+          <text class="axis-label" x="72" y="224" text-anchor="end">50</text>
+          <text class="axis-label" x="72" y="124" text-anchor="end">75</text>
+          <text class="axis-label" x="72" y="24"  text-anchor="end">100</text>
 
-          <!-- Bar B — Category Beta: 64% height = 256px, top at 400-256=144 -->
-          <rect class="bar-b" x="270" y="144" width="100" height="256" rx="4" />
-          <text class="chart-value" x="320" y="132" text-anchor="middle">64</text>
-          <text class="chart-label" x="320" y="420" text-anchor="middle">Beta</text>
+          <!-- ════════════════════════════════════════════════════ -->
+          <!--  BAR 1 — Category Alpha (82%)                        -->
+          <!-- ════════════════════════════════════════════════════ -->
+          <rect class="bar-1" x="100" y="92" width="100" height="328" rx="4" />
+          <text class="value-label" x="150" y="82" text-anchor="middle">82%</text>
+          <text class="axis-label"  x="150" y="440" text-anchor="middle">Alpha</text>
 
-          <!-- Bar C — Category Gamma: 91% height = 364px, top at 400-364=36 -->
-          <rect class="bar-c" x="420" y="36" width="100" height="364" rx="4" />
-          <text class="chart-value" x="470" y="24" text-anchor="middle">91</text>
-          <text class="chart-label" x="470" y="420" text-anchor="middle">Gamma</text>
+          <!-- BAR 2 — Category Beta (64%) -->
+          <rect class="bar-2" x="240" y="164" width="100" height="256" rx="4" />
+          <text class="value-label" x="290" y="154" text-anchor="middle">64%</text>
+          <text class="axis-label"  x="290" y="440" text-anchor="middle">Beta</text>
 
-          <!-- Bar D — Category Delta: 47% height = 188px, top at 400-188=212 -->
-          <rect class="bar-d" x="570" y="212" width="100" height="188" rx="4" />
-          <text class="chart-value" x="620" y="200" text-anchor="middle">47</text>
-          <text class="chart-label" x="620" y="420" text-anchor="middle">Delta</text>
+          <!-- BAR 3 — Category Gamma (91%) -->
+          <rect class="bar-3" x="380" y="56" width="100" height="364" rx="4" />
+          <text class="value-label" x="430" y="46" text-anchor="middle">91%</text>
+          <text class="axis-label"  x="430" y="440" text-anchor="middle">Gamma</text>
 
-          <!-- Bar E — Category Epsilon: 73% height = 292px, top at 400-292=108 -->
-          <rect class="bar-e" x="720" y="108" width="100" height="292" rx="4" />
-          <text class="chart-value" x="770" y="96" text-anchor="middle">73</text>
-          <text class="chart-label" x="770" y="420" text-anchor="middle">Epsilon</text>
+          <!-- BAR 4 — Category Delta (47%) -->
+          <rect class="bar-4" x="520" y="232" width="100" height="188" rx="4" />
+          <text class="value-label" x="570" y="222" text-anchor="middle">47%</text>
+          <text class="axis-label"  x="570" y="440" text-anchor="middle">Delta</text>
 
-          <!-- Legend (required when chart has multiple series / colors) -->
-          <g class="legend" transform="translate(100, 450)">
-            <rect class="bar-a" x="0"   y="0" width="14" height="14" rx="2" />
-            <text class="chart-label" x="20" y="12">Alpha</text>
-            <rect class="bar-b" x="90"  y="0" width="14" height="14" rx="2" />
-            <text class="chart-label" x="110" y="12">Beta</text>
-            <rect class="bar-c" x="175" y="0" width="14" height="14" rx="2" />
-            <text class="chart-label" x="195" y="12">Gamma</text>
-            <rect class="bar-d" x="270" y="0" width="14" height="14" rx="2" />
-            <text class="chart-label" x="290" y="12">Delta</text>
-            <rect class="bar-e" x="355" y="0" width="14" height="14" rx="2" />
-            <text class="chart-label" x="375" y="12">Epsilon</text>
+          <!-- BAR 5 — Category Epsilon (73%) -->
+          <rect class="bar-5" x="660" y="128" width="100" height="292" rx="4" />
+          <text class="value-label" x="710" y="118" text-anchor="middle">73%</text>
+          <text class="axis-label"  x="710" y="440" text-anchor="middle">Epsilon</text>
+
+          <!-- ════════════════════════════════════════════════════ -->
+          <!--  LEGEND (required even for single-series charts)    -->
+          <!--  class="legend" satisfies the diagram-legibility    -->
+          <!--  validator's legend-detection heuristic.            -->
+          <!-- ════════════════════════════════════════════════════ -->
+          <g class="legend" transform="translate(80, 465)">
+            <rect class="bar-1" x="0"   y="0" width="14" height="14" rx="2" />
+            <text class="legend-label" x="22" y="12">Alpha</text>
+
+            <rect class="bar-2" x="90"  y="0" width="14" height="14" rx="2" />
+            <text class="legend-label" x="112" y="12">Beta</text>
+
+            <rect class="bar-3" x="180" y="0" width="14" height="14" rx="2" />
+            <text class="legend-label" x="202" y="12">Gamma</text>
+
+            <rect class="bar-4" x="280" y="0" width="14" height="14" rx="2" />
+            <text class="legend-label" x="302" y="12">Delta</text>
+
+            <rect class="bar-5" x="372" y="0" width="14" height="14" rx="2" />
+            <text class="legend-label" x="394" y="12">Epsilon</text>
           </g>
+
         </svg>
       </div>
 
-      <!-- Optional source / footnote -->
-      <div class="chart-caption">Source: Internal dataset, Q1 2026. Values are illustrative stand-ins.</div>
+      <!-- Source note -->
+      <div class="chart-caption">Source: Internal dataset, Q1 2026. Values are illustrative stand-ins — replace with your data.</div>
     </div>
+
   </div>
 </body>
 </html>

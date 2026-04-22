@@ -42,6 +42,9 @@ export enum ErrorCode {
   UNKNOWN_FORMAT = 'UNKNOWN_FORMAT',
   GOOGLE_AUTH_MISSING = 'GOOGLE_AUTH_MISSING',
 
+  // Page chrome errors
+  PAGE_CHROME_INVALID_JSON = 'PAGE_CHROME_INVALID_JSON',
+
   // Asset errors
   ASSET_NOT_FOUND = 'ASSET_NOT_FOUND',
   ASSET_INVALID_MIME = 'ASSET_INVALID_MIME',
@@ -168,5 +171,21 @@ export class UnknownFormatError extends PenguiError {
 export class AssetNotFoundError extends PenguiError {
   constructor(assetId: string) {
     super(ErrorCode.ASSET_NOT_FOUND, `Asset not found: ${assetId}`, { assetId });
+  }
+}
+
+/**
+ * Thrown by strict callers that want to treat a malformed @page-chrome
+ * directive as a hard error. The PDF exporter itself tolerates bad JSON and
+ * returns a warning instead of throwing — this class is available for callers
+ * that prefer strict validation.
+ */
+export class PageChromeInvalidJsonError extends PenguiError {
+  constructor(slideId: string, parseError: string) {
+    super(
+      ErrorCode.PAGE_CHROME_INVALID_JSON,
+      `Slide "${slideId}" has a malformed @page-chrome directive: ${parseError}`,
+      { slideId, parseError },
+    );
   }
 }

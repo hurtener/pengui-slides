@@ -112,8 +112,19 @@ describe('SoulService', () => {
       const soul = await service.register(sampleSoulInput);
       const result = await service.approve(soul.id);
 
-      expect(result.recipes).toHaveLength(6);
+      // 6 slide recipes + 11 print recipes = 17 total (SPEC §5.3)
+      expect(result.recipes).toHaveLength(17);
       expect(result.recipes[0].soulId).toBe(soul.id);
+    });
+
+    it('generates both slide and print recipes', async () => {
+      const soul = await service.register(sampleSoulInput);
+      const result = await service.approve(soul.id);
+
+      const slideRecipes = result.recipes.filter((r) => r.medium === 'slides');
+      const printRecipes = result.recipes.filter((r) => r.medium === 'print');
+      expect(slideRecipes).toHaveLength(6);
+      expect(printRecipes).toHaveLength(11);
     });
 
     it('persists recipes to the store', async () => {
@@ -121,7 +132,8 @@ describe('SoulService', () => {
       await service.approve(soul.id);
 
       const recipes = await store.getRecipes(soul.id);
-      expect(recipes).toHaveLength(6);
+      // 6 slide + 11 print = 17 total
+      expect(recipes).toHaveLength(17);
     });
 
     it('throws SoulNotFoundError for non-existent soul', async () => {
@@ -165,7 +177,8 @@ describe('SoulService', () => {
 
       const result = await service.get(soul.id, true);
       expect(result.recipes).toBeDefined();
-      expect(result.recipes).toHaveLength(6);
+      // 6 slide + 11 print = 17 total (SPEC §5.3)
+      expect(result.recipes).toHaveLength(17);
     });
 
     it('omits recipes when not requested', async () => {

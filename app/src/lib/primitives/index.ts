@@ -8,5 +8,6 @@ export { default as Input }      from './Input.svelte';
 export { default as Pill }       from './Pill.svelte';
 export { default as Select }     from './Select.svelte';
 export { default as Sidebar }    from './Sidebar.svelte';
+export { default as Tabs }       from './Tabs.svelte';
 export { default as Textarea }   from './Textarea.svelte';
 export { default as Toast }      from './Toast.svelte';

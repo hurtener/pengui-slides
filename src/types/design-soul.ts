@@ -7,6 +7,7 @@
  */
 
 import type { SoulId, SlideId, TemplateId, ISOTimestamp } from './common.js';
+import type { FormatMedium } from './format.js';
 
 // ── Soul Status ───────────────────────────────────────────────────
 
@@ -199,6 +200,20 @@ export interface LayoutRecipe {
   description: string;
   tags: string[];
   source: RecipeSource;
+  /**
+   * Output medium this recipe targets.
+   *
+   * - `'slides'` — 16:9 slide canvas (1920×1080). Default for all recipes
+   *   generated before v2.0 (backward-compat: missing field treated as `'slides'`).
+   * - `'print'` — A4/Letter portrait page (1240×1754 or 1275×1650).
+   *
+   * Choice: added as a field on LayoutRecipe (not a separate `printRecipes`
+   * sibling on the soul) so that a single `getRecipes(soulId)` call returns
+   * both mediums and consumers can filter by `r.medium`. This keeps the store
+   * interface, soul-service, and approval flow the simplest — one save, one
+   * retrieve, one type.
+   */
+  medium: FormatMedium;
   html: string;
   createdAt: ISOTimestamp;
   savedFromSlideId?: SlideId;

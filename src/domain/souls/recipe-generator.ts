@@ -474,6 +474,7 @@ export class RecipeGenerator {
       description: spec.description,
       tags: spec.tags,
       source: 'built-in' as const,
+      medium: 'slides' as const,
       html: wrapDocument(cssTokens, utilityCss, spec.buildStyles(), spec.buildBody()),
       createdAt: now,
     }));
@@ -508,6 +509,7 @@ export class RecipeGenerator {
         description: spec.description,
         tags: spec.tags,
         source: 'built-in' as const,
+        medium: 'print' as const,
         html,
         createdAt: now,
       };

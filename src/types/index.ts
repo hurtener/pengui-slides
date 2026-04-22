@@ -7,3 +7,4 @@ export * from './deck.js';
 export * from './validation.js';
 export * from './export.js';
 export * from './slide-document.js';
+export * from './page-chrome.js';

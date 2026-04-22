@@ -22,6 +22,7 @@ import type {
   RenderOptions,
   SlideRenderResult,
 } from '../../types/export.js';
+import type { PdfExportMetadata } from './pdf-exporter.js';
 
 import { getFormat } from '../formats/format-registry.js';
 import { PlaywrightPool } from './playwright-pool.js';
@@ -133,7 +134,7 @@ export class RenderService {
     deckTitle: string,
     mode?: PdfMode,
     format?: FormatKind,
-  ): Promise<ExportResult> {
+  ): Promise<ExportResult & PdfExportMetadata> {
     const exporter = this.ensurePdfExporter();
     return exporter.export(slides, deckTitle, { mode, format });
   }
