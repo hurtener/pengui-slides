@@ -26,6 +26,8 @@ function makeSlide(html: string, id = 'slide-1'): Slide {
       metaVersion: '1.0',
       revisionHash: 'rev-1',
     },
+    sourceKind: 'legacy',
+    translationIssues: [],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
@@ -74,7 +76,13 @@ function slideDeckHtml(): string {
 
 // ── Fake Playwright infrastructure ───────────────────────────────────────────
 
-function makeFakePage(pdfSpy: ReturnType<typeof vi.fn>) {
+interface FakePage {
+  setViewportSize: ReturnType<typeof vi.fn>;
+  setContent: ReturnType<typeof vi.fn>;
+  pdf: ReturnType<typeof vi.fn>;
+}
+
+function makeFakePage(pdfSpy: ReturnType<typeof vi.fn>): FakePage {
   return {
     setViewportSize: vi.fn().mockResolvedValue(undefined),
     setContent: vi.fn().mockResolvedValue(undefined),
@@ -82,11 +90,17 @@ function makeFakePage(pdfSpy: ReturnType<typeof vi.fn>) {
   };
 }
 
-function makeFakePool(fakePage: ReturnType<typeof makeFakePage>) {
+function makeFakePool(fakePage: FakePage) {
   return {
     getPage: vi.fn().mockResolvedValue(fakePage),
     releasePage: vi.fn().mockResolvedValue(undefined),
   };
+}
+
+function lastSetContentHtml(fakePage: FakePage): string {
+  const calls = fakePage.setContent.mock.calls;
+  expect(calls.length).toBeGreaterThan(0);
+  return calls[calls.length - 1][0] as string;
 }
 
 const fakeRenderer = {
@@ -101,10 +115,15 @@ const fakeRenderer = {
 };
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
+//
+// The chrome strategy renders header/footer strips as HTML inside each
+// .slide-page section (not via Playwright displayHeaderFooter). Tests assert
+// that the composite HTML passed to setContent contains the expected chrome
+// markup — and that page.pdf is invoked WITHOUT displayHeaderFooter.
 
-describe('PdfExporter — page chrome', () => {
+describe('PdfExporter — page chrome (HTML composition strategy)', () => {
   describe('two-page print deck — all pages with chrome', () => {
-    it('calls page.pdf with displayHeaderFooter:true and header containing the running title', async () => {
+    it('injects header + footer HTML into each slide-page section and never sets displayHeaderFooter', async () => {
       const pdfSpy = vi.fn().mockResolvedValue(Buffer.from('pdf'));
       const fakePage = makeFakePage(pdfSpy);
       const fakePool = makeFakePool(fakePage);
@@ -135,24 +154,23 @@ describe('PdfExporter — page chrome', () => {
       expect(result.pageChromeMode).toBe('uniform');
       expect(result.warnings).toHaveLength(0);
 
-      // page.pdf should have been called once with displayHeaderFooter: true
+      const html = lastSetContentHtml(fakePage);
+      // Both pages get a header strip with the running title
+      expect(html.match(/<div class="pengui-chrome-header"/g)?.length).toBe(2);
+      expect(html.match(/<div class="pengui-chrome-footer"/g)?.length).toBe(2);
+      expect(html).toContain('Organic Chemistry');
+      expect(html).toContain('Page 1 of 2');
+      expect(html).toContain('Page 2 of 2');
+
+      // page.pdf is called WITHOUT displayHeaderFooter — chrome lives in the body
       expect(pdfSpy).toHaveBeenCalledOnce();
       const pdfCallArgs = pdfSpy.mock.calls[0][0] as Record<string, unknown>;
-      expect(pdfCallArgs.displayHeaderFooter).toBe(true);
-      expect(typeof pdfCallArgs.headerTemplate).toBe('string');
-      expect(typeof pdfCallArgs.footerTemplate).toBe('string');
-
-      // The header template should embed the running title
-      expect(pdfCallArgs.headerTemplate as string).toContain('Organic Chemistry');
-
-      // Footer should contain the Playwright page-number class spans
-      expect(pdfCallArgs.footerTemplate as string).toContain('pageNumber');
-      expect(pdfCallArgs.footerTemplate as string).toContain('totalPages');
+      expect(pdfCallArgs.displayHeaderFooter).toBeUndefined();
     });
   });
 
-  describe('cover page with hide:true — cover-hide-only strategy', () => {
-    it('applies chrome mode cover-hide-only and still calls page.pdf with displayHeaderFooter:true', async () => {
+  describe('cover page with hide:true — cover-hide-only mode', () => {
+    it('skips chrome on the hidden cover and numbers the visible page as Page 1', async () => {
       const pdfSpy = vi.fn().mockResolvedValue(Buffer.from('pdf'));
       const fakePage = makeFakePage(pdfSpy);
       const fakePool = makeFakePool(fakePage);
@@ -182,17 +200,56 @@ describe('PdfExporter — page chrome', () => {
       expect(result.pageChromeMode).toBe('cover-hide-only');
       expect(result.warnings).toHaveLength(0);
 
-      expect(pdfSpy).toHaveBeenCalledOnce();
-      const pdfCallArgs = pdfSpy.mock.calls[0][0] as Record<string, unknown>;
-      expect(pdfCallArgs.displayHeaderFooter).toBe(true);
+      const html = lastSetContentHtml(fakePage);
+      // Only the second section has chrome (1 header, 1 footer)
+      expect(html.match(/<div class="pengui-chrome-header"/g)?.length).toBe(1);
+      expect(html.match(/<div class="pengui-chrome-footer"/g)?.length).toBe(1);
+      // The visible page is "Page 1 of 1" — hidden pages don't count
+      expect(html).toContain('Page 1 of 1');
+      expect(html).toContain('My Deck');
+    });
+  });
 
-      // The header template should contain the running title from the first non-hidden slide
-      expect(pdfCallArgs.headerTemplate as string).toContain('My Deck');
+  describe('mid-deck hide — fully supported (no warning)', () => {
+    it('hides chrome on a mid-deck page and reports mode "mixed" without a limitation warning', async () => {
+      const pdfSpy = vi.fn().mockResolvedValue(Buffer.from('pdf'));
+      const fakePage = makeFakePage(pdfSpy);
+      const fakePool = makeFakePool(fakePage);
+
+      const exporter = new PdfExporter(
+        fakeRenderer as never,
+        fakePool as never,
+        new Logger('test', 'error'),
+      );
+
+      const slides = [
+        makeSlide(printSlideHtml('{"runningTitle":"Doc","pageNumber":true}', 'Page 1'), 'slide-1'),
+        // mid-deck hidden insert (e.g. a divider)
+        makeSlide(printSlideHtml('{"hide":true}', 'Divider'), 'slide-2'),
+        makeSlide(printSlideHtml('{"runningTitle":"Doc","pageNumber":true}', 'Page 3'), 'slide-3'),
+      ];
+
+      const result = await exporter.export(slides, 'Doc', {
+        mode: 'direct',
+        format: 'print_a4_portrait',
+      });
+
+      expect(result.pageChromeApplied).toBe(true);
+      expect(result.pageChromeMode).toBe('mixed');
+      // No "non-first hide unsupported" warning — fully supported now
+      expect(result.warnings).toHaveLength(0);
+
+      const html = lastSetContentHtml(fakePage);
+      // Only 2 chrome bars (the mid-deck hidden page is skipped)
+      expect(html.match(/<div class="pengui-chrome-header"/g)?.length).toBe(2);
+      // Page numbers count visible pages only: 1 of 2, 2 of 2
+      expect(html).toContain('Page 1 of 2');
+      expect(html).toContain('Page 2 of 2');
     });
   });
 
   describe('malformed @page-chrome JSON', () => {
-    it('surfaces a warning in result.warnings and sets pageChromeApplied to false', async () => {
+    it('surfaces a warning in result.warnings and falls back to no chrome when the only directive is malformed', async () => {
       const pdfSpy = vi.fn().mockResolvedValue(Buffer.from('pdf'));
       const fakePage = makeFakePage(pdfSpy);
       const fakePool = makeFakePool(fakePage);
@@ -215,7 +272,6 @@ describe('PdfExporter — page chrome', () => {
         format: 'print_a4_portrait',
       });
 
-      // Chrome not applied because the only directive was malformed (null after parse error)
       expect(result.pageChromeApplied).toBe(false);
       expect(result.pageChromeMode).toBe('none');
       expect(result.warnings.length).toBeGreaterThan(0);
@@ -234,12 +290,10 @@ describe('PdfExporter — page chrome', () => {
       );
 
       const slides = [
-        // This slide has a valid directive
         makeSlide(
           printSlideHtml('{"runningTitle":"Good","pageNumber":true}', 'Good Slide'),
           'slide-1',
         ),
-        // This slide has a malformed directive
         makeSlide(
           printSlideHtml('{bad}', 'Bad Slide'),
           'slide-2',
@@ -251,15 +305,13 @@ describe('PdfExporter — page chrome', () => {
         format: 'print_a4_portrait',
       });
 
-      // The first slide had a valid directive, so chrome is applied
       expect(result.pageChromeApplied).toBe(true);
-      // A warning is also emitted for the malformed second slide
       expect(result.warnings.some((w) => w.includes('@page-chrome JSON is malformed'))).toBe(true);
     });
   });
 
   describe('slide-format deck (non-print)', () => {
-    it('never applies chrome even if a slide has @page-chrome', async () => {
+    it('never applies chrome even if a slide carries @page-chrome', async () => {
       const pdfSpy = vi.fn().mockResolvedValue(Buffer.from('pdf'));
       const fakePage = makeFakePage(pdfSpy);
       const fakePool = makeFakePool(fakePage);
@@ -280,15 +332,14 @@ describe('PdfExporter — page chrome', () => {
       expect(result.pageChromeApplied).toBe(false);
       expect(result.pageChromeMode).toBe('none');
 
-      // page.pdf should have been called without displayHeaderFooter
-      expect(pdfSpy).toHaveBeenCalledOnce();
-      const pdfCallArgs = pdfSpy.mock.calls[0][0] as Record<string, unknown>;
-      expect(pdfCallArgs.displayHeaderFooter).toBeUndefined();
+      const html = lastSetContentHtml(fakePage);
+      expect(html).not.toContain('pengui-chrome-header');
+      expect(html).not.toContain('pengui-chrome-footer');
     });
   });
 
   describe('print deck without any @page-chrome directive', () => {
-    it('produces mode:none and pageChromeApplied:false when no slides have the directive', async () => {
+    it('produces mode:none and no chrome HTML', async () => {
       const pdfSpy = vi.fn().mockResolvedValue(Buffer.from('pdf'));
       const fakePage = makeFakePage(pdfSpy);
       const fakePool = makeFakePool(fakePage);
@@ -313,8 +364,8 @@ describe('PdfExporter — page chrome', () => {
       expect(result.pageChromeMode).toBe('none');
       expect(result.warnings).toHaveLength(0);
 
-      const pdfCallArgs = pdfSpy.mock.calls[0][0] as Record<string, unknown>;
-      expect(pdfCallArgs.displayHeaderFooter).toBeUndefined();
+      const html = lastSetContentHtml(fakePage);
+      expect(html).not.toContain('pengui-chrome-header');
     });
   });
 
@@ -323,7 +374,7 @@ describe('PdfExporter — page chrome', () => {
       ['left', 'flex-start'],
       ['center', 'center'],
       ['right', 'flex-end'],
-    ] as const)('footerAlign %s produces justify-content:%s in footer template', async (align, justify) => {
+    ] as const)('footerAlign %s injects justify-content:%s on the footer strip', async (align, justify) => {
       const pdfSpy = vi.fn().mockResolvedValue(Buffer.from('pdf'));
       const fakePage = makeFakePage(pdfSpy);
       const fakePool = makeFakePool(fakePage);
@@ -336,7 +387,7 @@ describe('PdfExporter — page chrome', () => {
 
       const slides = [
         makeSlide(
-          printSlideHtml(`{"runningTitle":"Align Test","footerAlign":"${align}"}`, 'Align Test'),
+          printSlideHtml(`{"runningTitle":"Align Test","pageNumber":true,"footerAlign":"${align}"}`, 'Align Test'),
           'slide-1',
         ),
       ];
@@ -346,13 +397,13 @@ describe('PdfExporter — page chrome', () => {
         format: 'print_a4_portrait',
       });
 
-      const pdfCallArgs = pdfSpy.mock.calls[0][0] as Record<string, unknown>;
-      expect(pdfCallArgs.footerTemplate as string).toContain(justify);
+      const html = lastSetContentHtml(fakePage);
+      expect(html).toContain(`justify-content: ${justify}`);
     });
   });
 
   describe('soul color extraction', () => {
-    it('uses colors from the first slide :root block in header template', async () => {
+    it('uses colors from the first slide :root block in the chrome HTML', async () => {
       const pdfSpy = vi.fn().mockResolvedValue(Buffer.from('pdf'));
       const fakePage = makeFakePage(pdfSpy);
       const fakePool = makeFakePool(fakePage);
@@ -363,16 +414,16 @@ describe('PdfExporter — page chrome', () => {
         new Logger('test', 'error'),
       );
 
-      const customCanvas = '#AABBCC';
+      const customBorder = '#AABBCC';
       const html = `<!DOCTYPE html>
 <html>
 <head>
 <style>
 :root {
-  --color-canvas: ${customCanvas};
+  --color-canvas: #F7F2EA;
   --color-text-primary: #111111;
   --color-text-secondary: #999999;
-  --color-border: #CCCCCC;
+  --color-border: ${customBorder};
 }
 </style>
 </head>
@@ -390,9 +441,9 @@ describe('PdfExporter — page chrome', () => {
         format: 'print_a4_portrait',
       });
 
-      const pdfCallArgs = pdfSpy.mock.calls[0][0] as Record<string, unknown>;
-      // The extracted canvas color should appear in the header template
-      expect(pdfCallArgs.headerTemplate as string).toContain(customCanvas);
+      const composite = lastSetContentHtml(fakePage);
+      // The extracted border color should appear in the chrome HTML
+      expect(composite).toContain(customBorder);
     });
   });
 });

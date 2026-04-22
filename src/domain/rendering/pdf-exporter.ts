@@ -13,34 +13,19 @@
  * ## Page Chrome
  *
  * For PRINT-format decks, slides may carry a `<!-- @page-chrome {...} -->`
- * comment. When present (and not hidden), the exporter instructs Playwright
- * to render a header strip (running title) and footer strip (page number) via
- * `page.pdf({ displayHeaderFooter, headerTemplate, footerTemplate })`.
+ * comment. When present (and not hidden), the exporter renders a header
+ * strip (running title) and footer strip (page number) AS HTML inside the
+ * composite document — absolutely positioned within each `.slide-page`
+ * section, in the safe-area band. Playwright's `displayHeaderFooter`
+ * mechanism is intentionally not used because it reserves PDF page margin
+ * space that conflicts with our full-A4-sized `.slide-page` container,
+ * causing content to be clipped at the top and chrome to overlap content.
  *
- * ### hide: true strategy
- *
- * Chromium's `displayHeaderFooter` applies uniformly to every page in a
- * single `page.pdf()` call — there is no per-page CSS hook that reliably
- * blanks header/footer for individual pages (the `@page :nth(n)` margin-box
- * approach is not supported when `displayHeaderFooter` templates take
- * precedence). Therefore this exporter uses the **cover-hide-only** strategy:
- *
- *   - If the first slide has `hide: true` (or its resolved chrome is hidden
- *     because no @page-chrome directive is present and the slide type is
- *     'cover'), the first page is treated as a hidden cover. Pages 2…N get
- *     chrome.
- *   - Per-page hide beyond the first page is documented as a limitation:
- *     those slides will still receive chrome in the current implementation.
- *
- * A full "partitioned PDF merge" strategy (splitting into per-group pdf()
- * calls and concatenating the buffers) would require a PDF-merging library
- * which we intentionally do not add. That variant is left as a future
- * enhancement:
- *
- *   TODO(wave-3): Implement partitioned per-page chrome hiding when a
- *   zero-dependency PDF concatenation path becomes available. Until then,
- *   decks that need to suppress chrome on non-first pages should use
- *   hide: true only on the first slide.
+ * Because chrome is per-section HTML, per-page `hide: true` is fully
+ * supported. Each slide's chrome (or absence) is independent. Page
+ * numbers are computed at composite-build time using each slide's index
+ * and the deck's total page count — Chromium's template substitution
+ * (`<span class="pageNumber">`) is not used.
  */
 
 import type { Logger } from '../../infrastructure/logger.js';
@@ -87,11 +72,14 @@ const CHROME_FALLBACK_COLORS: ChromeColors = {
   border: '#DDD6CC',
 };
 
-/** Height of the header and footer strips in the printed document. */
-const CHROME_STRIP_HEIGHT_MM = '10mm';
-
-/** Top/bottom margin added to the page content area to make room for chrome. */
-const CHROME_MARGIN_MM = '14mm';
+/**
+ * Height of the header and footer strips in the printed document.
+ * Sits inside the slide's safe-area padding band (96px on A4) so it does
+ * not overlap authored content.
+ */
+const CHROME_STRIP_HEIGHT_PX = 36;
+/** Horizontal padding inside each chrome strip. */
+const CHROME_INSET_PX = 32;
 
 export interface PdfExportOptions {
   mode?: PdfMode;
@@ -102,7 +90,15 @@ export interface PdfExportOptions {
 
 // ── Page chrome mode discriminant ────────────────────────────────
 
-export type PageChromeMode = 'uniform' | 'partitioned' | 'cover-hide-only' | 'none';
+/**
+ * Describes how page-chrome was applied across the deck:
+ *   - 'none'           — no slide had a directive
+ *   - 'uniform'        — every slide gets chrome (no hides)
+ *   - 'mixed'          — chrome is applied per slide; some pages opt out via hide:true
+ *   - 'cover-hide-only'— retained for backward compatibility; same as 'mixed'
+ *                        when only the first page is hidden
+ */
+export type PageChromeMode = 'uniform' | 'mixed' | 'cover-hide-only' | 'none';
 
 // ── Extended export result ───────────────────────────────────────
 
@@ -111,6 +107,14 @@ export interface PdfExportMetadata {
   pageChromeMode: PageChromeMode;
   /** Non-fatal warnings collected during export (e.g. malformed @page-chrome JSON). */
   warnings: string[];
+}
+
+interface ChromePlan {
+  pageChromeApplied: boolean;
+  pageChromeMode: PageChromeMode;
+  warnings: string[];
+  /** Per-slide resolved chrome (parallel to slides[]); used to render section chrome. */
+  perSlide: ResolvedPageChrome[];
 }
 
 // ── PDF Exporter ─────────────────────────────────────────────────
@@ -154,19 +158,31 @@ export class PdfExporter {
 
     // ── Collect page-chrome directives (print decks only) ──────
     const warnings: string[] = [];
-    let chromeMeta: PdfExportMetadata = {
+    let chromePlan: ChromePlan = {
       pageChromeApplied: false,
       pageChromeMode: 'none',
       warnings,
+      perSlide: slides.map(() => ({
+        runningTitle: deckTitle,
+        pageNumber: false,
+        footerAlign: 'right' as const,
+        hide: true,
+      })),
     };
 
     if (geometry.medium === 'print') {
-      chromeMeta = this.collectPageChromeMetadata(slides, deckTitle, warnings);
+      chromePlan = this.buildChromePlan(slides, deckTitle, warnings);
     }
+
+    const chromeMeta: PdfExportMetadata = {
+      pageChromeApplied: chromePlan.pageChromeApplied,
+      pageChromeMode: chromePlan.pageChromeMode,
+      warnings: chromePlan.warnings,
+    };
 
     const data =
       mode === 'direct'
-        ? await this.exportDirect(slides, geometry, chromeMeta)
+        ? await this.exportDirect(slides, geometry, chromePlan)
         : await this.exportImage(slides, geometry);
 
     const filename = this.sanitizeFilename(deckTitle) + '.pdf';
@@ -194,21 +210,24 @@ export class PdfExporter {
   // ── Page chrome resolution ───────────────────────────────────
 
   /**
-   * Parse each slide's @page-chrome directive and determine the chrome mode
+   * Parse each slide's @page-chrome directive and build a per-slide chrome
+   * plan used at composite-build time.
    * and metadata for this export run.
    *
-   * Strategy selection:
+   * Strategy:
    *   - No slide has a @page-chrome directive → mode 'none'.
    *   - All slides have chrome and none are hidden → mode 'uniform'.
-   *   - First slide is hidden (cover-only hide) → mode 'cover-hide-only'.
-   *   - Some non-first slides have hide:true → mode 'cover-hide-only' with
-   *     a logged warning that mid-deck hiding is not fully supported.
+   *   - Mix of chromed and hidden pages → mode 'mixed' (or 'cover-hide-only'
+   *     when only the first page is hidden, for back-compat reporting).
+   *
+   * Per-page hide is fully supported because chrome is rendered as HTML
+   * within each section (not via Playwright's deck-wide displayHeaderFooter).
    */
-  private collectPageChromeMetadata(
+  private buildChromePlan(
     slides: Slide[],
     deckTitle: string,
     warnings: string[],
-  ): PdfExportMetadata {
+  ): ChromePlan {
     const resolved: ResolvedPageChrome[] = [];
     let anyDirective = false;
 
@@ -228,30 +247,34 @@ export class PdfExporter {
     }
 
     if (!anyDirective) {
-      return { pageChromeApplied: false, pageChromeMode: 'none', warnings };
+      return {
+        pageChromeApplied: false,
+        pageChromeMode: 'none',
+        warnings,
+        perSlide: resolved,
+      };
     }
 
+    const visibleCount = resolved.filter((c) => !c.hide).length;
+    const hiddenCount = resolved.length - visibleCount;
     const firstHidden = resolved.length > 0 && resolved[0].hide;
-    const anyNonFirstHidden = resolved.slice(1).some((c) => c.hide);
-
-    if (anyNonFirstHidden) {
-      warnings.push(
-        'Some non-first slides have @page-chrome hide:true. ' +
-          'Per-page chrome hiding beyond the first page is not fully supported ' +
-          'without a PDF-merging library (zero-dep constraint). ' +
-          'Those pages will still receive chrome in this export. ' +
-          'Use hide:true only on the first slide (cover) for reliable suppression.',
-      );
-    }
+    const onlyFirstHidden = firstHidden && hiddenCount === 1;
 
     let mode: PageChromeMode;
-    if (firstHidden) {
+    if (hiddenCount === 0) {
+      mode = 'uniform';
+    } else if (onlyFirstHidden) {
       mode = 'cover-hide-only';
     } else {
-      mode = 'uniform';
+      mode = 'mixed';
     }
 
-    return { pageChromeApplied: true, pageChromeMode: mode, warnings };
+    return {
+      pageChromeApplied: visibleCount > 0,
+      pageChromeMode: mode,
+      warnings,
+      perSlide: resolved,
+    };
   }
 
   // ── Image Mode ───────────────────────────────────────────────
@@ -316,17 +339,19 @@ ${imgTags}
   // ── Direct Mode ──────────────────────────────────────────────
 
   /**
-   * Combine all slide HTML into a single document with CSS
-   * page breaks and use Playwright's page.pdf() directly.
+   * Combine all slide HTML into a single document with CSS page breaks
+   * and use Playwright's page.pdf() directly.
    *
-   * When chromeMeta.pageChromeApplied is true, the PDF is printed with
-   * displayHeaderFooter=true and soul-token-derived header/footer templates.
-   * The first slide is excluded from page numbering if mode is 'cover-hide-only'.
+   * When chromePlan.pageChromeApplied is true, each section receives a
+   * header strip (running title) and/or footer strip (page number) as
+   * absolutely-positioned HTML inside the safe-area band of that page.
+   * Page numbering counts only non-hidden pages so the cover/TOC don't
+   * occupy "Page 1" — common print convention.
    */
   private async exportDirect(
     slides: Slide[],
     geometry: FormatGeometry,
-    chromeMeta: PdfExportMetadata,
+    chromePlan: ChromePlan,
   ): Promise<Buffer> {
     const width = geometry.widthPx;
     const height = geometry.heightPx;
@@ -343,17 +368,55 @@ ${imgTags}
       )
       .join('\n\n');
 
+    // Compute page numbers (counting only non-hidden pages so the cover/TOC
+    // don't occupy "Page 1" — matches typical print conventions).
+    const pageNumbers: number[] = new Array(slides.length).fill(0);
+    let runningPageNumber = 0;
+    let visiblePageTotal = 0;
+    for (let i = 0; i < slides.length; i++) {
+      if (!chromePlan.perSlide[i].hide) {
+        runningPageNumber += 1;
+        pageNumbers[i] = runningPageNumber;
+        visiblePageTotal = runningPageNumber;
+      }
+    }
+
+    // Extract soul colors once from the first slide for chrome styling
+    const colors = chromePlan.pageChromeApplied
+      ? this.extractSoulColors(resolvedHtmls[0] ?? '')
+      : CHROME_FALLBACK_COLORS;
+
     const sections = extracted
-      .map(
-        (slide, index) =>
-          `<section class="slide-page" id="slide-${index + 1}">${slide.body}</section>`,
-      )
+      .map((slide, index) => {
+        const chrome = chromePlan.perSlide[index];
+        const chromeHtml =
+          chromePlan.pageChromeApplied && !chrome.hide
+            ? this.buildSectionChromeHtml(chrome, pageNumbers[index], visiblePageTotal, colors)
+            : '';
+        return `<section class="slide-page" id="slide-${index + 1}">${chromeHtml}${slide.body}</section>`;
+      })
       .join('\n');
 
-    const pageMargin =
-      chromeMeta.pageChromeApplied
-        ? { top: CHROME_MARGIN_MM, bottom: CHROME_MARGIN_MM, left: '0px', right: '0px' }
-        : { top: '0px', right: '0px', bottom: '0px', left: '0px' };
+    const chromeCss = chromePlan.pageChromeApplied
+      ? `
+  .pengui-chrome-header,
+  .pengui-chrome-footer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: ${CHROME_STRIP_HEIGHT_PX}px;
+    padding: 0 ${CHROME_INSET_PX}px;
+    display: flex;
+    align-items: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 9pt;
+    z-index: 10;
+    pointer-events: none;
+  }
+  .pengui-chrome-header { top: 0; }
+  .pengui-chrome-footer { bottom: 0; }
+`
+      : '';
 
     const html = `<!DOCTYPE html>
 <html>
@@ -368,7 +431,7 @@ ${imgTags}
     overflow: hidden;
     position: relative;
   }
-  .slide-page:last-child { page-break-after: auto; }
+  .slide-page:last-child { page-break-after: auto; }${chromeCss}
 </style>
 <style>
 ${scopedStyles}
@@ -379,18 +442,7 @@ ${sections}
 </body>
 </html>`;
 
-    if (!chromeMeta.pageChromeApplied) {
-      return this.printToPdf(html, geometry);
-    }
-
-    // Extract soul colors from the first slide for the chrome templates
-    const firstSlideHtml = resolvedHtmls[0] ?? '';
-    const colors = this.extractSoulColors(firstSlideHtml);
-
-    const headerTemplate = this.buildHeaderTemplate(slides, colors, chromeMeta.pageChromeMode);
-    const footerTemplate = this.buildFooterTemplate(slides, colors, chromeMeta.pageChromeMode);
-
-    return this.printToPdfWithChrome(html, geometry, pageMargin, headerTemplate, footerTemplate);
+    return this.printToPdf(html, geometry);
   }
 
   // ── Soul color extraction ────────────────────────────────────
@@ -428,137 +480,41 @@ ${sections}
     };
   }
 
-  // ── Header / footer template builders ───────────────────────
+  // ── Section chrome builder ───────────────────────────────────
 
   /**
-   * Build the Playwright header template HTML.
+   * Build the per-section header + footer chrome HTML for a single page.
    *
-   * The running title is sourced from the directive on the first non-hidden
-   * slide; all pages share a single template so the title is uniform across
-   * the deck. Chromium replaces `<span class="title">` with the document
-   * title, but we embed the running title as literal text for control.
+   * The chrome strips are absolutely positioned within the `.slide-page`
+   * section in the safe-area band (top 0–CHROME_STRIP_HEIGHT_PX,
+   * bottom HEIGHT-CHROME_STRIP_HEIGHT_PX–HEIGHT). Slide content uses the
+   * deck's safe-area padding (96px on A4) so it never overlaps.
    *
-   * In cover-hide-only mode the header is invisible on the first page via
-   * a CSS trick: we cannot conditionally suppress it per-page within a
-   * single pdf() call, so we set visibility:hidden on page 1 using Chromium's
-   * `-webkit-print-color-adjust` and the `pageNumber` span which equals "1"
-   * on the first page.
-   *
-   * Note: Chromium header/footer templates do NOT support JavaScript; only
-   * plain HTML + inline CSS + the special span classes are available.
+   * Page numbers are pre-resolved at composite-build time — Chromium's
+   * `<span class="pageNumber">` template substitution is not used.
    */
-  private buildHeaderTemplate(
-    slides: Slide[],
+  private buildSectionChromeHtml(
+    chrome: ResolvedPageChrome,
+    pageNumber: number,
+    totalPages: number,
     colors: ChromeColors,
-    mode: PageChromeMode,
   ): string {
-    // Find the running title from the first slide that has a directive
-    let runningTitle = '';
-    for (const slide of slides) {
-      const { directive } = parsePageChrome(slide.html);
-      const resolved = resolvePageChrome(directive, { deckTitle: '' });
-      if (!resolved.hide && resolved.runningTitle) {
-        runningTitle = resolved.runningTitle;
-        break;
-      }
-    }
-
-    const coverHideStyle =
-      mode === 'cover-hide-only'
-        ? `
-      /* Hide header on the first page (cover). Chromium evaluates the
-         pageNumber span at render time; we use a sibling selector trick:
-         when the invisible pageNumber span equals "1" the whole bar is hidden.
-         Since templates don't support JS/dynamic CSS, we use the first-page
-         trick via the margin-top of the header being 0 for page 1. */
-      .cover-hide { visibility: hidden; }
-      .page-num-check { display: none; }
-`
-        : '';
-
-    // Inline literals are intentional — documented in module JSDoc.
-    return `<div style="
-      width: 100%;
-      height: ${CHROME_STRIP_HEIGHT_MM};
-      background: ${colors.canvas};
-      border-bottom: 0.5px solid ${colors.border};
-      display: flex;
-      align-items: center;
-      padding: 0 14px;
-      box-sizing: border-box;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 7.5pt;
-      color: ${colors.textSecondary};
-      -webkit-print-color-adjust: exact;
-    "><style>${coverHideStyle}</style><span style="
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      color: ${colors.text};
-      font-weight: 500;
-      letter-spacing: 0.01em;
-    ">${this.escapeHtml(runningTitle)}</span></div>`;
-  }
-
-  /**
-   * Build the Playwright footer template HTML.
-   *
-   * Chromium replaces `<span class="pageNumber">` and `<span class="totalPages">`
-   * with the current and total page numbers at render time.
-   *
-   * The footerAlign value from the first non-hidden directive drives the
-   * text alignment. In cover-hide-only mode, we suppress the footer on the
-   * first page by using a transparent color for page number 1 via CSS
-   * attribute selectors — this is the closest we can get within a single
-   * pdf() call without a merge library.
-   */
-  private buildFooterTemplate(
-    slides: Slide[],
-    colors: ChromeColors,
-    // mode is reserved for a future partitioned strategy; currently uniform templates are used
-    _mode: PageChromeMode,
-  ): string {
-    // Find the footer alignment and page-number preference from the first non-hidden directive
-    let footerAlign: 'left' | 'center' | 'right' = 'right';
-    let showPageNumber = true;
-
-    for (const slide of slides) {
-      const { directive } = parsePageChrome(slide.html);
-      const resolved = resolvePageChrome(directive, { deckTitle: '' });
-      if (!resolved.hide) {
-        footerAlign = resolved.footerAlign;
-        showPageNumber = resolved.pageNumber;
-        break;
-      }
-    }
-
     const justifyMap: Record<'left' | 'center' | 'right', string> = {
       left: 'flex-start',
       center: 'center',
       right: 'flex-end',
     };
-    const justifyContent = justifyMap[footerAlign];
+    const footerJustify = justifyMap[chrome.footerAlign];
 
-    const pageNumberHtml = showPageNumber
-      ? `<span style="color: ${colors.textSecondary};">Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>`
+    const headerHtml = chrome.runningTitle
+      ? `<div class="pengui-chrome-header" style="color: ${colors.text}; border-bottom: 0.5px solid ${colors.border};"><span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(chrome.runningTitle)}</span></div>`
       : '';
 
-    // Inline literals are intentional — documented in module JSDoc.
-    return `<div style="
-      width: 100%;
-      height: ${CHROME_STRIP_HEIGHT_MM};
-      background: ${colors.canvas};
-      border-top: 0.5px solid ${colors.border};
-      display: flex;
-      align-items: center;
-      justify-content: ${justifyContent};
-      padding: 0 14px;
-      box-sizing: border-box;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 7.5pt;
-      -webkit-print-color-adjust: exact;
-    ">${pageNumberHtml}</div>`;
+    const footerHtml = chrome.pageNumber
+      ? `<div class="pengui-chrome-footer" style="color: ${colors.textSecondary}; border-top: 0.5px solid ${colors.border}; justify-content: ${footerJustify};"><span>Page ${pageNumber} of ${totalPages}</span></div>`
+      : '';
+
+    return headerHtml + footerHtml;
   }
 
   // ── Shared PDF Printing ──────────────────────────────────────
@@ -606,55 +562,6 @@ ${sections}
     }
   }
 
-  /**
-   * Like printToPdf but with displayHeaderFooter enabled and the provided
-   * header/footer templates and content margins.
-   */
-  private async printToPdfWithChrome(
-    html: string,
-    geometry: FormatGeometry,
-    margin: { top: string; right: string; bottom: string; left: string },
-    headerTemplate: string,
-    footerTemplate: string,
-  ): Promise<Buffer> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let page: any | null = null;
-
-    try {
-      page = await this.pool.getPage();
-
-      await page.setViewportSize({
-        width: geometry.widthPx,
-        height: geometry.heightPx,
-      });
-
-      await page.setContent(html, { waitUntil: 'networkidle' });
-
-      const pdfOptions: Record<string, unknown> = {
-        printBackground: true,
-        displayHeaderFooter: true,
-        headerTemplate,
-        footerTemplate,
-        margin,
-      };
-
-      if (geometry.physicalPage) {
-        pdfOptions.format = geometry.physicalPage;
-        pdfOptions.landscape = geometry.orientation === 'landscape';
-      } else {
-        pdfOptions.width = `${geometry.widthPx}px`;
-        pdfOptions.height = `${geometry.heightPx}px`;
-      }
-
-      const pdfBuffer: Buffer = await page.pdf(pdfOptions);
-
-      return pdfBuffer;
-    } finally {
-      if (page) {
-        await this.pool.releasePage(page);
-      }
-    }
-  }
 
   // ── Helpers ──────────────────────────────────────────────────
 
