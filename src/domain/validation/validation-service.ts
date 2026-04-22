@@ -10,16 +10,19 @@
  */
 
 import type { SoulId } from '../../types/common.js';
+import type { FormatGeometry, FormatKind } from '../../types/format.js';
 import type {
   ValidationResult,
   ValidationIssue,
   ValidationDepth,
+  ValidationContext,
   StyleScore,
 } from '../../types/validation.js';
 import type { ISoulStore } from '../../storage/interfaces.js';
 import type { PenguiConfig } from '../../config.js';
 import type { Logger } from '../../infrastructure/logger.js';
 import { SoulNotFoundError } from '../../types/errors.js';
+import { getFormat } from '../formats/format-registry.js';
 import { Stage1Runner } from './stage1/stage1-runner.js';
 import { Stage2Runner } from './stage2/stage2-runner.js';
 
@@ -116,9 +119,10 @@ export class ValidationService {
   async validateSlide(
     html: string,
     soulId: SoulId,
-    depth: ValidationDepth = 'lint'
+    depth: ValidationDepth = 'lint',
+    format?: FormatKind,
   ): Promise<ValidationResult> {
-    this.logger.info('Starting slide validation', { soulId, depth });
+    this.logger.info('Starting slide validation', { soulId, depth, format });
 
     // ── Resolve the Design Soul ─────────────────────────────────────
     const soul = await this.soulStore.get(soulId);
@@ -128,10 +132,12 @@ export class ValidationService {
 
     const soulTokenNames = soul.tokenNames;
     const allowedFonts = soul.allowedFonts;
+    const geometry: FormatGeometry = getFormat(format).geometry;
+    const validationContext: ValidationContext = { geometry };
 
     // ── Stage 1: Static Lint ────────────────────────────────────────
     const stage1Runner = new Stage1Runner();
-    const stage1Result = stage1Runner.run(html, soulTokenNames, allowedFonts);
+    const stage1Result = stage1Runner.run(html, soulTokenNames, allowedFonts, validationContext);
 
     this.logger.debug('Stage 1 complete', {
       issueCount: stage1Result.issues.length,
@@ -152,7 +158,7 @@ export class ValidationService {
         const pw = await import('playwright');
         browser = await pw.chromium.launch({ headless: this.config.headless });
         const context = await browser.newContext({
-          viewport: { width: this.config.slideWidth, height: this.config.slideHeight },
+          viewport: { width: geometry.widthPx, height: geometry.heightPx },
         });
         const page = await context.newPage();
 
@@ -160,7 +166,7 @@ export class ValidationService {
         await page.setContent(html, { waitUntil: 'networkidle' });
 
         const stage2Runner = new Stage2Runner();
-        const stage2Result = await stage2Runner.run(page, soulTokenNames);
+        const stage2Result = await stage2Runner.run(page, soulTokenNames, validationContext);
         stage2ElapsedMs = stage2Result.elapsedMs;
 
         allIssues = [...allIssues, ...stage2Result.issues];

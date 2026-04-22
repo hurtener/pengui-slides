@@ -1,23 +1,33 @@
 /**
  * Safe Area Check (Stage 1)
  *
- * Verifies the root slide container declares the correct
- * dimensions (1920x1080) for the presentation canvas.
+ * Verifies the root slide container declares the dimensions that match
+ * the deck's format geometry. When geometry is not supplied, the check
+ * falls back to the slides_16_9 defaults (1920×1080) so pre-v2.0 callers
+ * and existing tests see byte-identical behavior.
  */
 
 import * as cheerio from 'cheerio';
 import postcss from 'postcss';
-import type { Stage1Check, ValidationIssue } from '../../../types/validation.js';
+import { FORMAT_REGISTRY } from '../../formats/format-registry.js';
+import type { Stage1Check, ValidationContext, ValidationIssue } from '../../../types/validation.js';
 
-const EXPECTED_WIDTH = '1920px';
-const EXPECTED_HEIGHT = '1080px';
 const EXPECTED_SAFE_AREA_TOKEN = 'var(--space-safe-area)';
+const DEFAULT_GEOMETRY = FORMAT_REGISTRY.slides_16_9.geometry;
 
 export class SafeAreaCheck implements Stage1Check {
   readonly id = 'safe-area-check';
   readonly name = 'Safe Area Dimensions';
 
-  run(html: string, _soulTokenNames: string[], _allowedFonts: string[]): ValidationIssue[] {
+  run(
+    html: string,
+    _soulTokenNames: string[],
+    _allowedFonts: string[],
+    context?: ValidationContext,
+  ): ValidationIssue[] {
+    const geometry = context?.geometry ?? DEFAULT_GEOMETRY;
+    const expectedWidth = `${geometry.widthPx}px`;
+    const expectedHeight = `${geometry.heightPx}px`;
     const issues: ValidationIssue[] = [];
     const $ = cheerio.load(html);
 
@@ -97,20 +107,20 @@ export class SafeAreaCheck implements Stage1Check {
         stage: 'stage1_lint',
         severity: 'warning',
         rule: this.id,
-        message: `Root .slide container is missing a width declaration. Expected ${EXPECTED_WIDTH}.`,
-        expected: EXPECTED_WIDTH,
-        fixSuggestion: `Add "width: ${EXPECTED_WIDTH}" to the .slide CSS rule.`,
+        message: `Root .slide container is missing a width declaration. Expected ${expectedWidth}.`,
+        expected: expectedWidth,
+        fixSuggestion: `Add "width: ${expectedWidth}" to the .slide CSS rule.`,
       });
-    } else if (actualWidth && actualWidth !== EXPECTED_WIDTH) {
+    } else if (actualWidth && actualWidth !== expectedWidth) {
       issues.push({
         id: `${this.id}-width-mismatch`,
         stage: 'stage1_lint',
         severity: 'warning',
         rule: this.id,
-        message: `Root .slide container width is "${actualWidth}", expected "${EXPECTED_WIDTH}".`,
-        expected: EXPECTED_WIDTH,
+        message: `Root .slide container width is "${actualWidth}", expected "${expectedWidth}".`,
+        expected: expectedWidth,
         actual: actualWidth,
-        fixSuggestion: `Set "width: ${EXPECTED_WIDTH}" on the .slide container.`,
+        fixSuggestion: `Set "width: ${expectedWidth}" on the .slide container.`,
       });
     }
 
@@ -120,20 +130,20 @@ export class SafeAreaCheck implements Stage1Check {
         stage: 'stage1_lint',
         severity: 'warning',
         rule: this.id,
-        message: `Root .slide container is missing a height declaration. Expected ${EXPECTED_HEIGHT}.`,
-        expected: EXPECTED_HEIGHT,
-        fixSuggestion: `Add "height: ${EXPECTED_HEIGHT}" to the .slide CSS rule.`,
+        message: `Root .slide container is missing a height declaration. Expected ${expectedHeight}.`,
+        expected: expectedHeight,
+        fixSuggestion: `Add "height: ${expectedHeight}" to the .slide CSS rule.`,
       });
-    } else if (actualHeight && actualHeight !== EXPECTED_HEIGHT) {
+    } else if (actualHeight && actualHeight !== expectedHeight) {
       issues.push({
         id: `${this.id}-height-mismatch`,
         stage: 'stage1_lint',
         severity: 'warning',
         rule: this.id,
-        message: `Root .slide container height is "${actualHeight}", expected "${EXPECTED_HEIGHT}".`,
-        expected: EXPECTED_HEIGHT,
+        message: `Root .slide container height is "${actualHeight}", expected "${expectedHeight}".`,
+        expected: expectedHeight,
         actual: actualHeight,
-        fixSuggestion: `Set "height: ${EXPECTED_HEIGHT}" on the .slide container.`,
+        fixSuggestion: `Set "height: ${expectedHeight}" on the .slide container.`,
       });
     }
 

@@ -3,6 +3,7 @@
  */
 
 import type { DeckId, SlideId, SoulId, RevisionId, ISOTimestamp } from './common.js';
+import type { FormatKind } from './format.js';
 import type { SlideMetadata } from './metadata.js';
 import type { ValidationResult } from './validation.js';
 import type {
@@ -35,6 +36,12 @@ export interface Deck {
   title: string;
   author: string;
   slideIds: SlideId[];
+  /**
+   * Output format for this deck. Absent on legacy decks; the deck-service
+   * treats a missing value as `slides_16_9` at read time. New decks always
+   * carry this field — see CreateDeckInput.
+   */
+  format?: FormatKind;
   createdAt: ISOTimestamp;
   updatedAt: ISOTimestamp;
 }
@@ -75,6 +82,7 @@ export interface DeckSummary {
   soulId: SoulId;
   title: string;
   author: string;
+  format: FormatKind;
   slideCount: number;
   slides: SlideSummary[];
   revisionCount: number;
@@ -88,6 +96,10 @@ export interface CreateDeckInput {
   soulId: string;
   title?: string;
   author?: string;
+  /**
+   * Output format. Omission preserves legacy behavior (slides_16_9).
+   */
+  format?: FormatKind;
 }
 
 export interface AddSlideInput {

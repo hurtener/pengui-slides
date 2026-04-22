@@ -4,6 +4,11 @@
  * Supports two modes:
  *   - 'image':  Render each slide as an image, then combine into a single PDF.
  *   - 'direct': Use Playwright's page.pdf() with CSS page breaks.
+ *
+ * The exporter is format-aware: callers pass either a FormatKind or a
+ * FormatGeometry, and the output page size, viewport, and default mode
+ * are derived from that. Omission falls back to slides_16_9 (1920×1080)
+ * so existing slide exports remain byte-identical.
  */
 
 import type { Logger } from '../../infrastructure/logger.js';
@@ -12,12 +17,20 @@ import { resolveAssetRefs } from '../assets/asset-resolver.js';
 import type { PlaywrightPool } from './playwright-pool.js';
 import type { SlideRenderer } from './slide-renderer.js';
 import type { Slide } from '../../types/deck.js';
+import type { FormatGeometry, FormatKind } from '../../types/format.js';
 import type { ExportResult, PdfMode } from '../../types/export.js';
+import { FORMAT_REGISTRY, getFormat } from '../formats/format-registry.js';
 
-// ── Constants ────────────────────────────────────────────────────
+// ── Defaults ─────────────────────────────────────────────────────
 
-const SLIDE_WIDTH = 1920;
-const SLIDE_HEIGHT = 1080;
+const DEFAULT_GEOMETRY: FormatGeometry = FORMAT_REGISTRY.slides_16_9.geometry;
+
+export interface PdfExportOptions {
+  mode?: PdfMode;
+  /** Either a FormatKind or a fully-resolved geometry. */
+  format?: FormatKind;
+  geometry?: FormatGeometry;
+}
 
 // ── PDF Exporter ─────────────────────────────────────────────────
 
@@ -34,22 +47,33 @@ export class PdfExporter {
    *
    * @param slides    Ordered array of slides.
    * @param deckTitle Used for the filename.
-   * @param mode      'image' renders each slide to PNG first; 'direct' uses page.pdf().
+   * @param options   Export mode + page geometry. When geometry is omitted,
+   *                  resolves from `format` via the registry; when both are
+   *                  omitted, falls back to the slides_16_9 defaults.
+   *                  `mode` defaults to `'image'` for slide formats and
+   *                  `'direct'` for print formats (vector text, smaller files).
    */
   async export(
     slides: Slide[],
     deckTitle: string,
-    mode: PdfMode = 'image',
+    options: PdfExportOptions = {},
   ): Promise<ExportResult> {
+    const geometry =
+      options.geometry ??
+      (options.format ? getFormat(options.format).geometry : DEFAULT_GEOMETRY);
+    const defaultMode: PdfMode = geometry.medium === 'print' ? 'direct' : 'image';
+    const mode: PdfMode = options.mode ?? defaultMode;
+
     this.logger.info('Starting PDF export', {
       slideCount: slides.length,
       mode,
+      geometry: { width: geometry.widthPx, height: geometry.heightPx, medium: geometry.medium },
     });
 
     const data =
       mode === 'direct'
-        ? await this.exportDirect(slides)
-        : await this.exportImage(slides);
+        ? await this.exportDirect(slides, geometry)
+        : await this.exportImage(slides, geometry);
 
     const filename = this.sanitizeFilename(deckTitle) + '.pdf';
 
@@ -76,13 +100,16 @@ export class PdfExporter {
    * Render each slide to a PNG, then build a PDF that places
    * one full-bleed image per page.
    */
-  private async exportImage(slides: Slide[]): Promise<Buffer> {
+  private async exportImage(slides: Slide[], geometry: FormatGeometry): Promise<Buffer> {
+    const width = geometry.widthPx;
+    const height = geometry.heightPx;
+
     // Render all slides to images first
     const images: Buffer[] = [];
     for (const slide of slides) {
       const result = await this.renderer.render(slide.html, slide.id, {
-        width: SLIDE_WIDTH,
-        height: SLIDE_HEIGHT,
+        width,
+        height,
         deviceScaleFactor: 1,
         format: 'png',
       });
@@ -102,10 +129,10 @@ export class PdfExporter {
 <head>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  @page { size: ${SLIDE_WIDTH}px ${SLIDE_HEIGHT}px; margin: 0; }
+  @page { size: ${width}px ${height}px; margin: 0; }
   .page {
-    width: ${SLIDE_WIDTH}px;
-    height: ${SLIDE_HEIGHT}px;
+    width: ${width}px;
+    height: ${height}px;
     page-break-after: always;
     overflow: hidden;
   }
@@ -123,7 +150,7 @@ ${imgTags}
 </body>
 </html>`;
 
-    return this.printToPdf(html);
+    return this.printToPdf(html, geometry);
   }
 
   // ── Direct Mode ──────────────────────────────────────────────
@@ -132,7 +159,10 @@ ${imgTags}
    * Combine all slide HTML into a single document with CSS
    * page breaks and use Playwright's page.pdf() directly.
    */
-  private async exportDirect(slides: Slide[]): Promise<Buffer> {
+  private async exportDirect(slides: Slide[], geometry: FormatGeometry): Promise<Buffer> {
+    const width = geometry.widthPx;
+    const height = geometry.heightPx;
+
     const resolvedHtmls = this.assetService
       ? await Promise.all(slides.map((s) => resolveAssetRefs(s.html, this.assetService!)))
       : slides.map((s) => s.html);
@@ -155,10 +185,10 @@ ${imgTags}
 <head>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  @page { size: ${SLIDE_WIDTH}px ${SLIDE_HEIGHT}px; margin: 0; }
+  @page { size: ${width}px ${height}px; margin: 0; }
   .slide-page {
-    width: ${SLIDE_WIDTH}px;
-    height: ${SLIDE_HEIGHT}px;
+    width: ${width}px;
+    height: ${height}px;
     page-break-after: always;
     overflow: hidden;
     position: relative;
@@ -174,15 +204,18 @@ ${sections}
 </body>
 </html>`;
 
-    return this.printToPdf(html);
+    return this.printToPdf(html, geometry);
   }
 
   // ── Shared PDF Printing ──────────────────────────────────────
 
   /**
-   * Load HTML into a Playwright page and print to PDF.
+   * Load HTML into a Playwright page and print to PDF. Uses the
+   * geometry's physical page (A4/Letter) when one is defined, so the
+   * resulting PDF carries proper print dimensions; otherwise uses the
+   * explicit pixel dimensions for screen-sized slide decks.
    */
-  private async printToPdf(html: string): Promise<Buffer> {
+  private async printToPdf(html: string, geometry: FormatGeometry): Promise<Buffer> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let page: any | null = null;
 
@@ -190,18 +223,26 @@ ${sections}
       page = await this.pool.getPage();
 
       await page.setViewportSize({
-        width: SLIDE_WIDTH,
-        height: SLIDE_HEIGHT,
+        width: geometry.widthPx,
+        height: geometry.heightPx,
       });
 
       await page.setContent(html, { waitUntil: 'networkidle' });
 
-      const pdfBuffer: Buffer = await page.pdf({
-        width: `${SLIDE_WIDTH}px`,
-        height: `${SLIDE_HEIGHT}px`,
+      const pdfOptions: Record<string, unknown> = {
         printBackground: true,
         margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
-      });
+      };
+
+      if (geometry.physicalPage) {
+        pdfOptions.format = geometry.physicalPage;
+        pdfOptions.landscape = geometry.orientation === 'landscape';
+      } else {
+        pdfOptions.width = `${geometry.widthPx}px`;
+        pdfOptions.height = `${geometry.heightPx}px`;
+      }
+
+      const pdfBuffer: Buffer = await page.pdf(pdfOptions);
 
       return pdfBuffer;
     } finally {

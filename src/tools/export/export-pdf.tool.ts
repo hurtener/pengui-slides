@@ -35,7 +35,12 @@ export function registerExportPdfTool(server: McpServer, container: ServiceConta
         );
         await validateSlidesForExport(container, deck_id, summary.soulId as string, slides);
 
-        const result = await container.renderService.exportPdf(slides, summary.title, mode ?? undefined);
+        const result = await container.renderService.exportPdf(
+          slides,
+          summary.title,
+          mode ?? undefined,
+          summary.format,
+        );
 
         // Write to output directory
         const outputDir = container.config.outputDir;

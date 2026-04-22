@@ -68,7 +68,7 @@ describe('PdfExporter', () => {
         makeSlide(`<!DOCTYPE html><html><head><style>.slide { color: red; }</style></head><body><div class="slide">Hello</div></body></html>`),
       ],
       'Deck',
-      'direct',
+      { mode: 'direct' },
     );
 
     expect(capturedHtml).toContain('<section class="slide-page" id="slide-1">');

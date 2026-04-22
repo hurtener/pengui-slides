@@ -5,7 +5,11 @@
  * against a Playwright Page. Returns aggregated issues and elapsed time.
  */
 
-import type { Stage2Check, ValidationIssue } from '../../../types/validation.js';
+import type {
+  Stage2Check,
+  ValidationContext,
+  ValidationIssue,
+} from '../../../types/validation.js';
 import { ContrastChecker } from './contrast-checker.js';
 import { OverflowDetector } from './overflow-detector.js';
 import { ColorSampler } from './color-sampler.js';
@@ -28,13 +32,17 @@ export class Stage2Runner {
     ];
   }
 
-  async run(page: unknown, soulTokenNames: string[]): Promise<Stage2Result> {
+  async run(
+    page: unknown,
+    soulTokenNames: string[],
+    context?: ValidationContext,
+  ): Promise<Stage2Result> {
     const start = performance.now();
     const issues: ValidationIssue[] = [];
 
     // Run checks sequentially to avoid race conditions on the page
     for (const check of this.checks) {
-      const checkIssues = await check.run(page, soulTokenNames);
+      const checkIssues = await check.run(page, soulTokenNames, context);
       issues.push(...checkIssues);
     }
 

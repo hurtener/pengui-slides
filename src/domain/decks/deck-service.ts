@@ -17,6 +17,8 @@ import type {
   AddSlideInput,
   UpdateSlideInput,
 } from '../../types/deck.js';
+import type { FormatKind } from '../../types/format.js';
+import { DEFAULT_FORMAT, assertKnownFormat } from '../formats/format-registry.js';
 import type { SlideMetadata, SlideType } from '../../types/metadata.js';
 import { DeckNotFoundError, SlideNotFoundError, SoulNotFoundError } from '../../types/errors.js';
 import type { IDeckStore, ISlideStore, ISoulStore } from '../../storage/interfaces.js';
@@ -67,12 +69,15 @@ export class DeckService {
     }
 
     const now = this.clock.now();
+    const format: FormatKind = input.format ?? DEFAULT_FORMAT;
+    assertKnownFormat(format);
     const deck: Deck = {
       id: generateDeckId(),
       soulId: sid,
       title: input.title ?? 'Untitled Deck',
       author: input.author ?? '',
       slideIds: [],
+      format,
       createdAt: now,
       updatedAt: now,
     };
@@ -448,12 +453,28 @@ export class DeckService {
       soulId: deck.soulId,
       title: deck.title,
       author: deck.author,
+      format: deck.format ?? DEFAULT_FORMAT,
       slideCount: deck.slideIds.length,
       slides: slideSummaries,
       revisionCount: revisions.length,
       createdAt: deck.createdAt,
       updatedAt: deck.updatedAt,
     };
+  }
+
+  /**
+   * Resolve a deck's format, defaulting to slides_16_9 for legacy decks
+   * that were created before the format field existed.
+   *
+   * @throws DeckNotFoundError if the deck does not exist.
+   */
+  async getDeckFormat(deckIdStr: string): Promise<FormatKind> {
+    const did = deckId(deckIdStr);
+    const deck = await this.deckStore.get(did);
+    if (!deck) {
+      throw new DeckNotFoundError(deckIdStr);
+    }
+    return deck.format ?? DEFAULT_FORMAT;
   }
 
   // ── Private Helpers ──────────────────────────────────────────────

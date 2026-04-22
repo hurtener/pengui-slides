@@ -11,6 +11,7 @@ import type { Logger } from '../../infrastructure/logger.js';
 import type { AssetService } from '../assets/asset-service.js';
 import type { SoulService } from '../souls/soul-service.js';
 import type { Slide } from '../../types/deck.js';
+import type { FormatKind } from '../../types/format.js';
 import type {
   PreviewResult,
   PreviewOptions,
@@ -105,15 +106,19 @@ export class RenderService {
   /**
    * Export slides as a PDF file.
    *
-   * @param mode 'image' renders slides to PNG first; 'direct' uses page.pdf().
+   * @param mode   'image' renders slides to PNG first; 'direct' uses page.pdf().
+   *               Defaults to 'image' for slide formats and 'direct' for print formats.
+   * @param format Optional deck format. When set, the exporter derives page geometry
+   *               from the registry (A4 / Letter / 16:9). Omission falls back to slides_16_9.
    */
   async exportPdf(
     slides: Slide[],
     deckTitle: string,
     mode?: PdfMode,
+    format?: FormatKind,
   ): Promise<ExportResult> {
     const exporter = this.ensurePdfExporter();
-    return exporter.export(slides, deckTitle, mode);
+    return exporter.export(slides, deckTitle, { mode, format });
   }
 
   // ── HTML Export ──────────────────────────────────────────────
