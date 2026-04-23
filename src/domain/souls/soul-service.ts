@@ -200,6 +200,71 @@ export class SoulService {
   }
 
   /**
+   * Apply a single token override to an existing soul.
+   *
+   * Mutates `layers[layer][tokenName] = value`, then regenerates cssTokens,
+   * allowedFonts, utilityCss, and styleGuide. If the soul is already approved,
+   * recipes are also regenerated and re-saved. Bumps updatedAt.
+   *
+   * @throws SoulNotFoundError if the soul does not exist.
+   * @throws PenguiError(INVALID_INPUT) if `layer` or `tokenName` is unknown.
+   */
+  async applyTokenOverride(
+    soulIdArg: SoulId,
+    layer: keyof import('../../types/design-soul.js').SoulLayers,
+    tokenName: string,
+    value: string | number,
+  ): Promise<DesignSoul> {
+    const soul = await this.store.get(soulIdArg);
+    if (!soul) throw new SoulNotFoundError(soulIdArg);
+
+    const layerObj = soul.layers[layer] as unknown as Record<string, unknown>;
+    if (!(tokenName in layerObj)) {
+      const known = Object.keys(layerObj).join(', ');
+      throw new PenguiError(
+        ErrorCode.INVALID_INPUT,
+        `Unknown token "${tokenName}" in layer "${layer}". Known: ${known}`,
+        { layer, tokenName, knownTokens: Object.keys(layerObj) },
+      );
+    }
+
+    // Mutate the layer in place on a clone
+    const updatedLayers = {
+      ...soul.layers,
+      [layer]: { ...layerObj, [tokenName]: value },
+    } as import('../../types/design-soul.js').SoulLayers;
+
+    // Regenerate derived fields
+    const { cssString, tokenNames, allowedFonts } = generateTokens(updatedLayers);
+    const utilityCss = generateUtilityCss();
+    const styleGuide = generateStyleGuide(updatedLayers, tokenNames);
+
+    const now = this.clock.now();
+    const updatedSoul: DesignSoul = {
+      ...soul,
+      layers: updatedLayers,
+      cssTokens: cssString,
+      tokenNames,
+      allowedFonts,
+      utilityCss,
+      styleGuide,
+      updatedAt: now,
+    };
+
+    await this.store.save(updatedSoul);
+
+    // If approved, also regenerate recipes
+    if (updatedSoul.status === 'approved') {
+      const slideRecipes = this.recipeGenerator.generateAll(soulIdArg, cssString, this.clock);
+      const printRecipes = this.recipeGenerator.generatePrintAll(soulIdArg, cssString, this.clock);
+      await this.store.saveRecipes(soulIdArg, [...slideRecipes, ...printRecipes]);
+    }
+
+    this.logger.info('Token override applied', { soulId: soulIdArg, layer, tokenName });
+    return updatedSoul;
+  }
+
+  /**
    * Save a validated slide as a reusable layout recipe (template).
    *
    * The slide must belong to an existing soul and must have passed
