@@ -91,12 +91,18 @@ export class SoulService {
       );
     }
 
-    // Generate layout recipes
-    const recipes = this.recipeGenerator.generateAll(
+    // Generate layout recipes for both mediums
+    const slideRecipes = this.recipeGenerator.generateAll(
       soulId,
       existing.cssTokens,
       this.clock,
     );
+    const printRecipes = this.recipeGenerator.generatePrintAll(
+      soulId,
+      existing.cssTokens,
+      this.clock,
+    );
+    const recipes = [...slideRecipes, ...printRecipes];
 
     // Update soul status
     const now = this.clock.now();
@@ -112,7 +118,9 @@ export class SoulService {
 
     this.logger.info('Design Soul approved', {
       soulId,
-      recipeCount: recipes.length,
+      slideRecipeCount: slideRecipes.length,
+      printRecipeCount: printRecipes.length,
+      totalRecipeCount: recipes.length,
     });
 
     return { soul: updatedSoul, recipes };
@@ -191,6 +199,7 @@ export class SoulService {
       description,
       tags,
       source: 'user-saved',
+      medium: 'slides',   // user-saved templates default to slides; print templates are built-in
       html: slide.html,
       createdAt: this.clock.now(),
       savedFromSlideId: slideId,

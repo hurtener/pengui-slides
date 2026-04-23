@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en" data-pengui-medium="print">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      /* Soul tokens are injected here by the recipe generator */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .slide {
+      width: 1240px;
+      height: 1754px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-normal);
+      line-height: var(--leading-body);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Page header ─────────────────────────────────────────────── */
+    .page-header {
+      margin-bottom: var(--space-xl);
+      padding-bottom: var(--space-lg);
+      border-bottom: var(--border-width) solid var(--color-border);
+      flex-shrink: 0;
+    }
+
+    .page-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      color: var(--color-accent-primary);
+      letter-spacing: var(--letter-spacing-heading);
+      text-transform: uppercase;
+      margin-bottom: var(--space-sm);
+    }
+
+    .page-heading {
+      font-family: var(--font-display);
+      font-size: var(--text-h1);
+      font-weight: var(--weight-bold);
+      letter-spacing: var(--letter-spacing-heading);
+      line-height: var(--line-height-heading);
+      color: var(--color-text-primary);
+    }
+
+    /* ── Body text ───────────────────────────────────────────────── */
+    .body-text {
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      line-height: var(--leading-body);
+      margin-bottom: var(--space-xl);
+      flex-shrink: 0;
+    }
+
+    /* ── Diagram wrapper ─────────────────────────────────────────── */
+    .diagram-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .diagram-title {
+      font-family: var(--font-display);
+      font-size: var(--text-h3);
+      font-weight: var(--weight-medium);
+      color: var(--color-text-primary);
+      margin-bottom: var(--space-md);
+    }
+
+    .diagram-container {
+      flex: 1;
+      background: var(--color-surface);
+      border-radius: var(--radius-card);
+      border: var(--border-width) solid var(--color-border);
+      padding: var(--space-lg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .diagram-svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Diagram caption ─────────────────────────────────────────── */
+    .diagram-caption {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      color: var(--color-text-tertiary);
+      margin-top: var(--space-md);
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    /* ── Inline SVG node and connector styles ────────────────────── */
+    /*
+     * Filled shapes use var(--color-category-*) tokens derived from the
+     * soul's accent family. Connectors use var(--color-border).
+     * All text uses var(--text-*) typography tokens.
+     *
+     * Structure:
+     *   Root node      — stone/canvas tint, soul border
+     *   Category nodes — --color-category-a/b/c/d (4 pastel families)
+     *   Leaf nodes     — --color-category-a-tint / b-tint / c-tint / d-tint
+     *
+     * Layout (horizontal, left-to-right):
+     *   [Root] ──┬── [Category A] ──┬── [Leaf A1]
+     *            │                  └── [Leaf A2]
+     *            ├── [Category B] ──┬── [Leaf B1]
+     *            │                  └── [Leaf B2]
+     *            ├── [Category C] ──┬── [Leaf C1]
+     *            │                  └── [Leaf C2]
+     *            └── [Category D] ──┬── [Leaf D1]
+     *                               └── [Leaf D2]
+     *
+     * Connectors are orthogonal (right-angle) paths — no diagonals.
+     * viewBox="0 0 1040 800" fills the container at any size.
+     */
+  </style>
+</head>
+<body>
+  <!-- @slide-meta {"title":"Concept Map — Horizontal Tree Diagram","type":"content_diagram","narrative":"A horizontal tree/mind-map diagram demonstrating how a root concept branches into four pastel-colored category groups, each with two leaf nodes. Category colors come from the soul's --color-category-a/b/c/d token family. Connectors are orthogonal right-angle paths. All fills, typography, and connector strokes reference soul CSS tokens.","tags":["diagram","mind-map","tree","concept-map","hierarchy","visualization","print"]} -->
+  <div class="slide">
+
+    <!-- Page header -->
+    <div class="page-header">
+      <div class="page-label">Section 2.1</div>
+      <h1 class="page-heading">Concept Hierarchy</h1>
+    </div>
+
+    <!-- Contextual body text -->
+    <p class="body-text">
+      The diagram below maps the main concept into four thematic groups.
+      Each group branches into its constituent sub-topics, allowing at-a-glance
+      navigation of the full subject area. Replace labels and add or remove leaf
+      nodes to match your content.
+    </p>
+
+    <!-- Diagram section -->
+    <div class="diagram-wrapper">
+      <div class="diagram-title">Mind Map — Core Domain</div>
+
+      <div class="diagram-container">
+        <!--
+          HORIZONTAL TREE / MIND-MAP DIAGRAM
+          ────────────────────────────────────
+          viewBox="0 0 1040 800"
+          Canvas is split into three columns:
+            Col 1: x  40–200  → root node
+            Col 2: x 240–440  → category nodes (A/B/C/D)
+            Col 3: x 540–860  → leaf nodes (2 per category)
+
+          Vertical layout (800px total):
+            Cat A centre: y 100   leaves at y 60, y 140
+            Cat B centre: y 300   leaves at y 260, y 340
+            Cat C centre: y 500   leaves at y 460, y 540
+            Cat D centre: y 700   leaves at y 660, y 740
+
+          Root centre: y 400
+
+          Connector strategy:
+            Root → Cat:   M120,400 H200 V<catY> H240
+            Cat → Leaf:   M440,<catY> H500 V<leafY> H540
+
+          All coordinates are geometry, not styling — exempt from token rule.
+        -->
+        <svg
+          class="diagram-svg"
+          viewBox="0 0 1040 800"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-label="Horizontal tree diagram: root concept branches into four category groups each with two leaf topics"
+          role="img"
+        >
+          <style>
+            /* ── Connector lines — orthogonal, muted border color ── */
+            .connector {
+              stroke: var(--color-border);
+              stroke-width: var(--border-width);
+              fill: none;
+            }
+            /* ── Node base — rounded rectangle ──────────────────── */
+            .node-root {
+              fill: var(--color-surface-alt);
+              stroke: var(--color-border);
+              stroke-width: var(--border-width);
+            }
+            /* Category fills — one per color family */
+            .cat-a      { fill: var(--color-category-a);      stroke: var(--color-border); stroke-width: var(--border-width); }
+            .cat-b      { fill: var(--color-category-b);      stroke: var(--color-border); stroke-width: var(--border-width); }
+            .cat-c      { fill: var(--color-category-c);      stroke: var(--color-border); stroke-width: var(--border-width); }
+            .cat-d      { fill: var(--color-category-d);      stroke: var(--color-border); stroke-width: var(--border-width); }
+            /* Leaf fills — lighter tint of each category */
+            .leaf-a     { fill: var(--color-category-a-tint); stroke: var(--color-border); stroke-width: var(--border-width); }
+            .leaf-b     { fill: var(--color-category-b-tint); stroke: var(--color-border); stroke-width: var(--border-width); }
+            .leaf-c     { fill: var(--color-category-c-tint); stroke: var(--color-border); stroke-width: var(--border-width); }
+            .leaf-d     { fill: var(--color-category-d-tint); stroke: var(--color-border); stroke-width: var(--border-width); }
+            /* ── Node text ──────────────────────────────────────── */
+            .node-title {
+              font-family: var(--font-display);
+              font-size: var(--text-h3);
+              font-weight: var(--weight-bold);
+              fill: var(--color-text-primary);
+            }
+            .node-subtitle {
+              font-family: var(--font-body);
+              font-size: var(--text-caption);
+              font-style: italic;
+              fill: var(--color-text-secondary);
+            }
+          </style>
+
+          <!-- ═══════════════════════════════════════════════════════ -->
+          <!--  CONNECTORS (drawn first, behind nodes)               -->
+          <!-- ═══════════════════════════════════════════════════════ -->
+
+          <!-- Root → Category A  (root centre y=400, cat A centre y=100) -->
+          <path class="connector" d="M 200,400 H 220 V 100 H 240" />
+          <!-- Root → Category B  (cat B centre y=300) -->
+          <path class="connector" d="M 200,400 H 220 V 300 H 240" />
+          <!-- Root → Category C  (cat C centre y=500) -->
+          <path class="connector" d="M 200,400 H 220 V 500 H 240" />
+          <!-- Root → Category D  (cat D centre y=700) -->
+          <path class="connector" d="M 200,400 H 220 V 700 H 240" />
+
+          <!-- Cat A → Leaf A1  (cat A right edge x=440, leaf centres y=60 / y=140) -->
+          <path class="connector" d="M 440,100 H 500 V 60  H 540" />
+          <!-- Cat A → Leaf A2 -->
+          <path class="connector" d="M 440,100 H 500 V 140 H 540" />
+
+          <!-- Cat B → Leaf B1 -->
+          <path class="connector" d="M 440,300 H 500 V 260 H 540" />
+          <!-- Cat B → Leaf B2 -->
+          <path class="connector" d="M 440,300 H 500 V 340 H 540" />
+
+          <!-- Cat C → Leaf C1 -->
+          <path class="connector" d="M 440,500 H 500 V 460 H 540" />
+          <!-- Cat C → Leaf C2 -->
+          <path class="connector" d="M 440,500 H 500 V 540 H 540" />
+
+          <!-- Cat D → Leaf D1 -->
+          <path class="connector" d="M 440,700 H 500 V 660 H 540" />
+          <!-- Cat D → Leaf D2 -->
+          <path class="connector" d="M 440,700 H 500 V 740 H 540" />
+
+          <!-- ═══════════════════════════════════════════════════════ -->
+          <!--  ROOT NODE  (x 40–200, centred at y=400, h=80)        -->
+          <!-- ═══════════════════════════════════════════════════════ -->
+          <g transform="translate(40, 360)">
+            <rect class="node-root" x="0" y="0" width="160" height="80" rx="14" />
+            <text class="node-title"    x="80" y="35" text-anchor="middle" dominant-baseline="middle">Root Topic</text>
+            <text class="node-subtitle" x="80" y="58" text-anchor="middle">Core concept</text>
+          </g>
+
+          <!-- ═══════════════════════════════════════════════════════ -->
+          <!--  CATEGORY NODES  (x 240–440, height 80)               -->
+          <!-- ═══════════════════════════════════════════════════════ -->
+
+          <!-- Category A — centred at y=100 -->
+          <g transform="translate(240, 60)">
+            <rect class="cat-a" x="0" y="0" width="200" height="80" rx="14" />
+            <text class="node-title"    x="100" y="35" text-anchor="middle" dominant-baseline="middle">Category A</text>
+            <text class="node-subtitle" x="100" y="58" text-anchor="middle">Group descriptor</text>
+          </g>
+
+          <!-- Category B — centred at y=300 -->
+          <g transform="translate(240, 260)">
+            <rect class="cat-b" x="0" y="0" width="200" height="80" rx="14" />
+            <text class="node-title"    x="100" y="35" text-anchor="middle" dominant-baseline="middle">Category B</text>
+            <text class="node-subtitle" x="100" y="58" text-anchor="middle">Group descriptor</text>
+          </g>
+
+          <!-- Category C — centred at y=500 -->
+          <g transform="translate(240, 460)">
+            <rect class="cat-c" x="0" y="0" width="200" height="80" rx="14" />
+            <text class="node-title"    x="100" y="35" text-anchor="middle" dominant-baseline="middle">Category C</text>
+            <text class="node-subtitle" x="100" y="58" text-anchor="middle">Group descriptor</text>
+          </g>
+
+          <!-- Category D — centred at y=700 -->
+          <g transform="translate(240, 660)">
+            <rect class="cat-d" x="0" y="0" width="200" height="80" rx="14" />
+            <text class="node-title"    x="100" y="35" text-anchor="middle" dominant-baseline="middle">Category D</text>
+            <text class="node-subtitle" x="100" y="58" text-anchor="middle">Group descriptor</text>
+          </g>
+
+          <!-- ═══════════════════════════════════════════════════════ -->
+          <!--  LEAF NODES  (x 540–860, height 60)                   -->
+          <!-- ═══════════════════════════════════════════════════════ -->
+
+          <!-- Leaf A1 — centred at y=60 -->
+          <g transform="translate(540, 30)">
+            <rect class="leaf-a" x="0" y="0" width="300" height="60" rx="10" />
+            <text class="node-title"    x="150" y="26" text-anchor="middle" dominant-baseline="middle">Sub-topic A1</text>
+            <text class="node-subtitle" x="150" y="45" text-anchor="middle">Brief descriptor or example</text>
+          </g>
+
+          <!-- Leaf A2 — centred at y=140 -->
+          <g transform="translate(540, 110)">
+            <rect class="leaf-a" x="0" y="0" width="300" height="60" rx="10" />
+            <text class="node-title"    x="150" y="26" text-anchor="middle" dominant-baseline="middle">Sub-topic A2</text>
+            <text class="node-subtitle" x="150" y="45" text-anchor="middle">Brief descriptor or example</text>
+          </g>
+
+          <!-- Leaf B1 — centred at y=260 -->
+          <g transform="translate(540, 230)">
+            <rect class="leaf-b" x="0" y="0" width="300" height="60" rx="10" />
+            <text class="node-title"    x="150" y="26" text-anchor="middle" dominant-baseline="middle">Sub-topic B1</text>
+            <text class="node-subtitle" x="150" y="45" text-anchor="middle">Brief descriptor or example</text>
+          </g>
+
+          <!-- Leaf B2 — centred at y=340 -->
+          <g transform="translate(540, 310)">
+            <rect class="leaf-b" x="0" y="0" width="300" height="60" rx="10" />
+            <text class="node-title"    x="150" y="26" text-anchor="middle" dominant-baseline="middle">Sub-topic B2</text>
+            <text class="node-subtitle" x="150" y="45" text-anchor="middle">Brief descriptor or example</text>
+          </g>
+
+          <!-- Leaf C1 — centred at y=460 -->
+          <g transform="translate(540, 430)">
+            <rect class="leaf-c" x="0" y="0" width="300" height="60" rx="10" />
+            <text class="node-title"    x="150" y="26" text-anchor="middle" dominant-baseline="middle">Sub-topic C1</text>
+            <text class="node-subtitle" x="150" y="45" text-anchor="middle">Brief descriptor or example</text>
+          </g>
+
+          <!-- Leaf C2 — centred at y=540 -->
+          <g transform="translate(540, 510)">
+            <rect class="leaf-c" x="0" y="0" width="300" height="60" rx="10" />
+            <text class="node-title"    x="150" y="26" text-anchor="middle" dominant-baseline="middle">Sub-topic C2</text>
+            <text class="node-subtitle" x="150" y="45" text-anchor="middle">Brief descriptor or example</text>
+          </g>
+
+          <!-- Leaf D1 — centred at y=660 -->
+          <g transform="translate(540, 630)">
+            <rect class="leaf-d" x="0" y="0" width="300" height="60" rx="10" />
+            <text class="node-title"    x="150" y="26" text-anchor="middle" dominant-baseline="middle">Sub-topic D1</text>
+            <text class="node-subtitle" x="150" y="45" text-anchor="middle">Brief descriptor or example</text>
+          </g>
+
+          <!-- Leaf D2 — centred at y=740 -->
+          <g transform="translate(540, 710)">
+            <rect class="leaf-d" x="0" y="0" width="300" height="60" rx="10" />
+            <text class="node-title"    x="150" y="26" text-anchor="middle" dominant-baseline="middle">Sub-topic D2</text>
+            <text class="node-subtitle" x="150" y="45" text-anchor="middle">Brief descriptor or example</text>
+          </g>
+
+        </svg>
+      </div>
+
+      <!-- Diagram caption / figure note -->
+      <div class="diagram-caption">
+        Figure 1: Horizontal tree map. Replace node labels with your content. Category colors derive from the soul's accent family via <code>--color-category-a/b/c/d</code> tokens.
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

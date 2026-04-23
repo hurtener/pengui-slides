@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en" data-pengui-medium="print">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      /* Soul tokens are injected here by the recipe generator */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .slide {
+      width: 1240px;
+      height: 1754px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-normal);
+      line-height: var(--leading-body);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Page header ─────────────────────────────────────────────── */
+    .page-header {
+      margin-bottom: var(--space-xl);
+      padding-bottom: var(--space-lg);
+      border-bottom: var(--border-width) solid var(--color-border);
+      flex-shrink: 0;
+    }
+
+    .page-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      color: var(--color-accent-primary);
+      letter-spacing: var(--letter-spacing-heading);
+      text-transform: uppercase;
+      margin-bottom: var(--space-sm);
+    }
+
+    .page-heading {
+      font-family: var(--font-display);
+      font-size: var(--text-h1);
+      font-weight: var(--weight-bold);
+      letter-spacing: var(--letter-spacing-heading);
+      line-height: var(--line-height-heading);
+      color: var(--color-text-primary);
+    }
+
+    /* ── Body text ───────────────────────────────────────────────── */
+    .body-text {
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      line-height: var(--leading-body);
+      margin-bottom: var(--space-xl);
+      flex-shrink: 0;
+    }
+
+    /* ── Chart wrapper ───────────────────────────────────────────── */
+    .chart-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .chart-title {
+      font-family: var(--font-display);
+      font-size: var(--text-h3);
+      font-weight: var(--weight-medium);
+      color: var(--color-text-primary);
+      margin-bottom: var(--space-md);
+    }
+
+    .chart-container {
+      flex: 1;
+      background: var(--color-surface);
+      border-radius: var(--radius-card);
+      border: var(--border-width) solid var(--color-border);
+      padding: var(--space-lg);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    /* SVG fills container */
+    .chart-svg {
+      flex: 1;
+      width: 100%;
+      min-height: 0;
+    }
+
+    /* ── Chart caption ───────────────────────────────────────────── */
+    .chart-caption {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      color: var(--color-text-tertiary);
+      margin-top: var(--space-md);
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    /*
+     * Bar chart conventions:
+     * - viewBox="0 0 960 520"
+     * - Chart area: x 80–920, y 20–420  (width 840, height 400)
+     * - X-axis at y=420, Y-axis at x=80
+     * - 5 bars, each 100px wide with 60px gaps, grouped at x: 120,260,400,540,680
+     * - Bar max height 400px (y=20). Each percent point = 4px height.
+     * - Legend at y=455 (below axis)
+     *
+     * Token conventions:
+     * - Grid and axis: var(--color-border)
+     * - Axis labels: var(--color-text-tertiary), var(--text-caption)
+     * - Value labels above bars: var(--color-text-secondary), var(--text-caption)
+     * - Bar fills: var(--color-category-a/b/c/d) + var(--color-accent-primary)
+     * - Legend swatches: same fill as the corresponding bar
+     *
+     * Swap in your data by:
+     * 1. Adjusting bar heights (y="top of bar" = 420 - value*4, height="value*4")
+     * 2. Updating label text
+     * 3. Keeping fill references on var(--color-*) tokens
+     */
+  </style>
+</head>
+<body>
+  <!-- @slide-meta {"title":"Data Analysis — Vertical Bar Chart","type":"content_chart","narrative":"A polished vertical bar chart with five bars, axis labels, gridlines, value labels on each bar, and a single-series legend. All fills and typography reference soul tokens. The chart demonstrates category performance data with a source note. Replace values, labels, and bar counts to match your dataset.","tags":["chart","data","bar-chart","vertical","visualization","print"]} -->
+  <div class="slide">
+
+    <!-- Page header -->
+    <div class="page-header">
+      <div class="page-label">Section 3.2</div>
+      <h1 class="page-heading">Data Analysis &amp; Trends</h1>
+    </div>
+
+    <!-- Contextual body text — 2–4 sentences situating the chart -->
+    <p class="body-text">
+      The chart below shows performance across five categories for the study period.
+      Values represent the percentage of the maximum baseline score, normalised for
+      fair comparison. Refer to Appendix A for the full dataset and methodology.
+    </p>
+
+    <!-- Chart section -->
+    <div class="chart-wrapper">
+      <div class="chart-title">Category Performance — Q1 2026</div>
+
+      <div class="chart-container">
+        <!--
+          VERTICAL BAR CHART — 5 bars, single series
+          ────────────────────────────────────────────
+          viewBox="0 0 960 520"
+
+          Chart boundaries:
+            Left margin (Y-axis + labels): x 0–80
+            Chart area: x 80–920, y 20–420 (h 400)
+            Legend area: y 455–495
+
+          Bar layout (5 bars, width 100, gap 60):
+            Bar 1 centre: x 150  (x start 100)
+            Bar 2 centre: x 290  (x start 240)
+            Bar 3 centre: x 430  (x start 380)
+            Bar 4 centre: x 570  (x start 520)
+            Bar 5 centre: x 710  (x start 660)
+
+          Y scale: 0–100, each unit = 4px
+            0   → y 420 (axis bottom)
+            25  → y 320
+            50  → y 220
+            75  → y 120
+            100 → y 20
+
+          Bar heights (examples):
+            82% → height 328, top y 92   (420-328=92)
+            64% → height 256, top y 164
+            91% → height 364, top y 56
+            47% → height 188, top y 232
+            73% → height 292, top y 128
+        -->
+        <svg
+          class="chart-svg"
+          viewBox="0 0 960 520"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-label="Vertical bar chart: category performance Q1 2026"
+          role="img"
+        >
+          <style>
+            /* Axes and gridlines */
+            .chart-axis  { stroke: var(--color-border); stroke-width: var(--border-width); }
+            .chart-grid  { stroke: var(--color-border); stroke-width: var(--border-width); stroke-dasharray: 4 4; opacity: 0.6; }
+            /* Axis labels (Y ticks, X category names) */
+            .axis-label  { font-family: var(--font-mono); font-size: var(--text-caption); fill: var(--color-text-tertiary); }
+            /* Value labels above each bar */
+            .value-label { font-family: var(--font-mono); font-size: var(--text-caption); fill: var(--color-text-secondary); font-weight: 600; }
+            /* Y-axis title */
+            .axis-title  { font-family: var(--font-body); font-size: var(--text-caption); fill: var(--color-text-tertiary); font-style: italic; }
+            /* Bar fills — use category token family for visual identity */
+            .bar-1 { fill: var(--color-category-a); }
+            .bar-2 { fill: var(--color-category-b); }
+            .bar-3 { fill: var(--color-category-c); }
+            .bar-4 { fill: var(--color-category-d); }
+            .bar-5 { fill: var(--color-accent-primary); }
+            /* Legend text */
+            .legend-label { font-family: var(--font-body); font-size: var(--text-caption); fill: var(--color-text-secondary); }
+          </style>
+
+          <!-- ── Y-axis title (rotated) ─────────────────────────── -->
+          <text class="axis-title" transform="rotate(-90)" x="-220" y="18" text-anchor="middle">Score (%)</text>
+
+          <!-- ── Horizontal gridlines at 25 / 50 / 75 / 100 ──────── -->
+          <line class="chart-grid" x1="80" y1="320" x2="920" y2="320" />  <!-- 25 -->
+          <line class="chart-grid" x1="80" y1="220" x2="920" y2="220" />  <!-- 50 -->
+          <line class="chart-grid" x1="80" y1="120" x2="920" y2="120" />  <!-- 75 -->
+          <line class="chart-grid" x1="80" y1="20"  x2="920" y2="20"  />  <!-- 100 -->
+
+          <!-- ── Axes ───────────────────────────────────────────── -->
+          <line class="chart-axis" x1="80" y1="20"  x2="80"  y2="420" />  <!-- Y-axis -->
+          <line class="chart-axis" x1="80" y1="420" x2="920" y2="420" />  <!-- X-axis -->
+
+          <!-- ── Y-axis tick labels ─────────────────────────────── -->
+          <text class="axis-label" x="72" y="424" text-anchor="end">0</text>
+          <text class="axis-label" x="72" y="324" text-anchor="end">25</text>
+          <text class="axis-label" x="72" y="224" text-anchor="end">50</text>
+          <text class="axis-label" x="72" y="124" text-anchor="end">75</text>
+          <text class="axis-label" x="72" y="24"  text-anchor="end">100</text>
+
+          <!-- ════════════════════════════════════════════════════ -->
+          <!--  BAR 1 — Category Alpha (82%)                        -->
+          <!-- ════════════════════════════════════════════════════ -->
+          <rect class="bar-1" x="100" y="92" width="100" height="328" rx="4" />
+          <text class="value-label" x="150" y="82" text-anchor="middle">82%</text>
+          <text class="axis-label"  x="150" y="440" text-anchor="middle">Alpha</text>
+
+          <!-- BAR 2 — Category Beta (64%) -->
+          <rect class="bar-2" x="240" y="164" width="100" height="256" rx="4" />
+          <text class="value-label" x="290" y="154" text-anchor="middle">64%</text>
+          <text class="axis-label"  x="290" y="440" text-anchor="middle">Beta</text>
+
+          <!-- BAR 3 — Category Gamma (91%) -->
+          <rect class="bar-3" x="380" y="56" width="100" height="364" rx="4" />
+          <text class="value-label" x="430" y="46" text-anchor="middle">91%</text>
+          <text class="axis-label"  x="430" y="440" text-anchor="middle">Gamma</text>
+
+          <!-- BAR 4 — Category Delta (47%) -->
+          <rect class="bar-4" x="520" y="232" width="100" height="188" rx="4" />
+          <text class="value-label" x="570" y="222" text-anchor="middle">47%</text>
+          <text class="axis-label"  x="570" y="440" text-anchor="middle">Delta</text>
+
+          <!-- BAR 5 — Category Epsilon (73%) -->
+          <rect class="bar-5" x="660" y="128" width="100" height="292" rx="4" />
+          <text class="value-label" x="710" y="118" text-anchor="middle">73%</text>
+          <text class="axis-label"  x="710" y="440" text-anchor="middle">Epsilon</text>
+
+          <!-- ════════════════════════════════════════════════════ -->
+          <!--  LEGEND (required even for single-series charts)    -->
+          <!--  class="legend" satisfies the diagram-legibility    -->
+          <!--  validator's legend-detection heuristic.            -->
+          <!-- ════════════════════════════════════════════════════ -->
+          <g class="legend" transform="translate(80, 465)">
+            <rect class="bar-1" x="0"   y="0" width="14" height="14" rx="2" />
+            <text class="legend-label" x="22" y="12">Alpha</text>
+
+            <rect class="bar-2" x="90"  y="0" width="14" height="14" rx="2" />
+            <text class="legend-label" x="112" y="12">Beta</text>
+
+            <rect class="bar-3" x="180" y="0" width="14" height="14" rx="2" />
+            <text class="legend-label" x="202" y="12">Gamma</text>
+
+            <rect class="bar-4" x="280" y="0" width="14" height="14" rx="2" />
+            <text class="legend-label" x="302" y="12">Delta</text>
+
+            <rect class="bar-5" x="372" y="0" width="14" height="14" rx="2" />
+            <text class="legend-label" x="394" y="12">Epsilon</text>
+          </g>
+
+        </svg>
+      </div>
+
+      <!-- Source note -->
+      <div class="chart-caption">Source: Internal dataset, Q1 2026. Values are illustrative stand-ins — replace with your data.</div>
+    </div>
+
+  </div>
+</body>
+</html>

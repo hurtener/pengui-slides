@@ -92,8 +92,8 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
         const deck = await container.deckService.getDeckSummary(deck_id);
         const sId = soulId(deck.soulId as string);
 
-        // 5. Validate the embedded HTML against the deck's Design Soul
-        const validation = await container.validationService.validateSlide(embeddedHtml, sId);
+        // 5. Validate the embedded HTML against the deck's Design Soul using the deck's format geometry
+        const validation = await container.validationService.validateSlide(embeddedHtml, sId, 'lint', deck.format);
 
         // 6. Store the validation result on the slide
         await container.deckService.updateSlide({

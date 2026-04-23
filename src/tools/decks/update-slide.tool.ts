@@ -111,7 +111,7 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
 
           const deck = await container.deckService.getDeckSummary(deck_id);
           const sId = soulId(deck.soulId as string);
-          validation = await container.validationService.validateSlide(embeddedHtml, sId);
+          validation = await container.validationService.validateSlide(embeddedHtml, sId, 'lint', deck.format);
 
           // Store the validation result on the slide
           await container.deckService.updateSlide({

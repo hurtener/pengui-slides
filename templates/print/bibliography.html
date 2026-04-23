@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en" data-pengui-medium="print">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      /* Soul tokens are injected here by the recipe generator */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .slide {
+      width: 1240px;
+      height: 1754px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-normal);
+      line-height: var(--leading-body);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Page header */
+    .page-header {
+      margin-bottom: var(--space-xxl);
+      padding-bottom: var(--space-lg);
+      border-bottom: var(--border-width) solid var(--color-border);
+      flex-shrink: 0;
+    }
+
+    .page-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      color: var(--color-accent-primary);
+      letter-spacing: var(--letter-spacing-heading);
+      text-transform: uppercase;
+      margin-bottom: var(--space-sm);
+    }
+
+    .page-heading {
+      font-family: var(--font-display);
+      font-size: var(--text-h1);
+      font-weight: var(--weight-bold);
+      letter-spacing: var(--letter-spacing-heading);
+      line-height: var(--line-height-heading);
+      color: var(--color-text-primary);
+    }
+
+    /* Reference list */
+    .ref-list {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-lg);
+      overflow: hidden;
+    }
+
+    /* Individual reference entry */
+    .ref-entry {
+      display: flex;
+      gap: var(--space-md);
+      align-items: flex-start;
+      padding-bottom: var(--space-lg);
+      border-bottom: var(--border-width) solid var(--color-border);
+    }
+
+    .ref-entry:last-child {
+      border-bottom: none;
+    }
+
+    /* Reference number */
+    .ref-number {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-bold);
+      color: var(--color-accent-primary);
+      min-width: var(--space-xxl);
+      flex-shrink: 0;
+      padding-top: var(--space-xs);
+    }
+
+    /* APA-style reference body */
+    .ref-body {
+      flex: 1;
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      line-height: var(--leading-body);
+    }
+
+    /* Author names — slightly more prominent */
+    .ref-authors {
+      color: var(--color-text-primary);
+    }
+
+    /* Publication year */
+    .ref-year {
+      color: var(--color-text-primary);
+      font-weight: var(--weight-medium);
+    }
+
+    /* Journal / book title — italic via font-style */
+    .ref-source {
+      font-style: italic;
+    }
+
+    /* DOI / URL — monospace, subtle */
+    .ref-doi {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      color: var(--color-accent-primary);
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <!-- @slide-meta {"title":"Bibliography","type":"bibliography","narrative":"Numbered reference list in APA-like format. Each entry has an index number, author(s), year, title, source, and optional DOI or URL. Add or remove entries to match the document's actual citations.","tags":["bibliography","references","citations","sources","print"]} -->
+  <div class="slide">
+    <!-- Page header -->
+    <div class="page-header">
+      <div class="page-label">References</div>
+      <h1 class="page-heading">Bibliography</h1>
+    </div>
+
+    <!-- Reference list — follow APA 7th edition format. Remove or add entries as needed. -->
+    <div class="ref-list">
+      <div class="ref-entry">
+        <div class="ref-number">[1]</div>
+        <div class="ref-body">
+          <span class="ref-authors">Author, A. A., &amp; Author, B. B.</span>
+          (<span class="ref-year">2022</span>).
+          Title of the journal article in sentence case.
+          <span class="ref-source">Journal of Relevant Studies, 14</span>(3), 45–62.
+          <div class="ref-doi">https://doi.org/10.0000/example.2022.0001</div>
+        </div>
+      </div>
+
+      <div class="ref-entry">
+        <div class="ref-number">[2]</div>
+        <div class="ref-body">
+          <span class="ref-authors">Author, C. C.</span>
+          (<span class="ref-year">2020</span>).
+          <span class="ref-source">Title of the Book: Subtitle if Applicable.</span>
+          Publisher Name.
+        </div>
+      </div>
+
+      <div class="ref-entry">
+        <div class="ref-number">[3]</div>
+        <div class="ref-body">
+          <span class="ref-authors">Author, D. D., Author, E. E., &amp; Author, F. F.</span>
+          (<span class="ref-year">2019</span>).
+          Chapter title in sentence case. In G. G. Editor (Ed.),
+          <span class="ref-source">Title of the Edited Volume</span> (pp. 112–135). Publisher Name.
+          <div class="ref-doi">https://doi.org/10.0000/example.2019.0003</div>
+        </div>
+      </div>
+
+      <div class="ref-entry">
+        <div class="ref-number">[4]</div>
+        <div class="ref-body">
+          <span class="ref-authors">Organisation Name.</span>
+          (<span class="ref-year">2023</span>).
+          Title of the report or white paper.
+          <span class="ref-source">Organisation Name.</span>
+          <div class="ref-doi">https://www.organisation.example/reports/title-2023</div>
+        </div>
+      </div>
+
+      <div class="ref-entry">
+        <div class="ref-number">[5]</div>
+        <div class="ref-body">
+          <span class="ref-authors">Author, H. H.</span>
+          (<span class="ref-year">2021</span>).
+          Title of conference paper in sentence case.
+          In <span class="ref-source">Proceedings of the International Conference on Topic</span> (pp. 88–97).
+          Conference Publisher.
+        </div>
+      </div>
+
+      <div class="ref-entry">
+        <div class="ref-number">[6]</div>
+        <div class="ref-body">
+          <span class="ref-authors">Author, I. I., &amp; Author, J. J.</span>
+          (<span class="ref-year">2018</span>).
+          Article with a longer title that demonstrates wrapping across multiple lines.
+          <span class="ref-source">Another Journal of Studies, 7</span>(1), 1–28.
+          <div class="ref-doi">https://doi.org/10.0000/example.2018.0006</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

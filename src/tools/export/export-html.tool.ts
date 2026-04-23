@@ -39,6 +39,7 @@ export function registerExportHtmlTool(server: McpServer, container: ServiceCont
           slides,
           summary.title,
           include_navigation ?? false,
+          summary.format,
         );
 
         // Write to output directory

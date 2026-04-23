@@ -17,7 +17,8 @@ describe('End-to-end flow (no MCP)', () => {
     // 2. Approve Design Soul
     const { soul: approved, recipes } = await container.soulService.approve(soul.id);
     expect(approved.status).toBe('approved');
-    expect(recipes).toHaveLength(6);
+    // 6 slide recipes + 11 print recipes = 17 total (SPEC §5.3)
+    expect(recipes).toHaveLength(17);
 
     // 3. Create Deck
     const deck = await container.deckService.createDeck({
@@ -74,9 +75,9 @@ describe('End-to-end flow (no MCP)', () => {
     expect(savedRecipe.name).toBe('My Template');
     expect(savedRecipe.savedFromSlideId).toBe(slide.id);
 
-    // Verify recipe count is now 7 (6 built-in + 1 user-saved)
+    // Verify recipe count is now 18 (6 slide built-in + 11 print built-in + 1 user-saved)
     const { recipes: allRecipes } = await container.soulService.get(soul.id, true);
-    expect(allRecipes).toHaveLength(7);
+    expect(allRecipes).toHaveLength(18);
 
     // 6. Get Deck Summary
     const summary = await container.deckService.getDeckSummary(deck.id as string);

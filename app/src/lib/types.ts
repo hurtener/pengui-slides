@@ -87,6 +87,14 @@ export interface SlideSummary {
   styleScore?: number;
 }
 
+// Format types (Wave 2B addition — mirrors src/types/format.ts on the backend).
+export type FormatKind =
+  | 'slides_16_9'
+  | 'print_a4_portrait'
+  | 'print_letter_portrait';
+
+export type FormatMedium = 'slides' | 'print';
+
 export interface DeckSummary {
   id: string;
   soulId: string;
@@ -97,6 +105,22 @@ export interface DeckSummary {
   revisionCount: number;
   createdAt: string;
   updatedAt: string;
+  /** Format of the deck — added in Wave 2 (SPEC §3.3). Absent on legacy decks → treated as slides_16_9. */
+  format?: FormatKind;
+}
+
+/** Export result from export_pdf / export_pptx / export_html. */
+export interface ExportResult {
+  file_path: string;
+  filename: string;
+  file_size_bytes: number;
+  slide_count: number;
+  mime_type: string;
+  resource?: {
+    blob?: string; // base64-encoded bytes
+    uri?: string;
+    mimeType?: string;
+  };
 }
 
 export interface EditorThumbnail {

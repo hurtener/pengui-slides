@@ -26,9 +26,11 @@ export function structuredResponse(
   };
 }
 
-export function errorResponse(message: string, code?: string) {
+export function errorResponse(message: string, code?: string, details?: Record<string, unknown>) {
+  const body: Record<string, unknown> = { error: true, code, message };
+  if (details) body.details = details;
   return {
-    content: [{ type: 'text' as const, text: JSON.stringify({ error: true, code, message }) }],
+    content: [{ type: 'text' as const, text: JSON.stringify(body) }],
     isError: true as const,
   };
 }

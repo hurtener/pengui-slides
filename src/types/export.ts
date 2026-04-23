@@ -29,6 +29,10 @@ export interface PreviewOptions {
   height: number;
   format: ImageFormat;
   quality?: number;
+  /** Native canvas width of the slide being scaled down (from format geometry). */
+  nativeWidth?: number;
+  /** Native canvas height of the slide being scaled down (from format geometry). */
+  nativeHeight?: number;
 }
 
 export const DEFAULT_PREVIEW_OPTIONS: PreviewOptions = {

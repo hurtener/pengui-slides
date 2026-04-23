@@ -35,7 +35,12 @@ export function registerExportPdfTool(server: McpServer, container: ServiceConta
         );
         await validateSlidesForExport(container, deck_id, summary.soulId as string, slides);
 
-        const result = await container.renderService.exportPdf(slides, summary.title, mode ?? undefined);
+        const result = await container.renderService.exportPdf(
+          slides,
+          summary.title,
+          mode ?? undefined,
+          summary.format,
+        );
 
         // Write to output directory
         const outputDir = container.config.outputDir;
@@ -43,18 +48,43 @@ export function registerExportPdfTool(server: McpServer, container: ServiceConta
         const filePath = path.join(outputDir, result.filename);
         fs.writeFileSync(filePath, result.data);
 
-        const metadata = {
+        // Surface page-chrome metadata and any warnings from the export
+        const metadata: {
+          file_path: string;
+          filename: string;
+          file_size_bytes: number;
+          slide_count: number;
+          mime_type: string;
+          page_chrome_applied: boolean;
+          page_chrome_mode: string;
+          warnings?: string[];
+        } = {
           file_path: filePath,
           filename: result.filename,
           file_size_bytes: result.fileSizeBytes,
           slide_count: result.slideCount,
           mime_type: result.mimeType,
+          page_chrome_applied: result.pageChromeApplied,
+          page_chrome_mode: result.pageChromeMode,
         };
+
+        if (result.warnings.length > 0) {
+          metadata.warnings = result.warnings;
+        }
+
+        // Surface malformed @page-chrome JSON as a dedicated warning key
+        const invalidJsonWarnings = result.warnings.filter((w) =>
+          w.includes('@page-chrome JSON is malformed'),
+        );
+        const responseObject: Record<string, unknown> = { ...metadata };
+        if (invalidJsonWarnings.length > 0) {
+          responseObject.page_chrome_invalid_json = invalidJsonWarnings;
+        }
 
         if (include_data) {
           return {
             content: [
-              { type: 'text' as const, text: JSON.stringify(metadata, null, 2) },
+              { type: 'text' as const, text: JSON.stringify(responseObject, null, 2) },
               {
                 type: 'resource' as const,
                 resource: {
@@ -67,7 +97,7 @@ export function registerExportPdfTool(server: McpServer, container: ServiceConta
           };
         }
 
-        return textResponse(metadata);
+        return textResponse(responseObject);
       } catch (error) {
         return handleToolError(error);
       }

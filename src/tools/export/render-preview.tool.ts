@@ -1,14 +1,20 @@
 /**
  * MCP Tool: render_preview
  *
- * Renders preview thumbnails for slides in a deck.
+ * Renders preview thumbnails for slides in a deck. Thumbnail dimensions
+ * are derived from the deck's format geometry so print decks produce
+ * portrait thumbnails and slide decks produce 16:9 thumbnails.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServiceContainer } from '../../container.js';
+import { getFormat } from '../../domain/formats/format-registry.js';
 import { textResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
+
+/** Target thumbnail short-edge in pixels. Width for landscape, height for portrait. */
+const THUMBNAIL_SHORT_EDGE = 270;
 
 export function registerRenderPreviewTool(server: McpServer, container: ServiceContainer): void {
   server.registerTool(
@@ -19,29 +25,41 @@ export function registerRenderPreviewTool(server: McpServer, container: ServiceC
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to render previews for.'),
         slides: z.array(z.string()).nullish().describe('Specific slide IDs to render. If omitted, renders all slides.'),
-        thumbnail_width: z.number().nullish().describe('Width of the thumbnail in pixels. Defaults to config preview width.'),
+        thumbnail_width: z.number().nullish().describe('Width of the thumbnail in pixels. Defaults to a format-appropriate size.'),
       }),
     },
     async ({ deck_id, slides: slideIds, thumbnail_width }) => {
       try {
-        // Get the deck summary to retrieve slide info
         const summary = await container.deckService.getDeckSummary(deck_id);
+        const format = getFormat(summary.format);
+        const { widthPx, heightPx, thumbnailAspect } = format.geometry;
 
-        // Get the full slide objects
+        // Derive thumbnail dimensions from the format's thumbnail aspect ratio.
+        // When the caller overrides width, preserve the format's aspect ratio for height.
+        let thumbWidth: number;
+        let thumbHeight: number;
+        if (thumbnail_width != null) {
+          thumbWidth = thumbnail_width;
+          thumbHeight = Math.round(thumbnail_width / thumbnailAspect);
+        } else {
+          // For landscape (slides): THUMBNAIL_SHORT_EDGE is the height.
+          // For portrait (print): THUMBNAIL_SHORT_EDGE is still the height, giving a
+          // narrower portrait thumbnail (~192px wide for A4, ~196px wide for Letter).
+          thumbHeight = THUMBNAIL_SHORT_EDGE;
+          thumbWidth = Math.round(THUMBNAIL_SHORT_EDGE * thumbnailAspect);
+        }
+
         const allSlideIds = slideIds ?? summary.slides.map((s) => s.id as string);
         const slideObjects = await Promise.all(
           allSlideIds.map((id) => container.deckService.getSlide(id)),
         );
 
-        // Build preview options
-        const previewOptions: { width?: number; height?: number } = {};
-        if (thumbnail_width != null) {
-          previewOptions.width = thumbnail_width;
-          // Maintain 16:9 aspect ratio
-          previewOptions.height = Math.round(thumbnail_width * 9 / 16);
-        }
-
-        const previews = await container.renderService.renderPreview(slideObjects, previewOptions);
+        const previews = await container.renderService.renderPreview(slideObjects, {
+          width: thumbWidth,
+          height: thumbHeight,
+          nativeWidth: widthPx,
+          nativeHeight: heightPx,
+        });
 
         return textResponse({
           previews: previews.map((p) => ({

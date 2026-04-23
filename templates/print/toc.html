@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en" data-pengui-medium="print">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      /* Soul tokens are injected here by the recipe generator */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .slide {
+      width: 1240px;
+      height: 1754px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-normal);
+      line-height: var(--leading-body);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .toc-header {
+      margin-bottom: var(--space-xxxl);
+      padding-bottom: var(--space-lg);
+      border-bottom: var(--border-width) solid var(--color-border);
+    }
+
+    .toc-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      color: var(--color-accent-primary);
+      letter-spacing: var(--letter-spacing-heading);
+      text-transform: uppercase;
+      margin-bottom: var(--space-sm);
+    }
+
+    .toc-title {
+      font-family: var(--font-display);
+      font-size: var(--text-h1);
+      font-weight: var(--weight-bold);
+      letter-spacing: var(--letter-spacing-heading);
+      color: var(--color-text-primary);
+    }
+
+    /* TOC entry list */
+    .toc-list {
+      list-style: none;
+    }
+
+    .toc-entry {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-sm);
+      margin-bottom: var(--space-lg);
+    }
+
+    .toc-number {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-bold);
+      color: var(--color-accent-primary);
+      min-width: var(--space-xxl);
+      flex-shrink: 0;
+    }
+
+    .toc-entry-title {
+      font-size: var(--text-h3);
+      font-weight: var(--weight-medium);
+      color: var(--color-text-primary);
+      flex: 1;
+    }
+
+    /* Dotted leader between title and page number */
+    .toc-leader {
+      flex: 1;
+      border-bottom: var(--border-width) dotted var(--color-border);
+      margin-bottom: var(--space-xs);
+      min-width: var(--space-lg);
+    }
+
+    .toc-page {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      color: var(--color-text-tertiary);
+      flex-shrink: 0;
+      min-width: var(--space-xxl);
+      text-align: right;
+    }
+
+    /* Sub-entry (optional) — slightly indented, smaller */
+    .toc-sub {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-sm);
+      margin-bottom: var(--space-md);
+      padding-left: var(--space-xxl);
+    }
+
+    .toc-sub-title {
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+  <!-- @slide-meta {"title":"Table of Contents","type":"toc","narrative":"Table of contents page with numbered entries and dotted leaders to page numbers. Sub-entries are indented below main sections. Adjust entries and page numbers to match the document outline.","tags":["toc","navigation","index","print"]} -->
+  <div class="slide">
+    <!-- TOC header -->
+    <div class="toc-header">
+      <div class="toc-label">Contents</div>
+      <h1 class="toc-title">Table of Contents</h1>
+    </div>
+
+    <!-- TOC entry list — add or remove entries as needed -->
+    <ol class="toc-list">
+      <!-- Section 1 -->
+      <li class="toc-entry">
+        <span class="toc-number">01</span>
+        <span class="toc-entry-title">Introduction &amp; Overview</span>
+        <span class="toc-leader"></span>
+        <span class="toc-page">3</span>
+      </li>
+
+      <!-- Section 2 with a sub-entry -->
+      <li class="toc-entry">
+        <span class="toc-number">02</span>
+        <span class="toc-entry-title">Core Concepts</span>
+        <span class="toc-leader"></span>
+        <span class="toc-page">7</span>
+      </li>
+      <!-- Sub-entry — remove the entire block if not needed -->
+      <li class="toc-sub">
+        <span class="toc-sub-title">2.1 &nbsp;Foundational Principles</span>
+        <span class="toc-leader"></span>
+        <span class="toc-page">8</span>
+      </li>
+      <li class="toc-sub">
+        <span class="toc-sub-title">2.2 &nbsp;Key Terminology</span>
+        <span class="toc-leader"></span>
+        <span class="toc-page">11</span>
+      </li>
+
+      <!-- Section 3 -->
+      <li class="toc-entry">
+        <span class="toc-number">03</span>
+        <span class="toc-entry-title">Analysis &amp; Findings</span>
+        <span class="toc-leader"></span>
+        <span class="toc-page">15</span>
+      </li>
+
+      <!-- Section 4 -->
+      <li class="toc-entry">
+        <span class="toc-number">04</span>
+        <span class="toc-entry-title">Case Studies</span>
+        <span class="toc-leader"></span>
+        <span class="toc-page">22</span>
+      </li>
+
+      <!-- Section 5 -->
+      <li class="toc-entry">
+        <span class="toc-number">05</span>
+        <span class="toc-entry-title">Summary &amp; Conclusions</span>
+        <span class="toc-leader"></span>
+        <span class="toc-page">31</span>
+      </li>
+
+      <!-- Section 6 -->
+      <li class="toc-entry">
+        <span class="toc-number">06</span>
+        <span class="toc-entry-title">Bibliography &amp; References</span>
+        <span class="toc-leader"></span>
+        <span class="toc-page">35</span>
+      </li>
+    </ol>
+  </div>
+</body>
+</html>

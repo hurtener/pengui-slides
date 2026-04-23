@@ -74,6 +74,7 @@ export function registerGetDesignSoulTool(
             description: r.description,
             tags: r.tags,
             source: r.source,
+            medium: r.medium,
             html: r.html,
           }));
         }

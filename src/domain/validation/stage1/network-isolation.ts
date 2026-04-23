@@ -39,6 +39,48 @@ function isDataUri(url: string): boolean {
   return url.trim().toLowerCase().startsWith('data:');
 }
 
+/**
+ * URLs that are allowed because they are namespace identifiers, not
+ * network references. SVG and XLink xmlns values appear in HTML/SVG
+ * markup but the browser never fetches them.
+ */
+const ALLOWED_NAMESPACE_URLS = new Set<string>([
+  'http://www.w3.org/2000/svg',
+  'http://www.w3.org/1999/xlink',
+  'http://www.w3.org/1999/xhtml',
+  'http://www.w3.org/XML/1998/namespace',
+  'http://www.w3.org/2000/svg/',
+]);
+
+function isAllowedNamespaceUrl(url: string): boolean {
+  return ALLOWED_NAMESPACE_URLS.has(url.trim().toLowerCase());
+}
+
+/**
+ * Find character spans inside `xmlns` (or `xmlns:foo`) attribute values,
+ * which hold namespace identifiers that the browser never fetches. Any
+ * URL match falling inside one of these spans is markup, not network.
+ */
+function findXmlnsSpans(html: string): Array<[number, number]> {
+  const spans: Array<[number, number]> = [];
+  const re = /\bxmlns(?::[a-zA-Z0-9_-]+)?\s*=\s*"([^"]*)"|\bxmlns(?::[a-zA-Z0-9_-]+)?\s*=\s*'([^']*)'/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const valueStart = m.index + m[0].lastIndexOf(m[1] ?? m[2] ?? '');
+    const valueEnd = valueStart + (m[1] ?? m[2] ?? '').length;
+    spans.push([valueStart, valueEnd]);
+  }
+  return spans;
+}
+
+function isInsideSpan(matchIndex: number, matchLength: number, spans: Array<[number, number]>): boolean {
+  const matchEnd = matchIndex + matchLength;
+  for (const [start, end] of spans) {
+    if (matchIndex >= start && matchEnd <= end) return true;
+  }
+  return false;
+}
+
 export class NetworkIsolationCheck implements Stage1Check {
   readonly id = 'network-isolation';
   readonly name = 'Network Isolation';
@@ -46,6 +88,7 @@ export class NetworkIsolationCheck implements Stage1Check {
   run(html: string, _soulTokenNames: string[], _allowedFonts: string[]): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
     const seen = new Set<string>();
+    const xmlnsSpans = findXmlnsSpans(html);
 
     // Check attribute-level patterns (more specific, better messages)
     for (const [pattern, description] of ATTRIBUTE_URL_PATTERNS) {
@@ -79,6 +122,9 @@ export class NetworkIsolationCheck implements Stage1Check {
       while ((match = pattern.exec(html)) !== null) {
         const url = match[0];
         if (isDataUri(url)) continue;
+        // Skip XML namespace identifiers — they are markup, not network references.
+        if (isAllowedNamespaceUrl(url)) continue;
+        if (isInsideSpan(match.index, url.length, xmlnsSpans)) continue;
 
         const key = `broad:${url}`;
         if (seen.has(key)) continue;

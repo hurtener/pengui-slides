@@ -3,6 +3,8 @@ import { z } from 'zod';
 import type { ServiceContainer } from '../../container.js';
 import { textResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
+import { isPrintFormat } from '../../domain/formats/format-registry.js';
+import { FormatNotExportableError } from '../../types/errors.js';
 import {
   ensureSlidesReadyForEditableExport,
   validateSlidesForExport,
@@ -21,6 +23,9 @@ export function registerExportGoogleSlidesTool(server: McpServer, container: Ser
     async ({ deck_id }) => {
       try {
         const summary = await container.deckService.getDeckSummary(deck_id);
+        if (isPrintFormat(summary.format)) {
+          throw new FormatNotExportableError(summary.format, 'export_google_slides', 'export_pdf');
+        }
         const slides = await Promise.all(
           summary.slides.map((slideSummary) => container.deckService.getSlide(slideSummary.id as string)),
         );

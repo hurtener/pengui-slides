@@ -5,13 +5,18 @@
  * the provided slide HTML. Returns aggregated issues and elapsed time.
  */
 
-import type { Stage1Check, ValidationIssue } from '../../../types/validation.js';
+import type {
+  Stage1Check,
+  ValidationContext,
+  ValidationIssue,
+} from '../../../types/validation.js';
 import { TokenComplianceCheck } from './token-compliance.js';
 import { FontComplianceCheck } from './font-compliance.js';
 import { SpacingComplianceCheck } from './spacing-compliance.js';
 import { StructuralCheck } from './structural-check.js';
 import { NetworkIsolationCheck } from './network-isolation.js';
 import { SafeAreaCheck } from './safe-area-check.js';
+import { DiagramLegibilityCheck } from './diagram-legibility.js';
 
 export interface Stage1Result {
   issues: ValidationIssue[];
@@ -29,15 +34,21 @@ export class Stage1Runner {
       new StructuralCheck(),
       new NetworkIsolationCheck(),
       new SafeAreaCheck(),
+      new DiagramLegibilityCheck(),
     ];
   }
 
-  run(html: string, soulTokenNames: string[], allowedFonts: string[]): Stage1Result {
+  run(
+    html: string,
+    soulTokenNames: string[],
+    allowedFonts: string[],
+    context?: ValidationContext,
+  ): Stage1Result {
     const start = performance.now();
     const issues: ValidationIssue[] = [];
 
     for (const check of this.checks) {
-      const checkIssues = check.run(html, soulTokenNames, allowedFonts);
+      const checkIssues = check.run(html, soulTokenNames, allowedFonts, context);
       issues.push(...checkIssues);
     }
 

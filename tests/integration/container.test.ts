@@ -36,7 +36,8 @@ describe('createContainer', () => {
     // Approve it
     const { soul: approved, recipes } = await container.soulService.approve(soul.id);
     expect(approved.status).toBe('approved');
-    expect(recipes.length).toBe(6);
+    // 6 slide + 11 print = 17 total (SPEC §5.3)
+    expect(recipes.length).toBe(17);
 
     // Retrieve it
     const { soul: retrieved } = await container.soulService.get(soul.id);

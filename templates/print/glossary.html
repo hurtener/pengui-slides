@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" data-pengui-medium="print">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      /* Soul tokens are injected here by the recipe generator */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .slide {
+      width: 1240px;
+      height: 1754px;
+      padding: var(--space-safe-area);
+      background: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-normal);
+      line-height: var(--leading-body);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Page header */
+    .page-header {
+      margin-bottom: var(--space-xxl);
+      padding-bottom: var(--space-lg);
+      border-bottom: var(--border-width) solid var(--color-border);
+      flex-shrink: 0;
+    }
+
+    .page-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      color: var(--color-accent-primary);
+      letter-spacing: var(--letter-spacing-heading);
+      text-transform: uppercase;
+      margin-bottom: var(--space-sm);
+    }
+
+    .page-heading {
+      font-family: var(--font-display);
+      font-size: var(--text-h1);
+      font-weight: var(--weight-bold);
+      letter-spacing: var(--letter-spacing-heading);
+      line-height: var(--line-height-heading);
+      color: var(--color-text-primary);
+    }
+
+    /* Glossary list */
+    .glossary-list {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-lg);
+      overflow: hidden;
+    }
+
+    /* Each term-definition entry */
+    .glossary-entry {
+      display: flex;
+      gap: var(--space-md);
+      align-items: baseline;
+      padding-bottom: var(--space-lg);
+      border-bottom: var(--border-width) solid var(--color-border);
+    }
+
+    .glossary-entry:last-child {
+      border-bottom: none;
+    }
+
+    /* Term — bold, accent-colored label */
+    .glossary-term {
+      font-weight: var(--weight-bold);
+      color: var(--color-text-primary);
+      font-size: var(--text-body);
+      min-width: calc(var(--space-xxxl) * 2);
+      flex-shrink: 0;
+    }
+
+    /* Dash separator */
+    .glossary-sep {
+      color: var(--color-text-tertiary);
+      flex-shrink: 0;
+    }
+
+    /* Definition text */
+    .glossary-def {
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+      line-height: var(--leading-body);
+      flex: 1;
+    }
+
+    /* Alphabetical section break (optional) */
+    .alpha-break {
+      font-family: var(--font-display);
+      font-size: var(--text-h2);
+      font-weight: var(--weight-bold);
+      color: var(--color-accent-primary);
+      margin-bottom: var(--space-md);
+      padding-bottom: var(--space-sm);
+      border-bottom: var(--space-xs) solid var(--color-accent-primary);
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+  <!-- @slide-meta {"title":"Glossary","type":"glossary","narrative":"Term-definition glossary page. Each entry shows a bolded term, an em-dash separator, and its definition. Add alphabetical section breaks when the list spans multiple pages.","tags":["glossary","definitions","terms","reference","print"]} -->
+  <div class="slide">
+    <!-- Page header -->
+    <div class="page-header">
+      <div class="page-label">Reference</div>
+      <h1 class="page-heading">Glossary of Terms</h1>
+    </div>
+
+    <!-- Glossary entries — add, remove, or reorder as needed. Group by letter using .alpha-break. -->
+    <div class="glossary-list">
+      <!-- Optional alphabetical section break -->
+      <div class="alpha-break">A</div>
+
+      <div class="glossary-entry">
+        <span class="glossary-term">Algorithm</span>
+        <span class="glossary-sep">—</span>
+        <span class="glossary-def">A finite sequence of well-defined instructions used to solve a problem or perform a computation.</span>
+      </div>
+
+      <div class="glossary-entry">
+        <span class="glossary-term">Abstraction</span>
+        <span class="glossary-sep">—</span>
+        <span class="glossary-def">The process of simplifying complex systems by focusing on essential properties while omitting unnecessary detail.</span>
+      </div>
+
+      <!-- Alphabetical section break -->
+      <div class="alpha-break">B</div>
+
+      <div class="glossary-entry">
+        <span class="glossary-term">Baseline</span>
+        <span class="glossary-sep">—</span>
+        <span class="glossary-def">A reference value or condition against which subsequent measurements or changes are compared.</span>
+      </div>
+
+      <!-- Alphabetical section break -->
+      <div class="alpha-break">C</div>
+
+      <div class="glossary-entry">
+        <span class="glossary-term">Convergence</span>
+        <span class="glossary-sep">—</span>
+        <span class="glossary-def">The property of a process or sequence that approaches a definite limit as iterations increase.</span>
+      </div>
+
+      <div class="glossary-entry">
+        <span class="glossary-term">Constraint</span>
+        <span class="glossary-sep">—</span>
+        <span class="glossary-def">A limitation or restriction applied to a system, model, or process to bound the solution space.</span>
+      </div>
+
+      <!-- Alphabetical section break -->
+      <div class="alpha-break">D</div>
+
+      <div class="glossary-entry">
+        <span class="glossary-term">Dependency</span>
+        <span class="glossary-sep">—</span>
+        <span class="glossary-def">A relationship in which one component relies on another for its correct operation or completion.</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

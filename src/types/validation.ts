@@ -11,6 +11,8 @@
  * - info: Suggestions for improvement
  */
 
+import type { FormatGeometry } from './format.js';
+
 export type ValidationSeverity = 'error' | 'warning' | 'info';
 export type ValidationStage = 'stage1_lint' | 'stage2_render';
 export type ValidationDepth = 'lint' | 'full';
@@ -94,14 +96,34 @@ export interface ValidationPresentation {
 
 // ── Check Interfaces (Strategy Pattern) ───────────────────────────
 
+/**
+ * Optional third argument to check.run() that carries the deck's format
+ * geometry. Checks that care about dimensions (safe-area, overflow) read
+ * from here; checks that don't may ignore it. When callers omit the
+ * geometry, checks fall back to the SLIDES_16_9 defaults to preserve
+ * pre-v2.0 behavior for existing slide decks.
+ */
+export interface ValidationContext {
+  geometry: FormatGeometry;
+}
+
 export interface Stage1Check {
   readonly id: string;
   readonly name: string;
-  run(html: string, soulTokenNames: string[], allowedFonts: string[]): ValidationIssue[];
+  run(
+    html: string,
+    soulTokenNames: string[],
+    allowedFonts: string[],
+    context?: ValidationContext,
+  ): ValidationIssue[];
 }
 
 export interface Stage2Check {
   readonly id: string;
   readonly name: string;
-  run(page: unknown, soulTokenNames: string[]): Promise<ValidationIssue[]>;
+  run(
+    page: unknown,
+    soulTokenNames: string[],
+    context?: ValidationContext,
+  ): Promise<ValidationIssue[]>;
 }

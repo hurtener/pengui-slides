@@ -4,15 +4,21 @@
     message: string;
   };
 
-  export let title = '';
-  export let tone: 'error' | 'warning' | 'info' = 'info';
-  export let issues: IssueListItem[] = [];
+  interface Props {
+    title?: string;
+    tone?: 'error' | 'warning' | 'info';
+    issues?: IssueListItem[];
+  }
+
+  let { title = '', tone = 'info', issues = [] }: Props = $props();
 </script>
 
-<section class={`issue-group ${tone}`}>
-  <h4>{title}</h4>
+<section class={`issue-group tone-${tone}`}>
+  {#if title}
+    <h4>{title}</h4>
+  {/if}
   <ul>
-    {#each issues as issue}
+    {#each issues as issue (issue.id)}
       <li>{issue.message}</li>
     {/each}
   </ul>
@@ -20,31 +26,38 @@
 
 <style>
   .issue-group {
-    margin-top: 12px;
-    padding: 12px;
-    border-radius: 16px;
+    margin-top: var(--s-3);
+    padding: var(--s-3);
+    border-radius: var(--r-md);
   }
 
-  .issue-group.error {
-    background: rgba(182, 71, 49, 0.1);
+  .tone-error {
+    background: var(--error-tint);
   }
 
-  .issue-group.warning {
-    background: rgba(200, 135, 17, 0.12);
+  .tone-warning {
+    background: var(--warning-tint);
   }
 
-  .issue-group.info {
-    background: rgba(31, 95, 171, 0.1);
+  .tone-info {
+    background: var(--mint-tint);
   }
 
   h4 {
-    margin: 0;
-    font-family: "Iowan Old Style", "Palatino Linotype", serif;
+    margin: 0 0 var(--s-2);
+    font-size: 13px;
     font-weight: 600;
+    color: var(--ink-1);
   }
 
   ul {
-    margin: 8px 0 0;
-    padding-left: 18px;
+    margin: 0;
+    padding-left: var(--s-5);
+    font-size: 13px;
+    color: var(--ink-2);
+  }
+
+  li + li {
+    margin-top: var(--s-1);
   }
 </style>

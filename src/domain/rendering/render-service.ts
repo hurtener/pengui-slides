@@ -11,6 +11,7 @@ import type { Logger } from '../../infrastructure/logger.js';
 import type { AssetService } from '../assets/asset-service.js';
 import type { SoulService } from '../souls/soul-service.js';
 import type { Slide } from '../../types/deck.js';
+import type { FormatKind } from '../../types/format.js';
 import type {
   PreviewResult,
   PreviewOptions,
@@ -21,7 +22,9 @@ import type {
   RenderOptions,
   SlideRenderResult,
 } from '../../types/export.js';
+import type { PdfExportMetadata } from './pdf-exporter.js';
 
+import { getFormat } from '../formats/format-registry.js';
 import { PlaywrightPool } from './playwright-pool.js';
 import { SlideRenderer } from './slide-renderer.js';
 import { PreviewRenderer } from './preview-renderer.js';
@@ -53,10 +56,16 @@ export class RenderService {
 
   /**
    * Render preview thumbnails for the given slides.
+   *
+   * When `format` is provided, the renderer's native canvas dimensions
+   * and thumbnail aspect derive from the format's geometry. This keeps
+   * print deck thumbnails portrait-shaped (A4/Letter) instead of falling
+   * back to the 16:9 defaults.
    */
   async renderPreview(
     slides: Slide[],
     options?: Partial<PreviewOptions>,
+    format?: FormatKind,
   ): Promise<PreviewResult[]> {
     const renderer = this.ensurePreviewRenderer();
 
@@ -66,10 +75,20 @@ export class RenderService {
       html: slide.html,
     }));
 
+    const geometry = format ? getFormat(format).geometry : undefined;
+    const shortEdge = this.config.previewHeight;
+    const defaultWidth = geometry
+      ? Math.round(shortEdge * geometry.thumbnailAspect)
+      : this.config.previewWidth;
+    const defaultHeight = shortEdge;
+
     return renderer.renderPreviews(inputs, {
-      width: this.config.previewWidth,
-      height: this.config.previewHeight,
+      width: defaultWidth,
+      height: defaultHeight,
       format: 'png',
+      ...(geometry
+        ? { nativeWidth: geometry.widthPx, nativeHeight: geometry.heightPx }
+        : {}),
       ...options,
     });
   }
@@ -105,29 +124,39 @@ export class RenderService {
   /**
    * Export slides as a PDF file.
    *
-   * @param mode 'image' renders slides to PNG first; 'direct' uses page.pdf().
+   * @param mode   'image' renders slides to PNG first; 'direct' uses page.pdf().
+   *               Defaults to 'image' for slide formats and 'direct' for print formats.
+   * @param format Optional deck format. When set, the exporter derives page geometry
+   *               from the registry (A4 / Letter / 16:9). Omission falls back to slides_16_9.
    */
   async exportPdf(
     slides: Slide[],
     deckTitle: string,
     mode?: PdfMode,
-  ): Promise<ExportResult> {
+    format?: FormatKind,
+  ): Promise<ExportResult & PdfExportMetadata> {
     const exporter = this.ensurePdfExporter();
-    return exporter.export(slides, deckTitle, mode);
+    return exporter.export(slides, deckTitle, { mode, format });
   }
 
   // ── HTML Export ──────────────────────────────────────────────
 
   /**
    * Export slides as a self-contained HTML file.
+   *
+   * @param format  Optional deck format. When set, the exporter switches
+   *                to print layout (continuous vertical page stack, CSS
+   *                @page rules) for print-medium formats; slide formats
+   *                retain the single-slide scaled-to-viewport layout.
    */
   async exportHtml(
     slides: Slide[],
     deckTitle: string,
     includeNavigation?: boolean,
+    format?: FormatKind,
   ): Promise<ExportResult> {
     const exporter = this.ensureHtmlExporter();
-    return exporter.export(slides, deckTitle, includeNavigation);
+    return exporter.export(slides, deckTitle, { includeNavigation, format });
   }
 
   async renderSlideHtml(
