@@ -59,9 +59,14 @@ import { registerResolveCommentTool } from './comments/resolve-comment.tool.js';
 import { registerGetSessionTool } from './session/get-session.tool.js';
 
 // MCP App tools
-import { registerOpenDeckEditorTool } from './app/open-deck-editor.tool.js';
-import { registerGetEditorStateTool } from './app/get-editor-state.tool.js';
+import { registerApplyBlockEditTool } from './app/apply-block-edit.tool.js';
 import { registerApplyTextEditTool } from './app/apply-text-edit.tool.js';
+import { registerApplyTokenOverrideTool } from './app/apply-token-override.tool.js';
+import { registerGetEditorStateTool } from './app/get-editor-state.tool.js';
+import { registerGetThumbnailTool } from './app/get-thumbnail.tool.js';
+import { registerOpenDeckEditorTool } from './app/open-deck-editor.tool.js';
+import { registerSetActiveWorkspaceTool } from './app/set-active-workspace.tool.js';
+import { registerUploadAssetFromAppTool } from './app/upload-asset-from-app.tool.js';
 
 export function registerAllTools(server: McpServer, container: ServiceContainer): void {
   // Soul tools
@@ -115,8 +120,13 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   // Session tools (v4)
   registerGetSessionTool(server, container);
 
-  // MCP App tools
-  registerOpenDeckEditorTool(server, container);
-  registerGetEditorStateTool(server, container);
+  // MCP App tools (alphabetical)
+  registerApplyBlockEditTool(server, container);
   registerApplyTextEditTool(server, container);
+  registerApplyTokenOverrideTool(server, container);
+  registerGetEditorStateTool(server, container);
+  registerGetThumbnailTool(server, container);
+  registerOpenDeckEditorTool(server, container);
+  registerSetActiveWorkspaceTool(server, container);
+  registerUploadAssetFromAppTool(server, container);
 }
