@@ -23,6 +23,7 @@ import type { PenguiConfig } from '../../config.js';
 import type { Logger } from '../../infrastructure/logger.js';
 import { SoulNotFoundError } from '../../types/errors.js';
 import { getFormat } from '../formats/format-registry.js';
+import { applyDefensiveDefaults, type Injection } from './stage0/defensive-injector.js';
 import { Stage1Runner } from './stage1/stage1-runner.js';
 import { Stage2Runner } from './stage2/stage2-runner.js';
 
@@ -136,16 +137,28 @@ export class ValidationService {
     const geometry: FormatGeometry = getFormat(resolvedFormat).geometry;
     const validationContext: ValidationContext = { geometry, formatKind: resolvedFormat };
 
+    // ── Stage 0: Defensive defaults (sensible-defaults injection) ───
+    // Fills in hygiene defaults (html/body margin reset, * box-sizing,
+    // .slide position:relative + overflow:hidden) if the author's HTML
+    // is missing them. Author rules later in the cascade always win,
+    // so design intent is preserved. Emits info-level notes per
+    // default filled in so the author learns the pattern.
+    const stage0 = applyDefensiveDefaults(html);
+    const stage0Issues: ValidationIssue[] = stage0.injections.map((injection) =>
+      this.buildStage0InfoIssue(injection),
+    );
+    const validationHtml = stage0.html;
+
     // ── Stage 1: Static Lint ────────────────────────────────────────
     const stage1Runner = new Stage1Runner();
-    const stage1Result = stage1Runner.run(html, soulTokenNames, allowedFonts, validationContext);
+    const stage1Result = stage1Runner.run(validationHtml, soulTokenNames, allowedFonts, validationContext);
 
     this.logger.debug('Stage 1 complete', {
       issueCount: stage1Result.issues.length,
       elapsedMs: stage1Result.elapsedMs,
     });
 
-    let allIssues: ValidationIssue[] = [...stage1Result.issues];
+    let allIssues: ValidationIssue[] = [...stage0Issues, ...stage1Result.issues];
     let stage2ElapsedMs: number | undefined;
     let stage2Skipped = true;
 
@@ -163,8 +176,9 @@ export class ValidationService {
         });
         const page = await context.newPage();
 
-        // Load the slide HTML into the page
-        await page.setContent(html, { waitUntil: 'networkidle' });
+        // Load the Stage-0-augmented HTML so the rendered truth matches
+        // what the exporter will produce (both apply defensive defaults).
+        await page.setContent(validationHtml, { waitUntil: 'networkidle' });
 
         const stage2Runner = new Stage2Runner();
         const stage2Result = await stage2Runner.run(page, soulTokenNames, validationContext);
@@ -227,5 +241,28 @@ export class ValidationService {
     });
 
     return result;
+  }
+
+  /**
+   * Convert a Stage 0 injection into an info-level ValidationIssue so
+   * the author sees which defaults the server filled in. Info-severity
+   * so it doesn't block export and has zero style-score impact.
+   */
+  private buildStage0InfoIssue(injection: Injection): ValidationIssue {
+    return {
+      id: `stage0-defensive-${injection.id}`,
+      stage: 'stage1_lint',
+      severity: 'info',
+      rule: 'stage0-defensive-defaults',
+      message:
+        `Pengui auto-injected a defensive default for this slide: ${injection.rule}. ` +
+        `Reason: ${injection.reason} ` +
+        'The injection is low-priority — any explicit rule you author later in the ' +
+        'cascade overrides it. Including the rule explicitly in your slide\'s <style> ' +
+        'block makes the slide portable outside the Pengui render context.',
+      expected: injection.rule,
+      actual: 'rule not declared by author; filled in by stage0 defensive injector',
+      fixSuggestion: `Add "${injection.rule}" to your slide's <style> block to make the slide self-contained.`,
+    };
   }
 }

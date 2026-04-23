@@ -19,6 +19,7 @@
 import type { Logger } from '../../infrastructure/logger.js';
 import type { AssetService } from '../assets/asset-service.js';
 import { resolveAssetRefs } from '../assets/asset-resolver.js';
+import { applyDefensiveDefaults } from '../validation/stage0/defensive-injector.js';
 import type { Slide } from '../../types/deck.js';
 import type { FormatGeometry, FormatKind } from '../../types/format.js';
 import type { ExportResult } from '../../types/export.js';
@@ -102,8 +103,11 @@ export class HtmlExporter {
     includeNavigation: boolean,
     geometry: FormatGeometry = DEFAULT_GEOMETRY,
   ): Promise<string> {
-    // Extract body content and styles from each slide's full HTML document
-    const extracted = slides.map((slide) => this.extractSlideContent(slide.html));
+    // Apply Stage 0 defensive defaults before extraction so the composite
+    // document carries the same hygiene defaults that validation injected.
+    const extracted = slides.map((slide) =>
+      this.extractSlideContent(applyDefensiveDefaults(slide.html).html),
+    );
 
     // Scope each slide's CSS to its section id to prevent cross-slide collisions
     const scopedStyles = extracted

@@ -8,6 +8,7 @@
 import type { Logger } from '../../infrastructure/logger.js';
 import type { AssetService } from '../assets/asset-service.js';
 import { resolveAssetRefs } from '../assets/asset-resolver.js';
+import { applyDefensiveDefaults } from '../validation/stage0/defensive-injector.js';
 import type { PlaywrightPool } from './playwright-pool.js';
 import { sha256 } from '../../infrastructure/hash.js';
 import type {
@@ -63,10 +64,13 @@ export class SlideRenderer {
         height: opts.height,
       });
 
-      // Resolve asset://ID refs to data URIs before rendering
+      // Apply Stage 0 defensive defaults and resolve asset://ID refs
+      // before rendering. Idempotent if the slide already carries the
+      // defensive prelude.
+      const defended = applyDefensiveDefaults(html).html;
       const resolved = this.assetService
-        ? await resolveAssetRefs(html, this.assetService)
-        : html;
+        ? await resolveAssetRefs(defended, this.assetService)
+        : defended;
 
       const cacheKey = this.buildCacheKey(resolved, opts);
       const cached = this.cache.get(cacheKey);

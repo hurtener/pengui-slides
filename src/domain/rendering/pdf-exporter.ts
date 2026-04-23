@@ -31,6 +31,7 @@
 import type { Logger } from '../../infrastructure/logger.js';
 import type { AssetService } from '../assets/asset-service.js';
 import { resolveAssetRefs } from '../assets/asset-resolver.js';
+import { applyDefensiveDefaults } from '../validation/stage0/defensive-injector.js';
 import type { PlaywrightPool } from './playwright-pool.js';
 import type { SlideRenderer } from './slide-renderer.js';
 import type { Slide } from '../../types/deck.js';
@@ -365,9 +366,13 @@ ${imgTags}
     const width = geometry.widthPx;
     const height = geometry.heightPx;
 
+    // Apply Stage 0 defensive defaults before asset resolution so the
+    // composite document has the same hygiene defaults that validation
+    // used — keeps "what you validate" aligned with "what you export".
+    const defendedHtmls = slides.map((s) => applyDefensiveDefaults(s.html).html);
     const resolvedHtmls = this.assetService
-      ? await Promise.all(slides.map((s) => resolveAssetRefs(s.html, this.assetService!)))
-      : slides.map((s) => s.html);
+      ? await Promise.all(defendedHtmls.map((h) => resolveAssetRefs(h, this.assetService!)))
+      : defendedHtmls;
 
     const extracted = resolvedHtmls.map((html) => this.extractSlideContent(html));
 
