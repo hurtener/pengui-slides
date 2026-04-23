@@ -25,18 +25,23 @@ export function registerGetDesignSoulTool(
         'Retrieve a Design Soul by its ID. Optionally include the layout recipes ' +
         '(only available for approved souls) and the generated style guide.',
       inputSchema: z.object({
-        soul_id: z.string().describe('The Design Soul to fetch. Accepts UUID or slug.'),
+        soul_id: z.string().nullish().describe('The Design Soul to fetch. Accepts UUID or slug. Provide either soul_id or soul_ref.'),
+        soul_ref: z.string().nullish().describe('Alias for soul_id — accepts UUID or slug.'),
         include_recipes: BooleanParamSchema
           .describe('Whether to include layout recipes in the response. Defaults to true.'),
         include_style_guide: BooleanParamSchema
           .describe('Whether to include the style guide in the response. Defaults to true.'),
       }),
     },
-    async ({ soul_id, include_recipes, include_style_guide }) => {
+    async ({ soul_id, soul_ref, include_recipes, include_style_guide }) => {
       try {
         const shouldIncludeRecipes = include_recipes ?? true;
+        const ref = soul_id ?? soul_ref;
+        if (!ref) {
+          throw new Error('Either soul_id or soul_ref is required.');
+        }
 
-        const resolvedId = await container.soulService.resolveRefOrThrow(soul_id);
+        const resolvedId = await container.soulService.resolveRefOrThrow(ref);
         const { soul, recipes } = await container.soulService.get(
           resolvedId,
           shouldIncludeRecipes,
