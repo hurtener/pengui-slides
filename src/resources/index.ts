@@ -132,7 +132,10 @@ are documented at \`pengui://docs/charts-and-diagrams\`.
 | \`<!-- @slide-meta {...} -->\` | Valid JSON with at least \`layout\` and \`title\` | structural-check-meta-missing/invalid (error) |
 | \`<div class="slide">\` | Root visual container | structural-check-root-container (error) |
 | \`.slide { width: Wpx; height: Hpx }\` | Frame dimensions — W/H come from the deck's format (see table above) | safe-area-check (warning) — names the deck format in the error message |
+| \`.slide { padding: var(--space-safe-area) }\` | Safe-area inset via token (not a literal) | safe-area-check (error) |
+| \`.slide { position: relative }\` | Required. Makes the slide a positioned ancestor so any absolutely-positioned child (\`position: absolute\` with \`left/top/right/bottom\`) resolves against the slide's padding box. Missing it is a silent layout failure — absolute children escape up to \`<html>\` and fill the viewport, triggering confusing overflow errors that can't be fixed from inside the .slide CSS. | safe-area-check (error) — names the missing property in the message |
 | \`:root { ... }\` with all soul tokens | Token definitions for var() references | Needed for tokens to resolve |
+| \`html, body { margin: 0; padding: 0 }\` | Required. The universal selector \`* { margin: 0 }\` has specificity 0 and does NOT override the browser UA stylesheet's \`body { margin: 8px }\` (specificity 1). Explicit \`html, body\` wins. Without this the slide renders offset by 8px from the viewport origin. | (renderer correctness; not a hard lint) |
 
 ## What NOT to Do
 
@@ -143,6 +146,32 @@ are documented at \`pengui://docs/charts-and-diagrams\`.
 - ❌ Link to Google Fonts or any external URL — network-isolation error
 - ❌ Put raw base64 in img src — upload via \`upload_asset\`, use the \`asset://UUID\` ref
 - ❌ Omit the \`@slide-meta\` comment — the server injects it, but the JSON must be valid
+- ❌ Drop \`position: relative\` from .slide — absolutely-positioned descendants break
+- ❌ Rely on \`* { margin: 0 }\` alone for body reset — declare \`html, body\` explicitly
+
+## Common Pitfalls
+
+Two non-obvious CSS gotchas that waste cycles when discovered at validation time.
+Both are fixed in the canonical template above; this section exists so that a model
+paraphrasing the template (not copying it verbatim) knows which lines are load-bearing.
+
+### 1. \`.slide\` needs \`position: relative\`
+
+Any child you position with \`position: absolute; left/top/right/bottom: ...\` resolves
+against the nearest positioned ancestor. If \`.slide\` is not positioned, the child
+walks up the tree until it hits \`<html>\` — and now its \`top: 96px\` is measured from
+the page origin, not from the slide's padding box. Symptom: your absolutely-positioned
+wrapper reports bounds like \`[0, 0, 1240, 1754]\` instead of sitting inside the safe
+area. The fix is one line: \`.slide { position: relative }\`.
+
+### 2. \`html, body { margin: 0 }\` — the universal \`*\` selector doesn't help
+
+\`* { margin: 0; padding: 0; box-sizing: border-box }\` is a fine reset for ordinary
+elements but CSS specificity has a gotcha: \`*\` has specificity 0, and the browser UA
+stylesheet includes \`body { margin: 8px }\` (specificity 1). The type selector beats
+the universal selector, so without an explicit \`html, body { margin: 0 }\` rule the
+slide renders 8px off. Declare both — \`html, body { margin: 0; padding: 0 }\` — and
+keep \`* { box-sizing: border-box }\` separately.
 
 ## Images in Slides
 

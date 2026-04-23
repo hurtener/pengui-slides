@@ -290,7 +290,10 @@ Quick template — every slide must follow this structure:
 CHECKLIST before submitting:
 [ ] DOCTYPE is the very first thing
 [ ] :root block has ALL soul tokens (get them from get_design_soul)
-[ ] .slide has width:1920px and height:1080px
+[ ] html, body { margin: 0; padding: 0 } — declared EXPLICITLY (the * selector won't override UA body margin)
+[ ] .slide has width/height matching the deck's format (1920×1080 for slides_16_9, 1240×1754 for print_a4_portrait, 1275×1650 for print_letter_portrait)
+[ ] .slide has padding: var(--space-safe-area)
+[ ] .slide has position: relative — REQUIRED so any absolutely-positioned descendants resolve against the slide's box (without it they escape up to <html> and your layout silently breaks)
 [ ] All colors use var(--color-*) — no #hex, no rgb()
 [ ] All padding/margin/gap use var(--space-*) — no literal px
 [ ] All fonts are from the soul's allowedFonts list
