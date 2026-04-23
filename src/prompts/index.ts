@@ -259,7 +259,11 @@ Quick template — every slide must follow this structure:
     :root {
       /* PASTE ALL ~73 CSS TOKENS FROM THE SOUL HERE */
     }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* html/body reset must be explicit — the universal "*" selector has
+       specificity 0 and does NOT override the UA stylesheet's 8px body
+       margin. Declaring html and body explicitly wins. */
+    html, body { margin: 0; padding: 0; }
+    * { box-sizing: border-box; }
     .slide {
       width: 1920px;
       height: 1080px;

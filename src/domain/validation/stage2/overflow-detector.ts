@@ -41,18 +41,31 @@ export class OverflowDetector implements Stage2Check {
     const overflows: OverflowInfo[] = await pwPage.evaluate(
       ([slideW, slideH, inset]: [number, number, number]) => {
         const results: OverflowInfo[] = [];
-        const allElements = document.querySelectorAll('.slide *');
+        const slide = document.querySelector('.slide');
+        if (!slide) return results;
+
+        // Measure all child rects in the SLIDE's coordinate system rather
+        // than the viewport's. This way the check is independent of any
+        // body/html margin, browser UA defaults, or wrapper offsets: the
+        // slide's top-left is always (0, 0) in our measurement frame.
+        const slideRect = slide.getBoundingClientRect();
+        const allElements = slide.querySelectorAll('*');
 
         for (const el of Array.from(allElements)) {
-          const rect = el.getBoundingClientRect();
+          const r = el.getBoundingClientRect();
 
           // Skip zero-size elements
-          if (rect.width === 0 || rect.height === 0) continue;
+          if (r.width === 0 || r.height === 0) continue;
 
-          const overflowsRight = rect.right > slideW - inset;
-          const overflowsBottom = rect.bottom > slideH - inset;
-          const overflowsLeft = rect.left < inset;
-          const overflowsTop = rect.top < inset;
+          const left = r.left - slideRect.left;
+          const top = r.top - slideRect.top;
+          const right = r.right - slideRect.left;
+          const bottom = r.bottom - slideRect.top;
+
+          const overflowsRight = right > slideW - inset;
+          const overflowsBottom = bottom > slideH - inset;
+          const overflowsLeft = left < inset;
+          const overflowsTop = top < inset;
 
           if (overflowsRight || overflowsBottom || overflowsLeft || overflowsTop) {
             results.push({
@@ -60,12 +73,12 @@ export class OverflowDetector implements Stage2Check {
                 el.tagName.toLowerCase() +
                 (el.className ? '.' + String(el.className).split(/\s+/).join('.') : ''),
               rect: {
-                left: Math.round(rect.left),
-                top: Math.round(rect.top),
-                right: Math.round(rect.right),
-                bottom: Math.round(rect.bottom),
-                width: Math.round(rect.width),
-                height: Math.round(rect.height),
+                left: Math.round(left),
+                top: Math.round(top),
+                right: Math.round(right),
+                bottom: Math.round(bottom),
+                width: Math.round(r.width),
+                height: Math.round(r.height),
               },
             });
           }

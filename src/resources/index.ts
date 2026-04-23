@@ -73,8 +73,11 @@ for each slide, and the server stores, validates, and renders them independently
       /* ... all ~73 tokens from the soul ... */
     }
 
-    /* 2. Base reset */
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* 2. Base reset — note body/html are declared explicitly because
+       the universal "*" selector (specificity 0) does not override the
+       browser UA stylesheet's body { margin: 8px } rule. */
+    html, body { margin: 0; padding: 0; }
+    * { box-sizing: border-box; }
 
     /* 3. Slide container — REQUIRED dimensions */
     .slide {
