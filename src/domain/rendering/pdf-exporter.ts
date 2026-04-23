@@ -73,13 +73,19 @@ const CHROME_FALLBACK_COLORS: ChromeColors = {
 };
 
 /**
- * Height of the header and footer strips in the printed document.
- * Sits inside the slide's safe-area padding band (96px on A4) so it does
- * not overlap authored content.
+ * Geometry of the running header / footer strips. Each strip sits
+ * inside the slide's safe-area padding band (96px on A4) so it never
+ * overlaps authored content.
+ *
+ * - PAGE_INSET_PX: vertical distance from the physical page edge. Real
+ *   printed documents inset chrome ~10mm so it doesn't feel cramped.
+ * - STRIP_HEIGHT_PX: height of the chrome strip itself.
+ * - HORIZONTAL_INSET_PX: matches the deck's safe-area inset so the
+ *   running title and page number align visually with body content.
  */
-const CHROME_STRIP_HEIGHT_PX = 36;
-/** Horizontal padding inside each chrome strip. */
-const CHROME_INSET_PX = 32;
+const CHROME_PAGE_INSET_PX = 48;
+const CHROME_STRIP_HEIGHT_PX = 24;
+const CHROME_HORIZONTAL_INSET_PX = 96;
 
 export interface PdfExportOptions {
   mode?: PdfMode;
@@ -402,19 +408,32 @@ ${imgTags}
   .pengui-chrome-header,
   .pengui-chrome-footer {
     position: absolute;
-    left: 0;
-    right: 0;
+    left: ${CHROME_HORIZONTAL_INSET_PX}px;
+    right: ${CHROME_HORIZONTAL_INSET_PX}px;
     height: ${CHROME_STRIP_HEIGHT_PX}px;
-    padding: 0 ${CHROME_INSET_PX}px;
     display: flex;
     align-items: center;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 9pt;
+    font-size: 8.5pt;
+    line-height: 1;
     z-index: 10;
     pointer-events: none;
   }
-  .pengui-chrome-header { top: 0; }
-  .pengui-chrome-footer { bottom: 0; }
+  .pengui-chrome-header { top: ${CHROME_PAGE_INSET_PX}px; }
+  .pengui-chrome-footer { bottom: ${CHROME_PAGE_INSET_PX}px; }
+  .pengui-chrome-running-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .pengui-chrome-page-number {
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+  }
 `
       : '';
 
@@ -507,11 +526,11 @@ ${sections}
     const footerJustify = justifyMap[chrome.footerAlign];
 
     const headerHtml = chrome.runningTitle
-      ? `<div class="pengui-chrome-header" style="color: ${colors.text}; border-bottom: 0.5px solid ${colors.border};"><span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(chrome.runningTitle)}</span></div>`
+      ? `<div class="pengui-chrome-header" style="color: ${colors.textSecondary}; border-bottom: 0.5px solid ${colors.border}; padding-bottom: 8px;"><span class="pengui-chrome-running-title">${this.escapeHtml(chrome.runningTitle)}</span></div>`
       : '';
 
     const footerHtml = chrome.pageNumber
-      ? `<div class="pengui-chrome-footer" style="color: ${colors.textSecondary}; border-top: 0.5px solid ${colors.border}; justify-content: ${footerJustify};"><span>Page ${pageNumber} of ${totalPages}</span></div>`
+      ? `<div class="pengui-chrome-footer" style="color: ${colors.textSecondary}; border-top: 0.5px solid ${colors.border}; padding-top: 8px; justify-content: ${footerJustify};"><span class="pengui-chrome-page-number">${pageNumber} / ${totalPages}</span></div>`
       : '';
 
     return headerHtml + footerHtml;

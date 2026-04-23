@@ -159,8 +159,8 @@ describe('PdfExporter — page chrome (HTML composition strategy)', () => {
       expect(html.match(/<div class="pengui-chrome-header"/g)?.length).toBe(2);
       expect(html.match(/<div class="pengui-chrome-footer"/g)?.length).toBe(2);
       expect(html).toContain('Organic Chemistry');
-      expect(html).toContain('Page 1 of 2');
-      expect(html).toContain('Page 2 of 2');
+      expect(html).toContain('1 / 2');
+      expect(html).toContain('2 / 2');
 
       // page.pdf is called WITHOUT displayHeaderFooter — chrome lives in the body
       expect(pdfSpy).toHaveBeenCalledOnce();
@@ -205,7 +205,7 @@ describe('PdfExporter — page chrome (HTML composition strategy)', () => {
       expect(html.match(/<div class="pengui-chrome-header"/g)?.length).toBe(1);
       expect(html.match(/<div class="pengui-chrome-footer"/g)?.length).toBe(1);
       // The visible page is "Page 1 of 1" — hidden pages don't count
-      expect(html).toContain('Page 1 of 1');
+      expect(html).toContain('1 / 1');
       expect(html).toContain('My Deck');
     });
   });
@@ -243,8 +243,8 @@ describe('PdfExporter — page chrome (HTML composition strategy)', () => {
       // Only 2 chrome bars (the mid-deck hidden page is skipped)
       expect(html.match(/<div class="pengui-chrome-header"/g)?.length).toBe(2);
       // Page numbers count visible pages only: 1 of 2, 2 of 2
-      expect(html).toContain('Page 1 of 2');
-      expect(html).toContain('Page 2 of 2');
+      expect(html).toContain('1 / 2');
+      expect(html).toContain('2 / 2');
     });
   });
 
