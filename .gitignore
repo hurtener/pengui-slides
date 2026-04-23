@@ -14,3 +14,5 @@ output/
 .pengui-data/
 output/
 files/
+# v4 agent worktree artefacts
+.claude/
