@@ -40,9 +40,11 @@ export class SafeAreaCheck implements Stage1Check {
     let foundWidth = false;
     let foundHeight = false;
     let foundSafeAreaInset = false;
+    let foundPositionRelative = false;
     let actualWidth: string | undefined;
     let actualHeight: string | undefined;
     let actualSafeAreaInset: string | undefined;
+    let actualPosition: string | undefined;
 
     $('style').each((_i, el) => {
       const cssText = $(el).text();
@@ -80,6 +82,11 @@ export class SafeAreaCheck implements Stage1Check {
             actualSafeAreaInset = decl.value.trim();
           }
         });
+
+        rule.walkDecls('position', (decl) => {
+          actualPosition = decl.value.trim();
+          if (actualPosition === 'relative') foundPositionRelative = true;
+        });
       });
     });
 
@@ -102,6 +109,11 @@ export class SafeAreaCheck implements Stage1Check {
         if (paddingMatch && paddingMatch[1].includes('--space-safe-area')) {
           foundSafeAreaInset = true;
           actualSafeAreaInset = paddingMatch[1].trim();
+        }
+        const positionMatch = /(?:^|;)\s*position\s*:\s*([^;]+)/i.exec(inlineStyle);
+        if (positionMatch) {
+          actualPosition = positionMatch[1].trim();
+          if (actualPosition === 'relative') foundPositionRelative = true;
         }
       }
     }
@@ -172,6 +184,26 @@ export class SafeAreaCheck implements Stage1Check {
         expected: EXPECTED_SAFE_AREA_TOKEN,
         actual: actualSafeAreaInset,
         fixSuggestion: 'Use var(--space-safe-area) for the slide padding to preserve the required inset.',
+      });
+    }
+
+    if (!foundPositionRelative) {
+      const actual = actualPosition ?? 'static (browser default)';
+      issues.push({
+        id: `${this.id}-position-relative-missing`,
+        stage: 'stage1_lint',
+        severity: 'error',
+        rule: this.id,
+        message:
+          `Root .slide container is missing "position: relative". Current: ${actual}. ` +
+          'Without it, absolutely-positioned descendants escape up to the <html> root ' +
+          'and end up filling the viewport instead of being positioned inside the .slide ' +
+          "box — which then surfaces as false-looking safe-area / overflow errors.",
+        expected: 'position: relative',
+        actual,
+        fixSuggestion:
+          'Add "position: relative" to the .slide CSS rule so absolutely-positioned ' +
+          'descendants resolve against the .slide padding box.',
       });
     }
 

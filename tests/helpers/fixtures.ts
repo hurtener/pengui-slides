@@ -133,6 +133,7 @@ export function makeValidPrintA4Html(content: string = 'Page content'): string {
       color: var(--color-text-primary);
       font-family: var(--font-body);
       font-size: var(--text-body);
+      position: relative;
     }
   </style>
 </head>
@@ -173,6 +174,7 @@ export function makeValidSlideHtml(content: string = 'Hello World'): string {
       color: var(--color-text-primary);
       font-family: var(--font-body);
       font-size: var(--text-body);
+      position: relative;
     }
   </style>
 </head>

@@ -9,7 +9,7 @@ describe('SafeAreaCheck', () => {
   it('passes with correct 1920x1080 dimensions', () => {
     const html = `
       <style>
-        .slide { width: 1920px; height: 1080px; padding: var(--space-safe-area); }
+        .slide { width: 1920px; height: 1080px; padding: var(--space-safe-area); position: relative; }
       </style>
       <div class="slide">OK</div>`;
 
@@ -20,7 +20,7 @@ describe('SafeAreaCheck', () => {
   it('passes with dimensions in div.slide selector', () => {
     const html = `
       <style>
-        div.slide { width: 1920px; height: 1080px; padding: var(--space-safe-area); }
+        div.slide { width: 1920px; height: 1080px; padding: var(--space-safe-area); position: relative; }
       </style>
       <div class="slide">OK</div>`;
 
@@ -81,7 +81,7 @@ describe('SafeAreaCheck', () => {
   });
 
   it('recognizes inline style on .slide element', () => {
-    const html = `<div class="slide" style="width: 1920px; height: 1080px; padding: var(--space-safe-area);">OK</div>`;
+    const html = `<div class="slide" style="width: 1920px; height: 1080px; padding: var(--space-safe-area); position: relative;">OK</div>`;
 
     const issues = check.run(html, tokenNames, allowedFonts);
     expect(issues).toHaveLength(0);
