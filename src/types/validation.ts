@@ -11,7 +11,7 @@
  * - info: Suggestions for improvement
  */
 
-import type { FormatGeometry } from './format.js';
+import type { FormatGeometry, FormatKind } from './format.js';
 
 export type ValidationSeverity = 'error' | 'warning' | 'info';
 export type ValidationStage = 'stage1_lint' | 'stage2_render';
@@ -105,6 +105,13 @@ export interface ValidationPresentation {
  */
 export interface ValidationContext {
   geometry: FormatGeometry;
+  /**
+   * The deck's format kind (e.g. `print_a4_portrait`). Included so error
+   * messages can name the format explicitly — "Expected 1240×1754 because
+   * the deck's format is print_a4_portrait" — rather than leaving the
+   * author to guess why the expected dimensions are what they are.
+   */
+  formatKind?: FormatKind;
 }
 
 export interface Stage1Check {

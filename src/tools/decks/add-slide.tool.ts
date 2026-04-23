@@ -50,7 +50,8 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
     'add_slide',
     {
       title: 'Add Slide',
-      description: 'Add a new slide to a deck. Returns the slide ID, position, updated slide count, and validation results.',
+      description:
+        'Add a new slide to a deck. The slide HTML must declare .slide dimensions that match the DECK FORMAT: 1920×1080 for slides_16_9 (default), 1240×1754 for print_a4_portrait, 1275×1650 for print_letter_portrait. See pengui://docs/slide-format for the canonical template (and pengui://docs/print-mode for print decks). Returns the slide ID, position, slide count, and validation results.',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to add the slide to.'),
         html: z.string().describe('The slide HTML content.'),

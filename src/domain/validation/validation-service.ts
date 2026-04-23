@@ -132,8 +132,9 @@ export class ValidationService {
 
     const soulTokenNames = soul.tokenNames;
     const allowedFonts = soul.allowedFonts;
-    const geometry: FormatGeometry = getFormat(format).geometry;
-    const validationContext: ValidationContext = { geometry };
+    const resolvedFormat = format ?? 'slides_16_9';
+    const geometry: FormatGeometry = getFormat(resolvedFormat).geometry;
+    const validationContext: ValidationContext = { geometry, formatKind: resolvedFormat };
 
     // ── Stage 1: Static Lint ────────────────────────────────────────
     const stage1Runner = new Stage1Runner();

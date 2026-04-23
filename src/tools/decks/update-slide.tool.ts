@@ -49,7 +49,8 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
     'update_slide',
     {
       title: 'Update Slide',
-      description: 'Update a slide\'s HTML and/or metadata. Re-validates if HTML changed.',
+      description:
+        "Update a slide's HTML and/or metadata. Re-validates if HTML changed. When replacing HTML, keep the .slide dimensions aligned with the DECK FORMAT: 1920×1080 (slides_16_9), 1240×1754 (print_a4_portrait), or 1275×1650 (print_letter_portrait). See pengui://docs/slide-format.",
       inputSchema: z.object({
         deck_id: z.string().describe('The deck containing the slide.'),
         slide_id: z.string().describe('The slide to update.'),

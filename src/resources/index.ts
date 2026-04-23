@@ -58,6 +58,22 @@ const SLIDE_FORMAT = `# Slide HTML Format — Complete Reference
 Every slide is a **standalone HTML document**. The LLM generates the full document
 for each slide, and the server stores, validates, and renders them independently.
 
+## 🔸 First: pick the right dimensions for your deck's format
+
+A deck's \`format\` (set at \`create_deck\` time) determines the required \`.slide\` dimensions.
+A slide HTML authored for the wrong format fails the safe-area validation.
+
+| Deck format              | \`.slide\` width × height | Safe-area inset | Export surface          |
+|--------------------------|--------------------------|-----------------|-------------------------|
+| \`slides_16_9\` (default) | **1920 × 1080 px**       | 48 px           | PPTX / PDF / HTML / GS  |
+| \`print_a4_portrait\`     | **1240 × 1754 px**       | 96 px           | PDF only                |
+| \`print_letter_portrait\` | **1275 × 1650 px**       | 96 px           | PDF only                |
+
+**If your deck is a print format**, the canonical template below uses slide dimensions —
+substitute the print values and read the print authoring guide at
+\`pengui://docs/print-mode\` before building content. Diagrams and charts for print decks
+are documented at \`pengui://docs/charts-and-diagrams\`.
+
 ## Canonical Structure
 
 \`\`\`html
@@ -115,7 +131,7 @@ for each slide, and the server stores, validates, and renders them independently
 | \`<!DOCTYPE html>\` | Must be the very first thing | structural-check-doctype (error) |
 | \`<!-- @slide-meta {...} -->\` | Valid JSON with at least \`layout\` and \`title\` | structural-check-meta-missing/invalid (error) |
 | \`<div class="slide">\` | Root visual container | structural-check-root-container (error) |
-| \`.slide { width:1920px; height:1080px }\` | Frame dimensions | safe-area-check (warning) |
+| \`.slide { width: Wpx; height: Hpx }\` | Frame dimensions — W/H come from the deck's format (see table above) | safe-area-check (warning) — names the deck format in the error message |
 | \`:root { ... }\` with all soul tokens | Token definitions for var() references | Needed for tokens to resolve |
 
 ## What NOT to Do

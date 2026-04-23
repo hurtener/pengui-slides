@@ -19,7 +19,7 @@ export function registerCreateDeckTool(server: McpServer, container: ServiceCont
     {
       title: 'Create Deck',
       description:
-        'Create a new empty deck linked to a Design Soul. For 16:9 presentations use format "slides_16_9" (default). For printable PDF documents (study summaries, handouts) use "print_a4_portrait" or "print_letter_portrait" — print decks are PDF-only.',
+        'Create a new empty deck linked to a Design Soul. The deck FORMAT determines required .slide dimensions for every slide in this deck: slides_16_9 → 1920×1080 (default, 16:9 presentations, all exports), print_a4_portrait → 1240×1754 (A4, PDF-only), print_letter_portrait → 1275×1650 (US Letter, PDF-only). Subsequent add_slide / update_slide calls must author HTML at the matching dimensions. Print decks: read pengui://docs/print-mode and pengui://docs/charts-and-diagrams before authoring.',
       inputSchema: z.object({
         soul_id: z.string().describe('The ID of the Design Soul to use for this deck.'),
         title: z.string().nullish().describe('Deck title. Defaults to "Untitled Deck".'),

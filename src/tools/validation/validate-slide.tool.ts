@@ -19,7 +19,8 @@ export function registerValidateSlideTool(server: McpServer, container: ServiceC
     'validate_slide',
     {
       title: 'Validate Slide',
-      description: 'Validate slide HTML against a Design Soul. Returns issues, style score, and pass/fail status.',
+      description:
+        'Validate slide HTML against a Design Soul. Pass deck_id to validate against the deck\'s actual format geometry — without it the check uses the slides_16_9 default (1920×1080), which WILL flag false safe-area errors on print decks authored at 1240×1754 or 1275×1650. Returns issues, style score, and pass/fail status.',
       inputSchema: z.object({
         html: z.string().describe('The slide HTML to validate.'),
         soul_id: z.string().describe('The Design Soul to validate against.'),

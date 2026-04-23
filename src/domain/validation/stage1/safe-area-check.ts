@@ -28,6 +28,11 @@ export class SafeAreaCheck implements Stage1Check {
     const geometry = context?.geometry ?? DEFAULT_GEOMETRY;
     const expectedWidth = `${geometry.widthPx}px`;
     const expectedHeight = `${geometry.heightPx}px`;
+    // Human-readable phrase naming the deck format, appended to each
+    // message so the LLM doesn't have to infer why these dimensions.
+    const formatNote = context?.formatKind
+      ? ` (deck format: ${context.formatKind})`
+      : '';
     const issues: ValidationIssue[] = [];
     const $ = cheerio.load(html);
 
@@ -107,7 +112,7 @@ export class SafeAreaCheck implements Stage1Check {
         stage: 'stage1_lint',
         severity: 'warning',
         rule: this.id,
-        message: `Root .slide container is missing a width declaration. Expected ${expectedWidth}.`,
+        message: `Root .slide container is missing a width declaration. Expected ${expectedWidth}${formatNote}.`,
         expected: expectedWidth,
         fixSuggestion: `Add "width: ${expectedWidth}" to the .slide CSS rule.`,
       });
@@ -117,7 +122,7 @@ export class SafeAreaCheck implements Stage1Check {
         stage: 'stage1_lint',
         severity: 'warning',
         rule: this.id,
-        message: `Root .slide container width is "${actualWidth}", expected "${expectedWidth}".`,
+        message: `Root .slide container width is "${actualWidth}", expected "${expectedWidth}"${formatNote}.`,
         expected: expectedWidth,
         actual: actualWidth,
         fixSuggestion: `Set "width: ${expectedWidth}" on the .slide container.`,
@@ -130,7 +135,7 @@ export class SafeAreaCheck implements Stage1Check {
         stage: 'stage1_lint',
         severity: 'warning',
         rule: this.id,
-        message: `Root .slide container is missing a height declaration. Expected ${expectedHeight}.`,
+        message: `Root .slide container is missing a height declaration. Expected ${expectedHeight}${formatNote}.`,
         expected: expectedHeight,
         fixSuggestion: `Add "height: ${expectedHeight}" to the .slide CSS rule.`,
       });
@@ -140,7 +145,7 @@ export class SafeAreaCheck implements Stage1Check {
         stage: 'stage1_lint',
         severity: 'warning',
         rule: this.id,
-        message: `Root .slide container height is "${actualHeight}", expected "${expectedHeight}".`,
+        message: `Root .slide container height is "${actualHeight}", expected "${expectedHeight}"${formatNote}.`,
         expected: expectedHeight,
         actual: actualHeight,
         fixSuggestion: `Set "height: ${expectedHeight}" on the .slide container.`,
