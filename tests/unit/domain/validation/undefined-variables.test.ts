@@ -25,7 +25,7 @@ describe('UndefinedVariablesCheck', () => {
     const issues = check.run(html, [], []);
     expect(issues).toHaveLength(1);
     expect(issues[0].message).toContain('--space-safe-area');
-    expect(issues[0].severity).toBe('error');
+    expect(issues[0].severity).toBe('warning');
   });
 
   it('allows var() with a fallback even when --name is not declared', () => {

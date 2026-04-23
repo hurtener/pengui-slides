@@ -209,16 +209,26 @@ export function applyDefensiveDefaults(html: string): DefensiveResult {
   const preludeCss = ALL_DEFAULTS.map((d) => d.rule).join('\n  ');
   const styleTag = `<style id="${DEFENSIVE_STYLE_ID}">\n  /* pengui-defensive-defaults: lowest-priority fallbacks. Author rules later in the cascade win. */\n  ${preludeCss}\n</style>`;
 
-  // Insert immediately after <head> opening tag, or wrap in <head> if missing.
+  // Insert immediately after <head> opening tag, or wrap in <head> if
+  // missing. When the document is a fragment with no <html>/<head> but
+  // DOES start with a DOCTYPE, insert the style tag AFTER the DOCTYPE
+  // so the structural-check "DOCTYPE must be first" rule still passes.
   let injected: string;
   if (/<head[^>]*>/i.test(html)) {
     injected = html.replace(/<head([^>]*)>/i, (match) => `${match}\n${styleTag}`);
   } else if (/<html[^>]*>/i.test(html)) {
     injected = html.replace(/<html([^>]*)>/i, (match) => `${match}\n<head>${styleTag}</head>`);
   } else {
-    // Headless fragment — prepend the style tag. Cheerio / Playwright
-    // will wrap in <html><head> when parsing.
-    injected = `${styleTag}\n${html}`;
+    const doctypeMatch = /^(\s*<!DOCTYPE[^>]*>\s*)/i.exec(html);
+    if (doctypeMatch) {
+      const doctype = doctypeMatch[1];
+      const rest = html.slice(doctype.length);
+      injected = `${doctype}${styleTag}\n${rest}`;
+    } else {
+      // Fragment with no DOCTYPE either — prepend. Cheerio / Playwright
+      // will wrap in <html><head> when parsing.
+      injected = `${styleTag}\n${html}`;
+    }
   }
 
   return { html: injected, injections: missing };

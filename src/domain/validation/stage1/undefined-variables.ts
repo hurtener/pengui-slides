@@ -128,7 +128,11 @@ export class UndefinedVariablesCheck implements Stage1Check {
       issues.push({
         id: `${this.id}-${issues.length}`,
         stage: 'stage1_lint',
-        severity: 'error',
+        // warning, not error: the lint's job is to tell the author about a
+        // design-breaking pattern, not to block export. A slide with undefined
+        // variables still renders (resolved to initial values) — the author
+        // may want to see what they actually produced before correcting it.
+        severity: 'warning',
         rule: this.id,
         message:
           `CSS variable "${name}" is referenced (e.g., ${ctx.prop}: ${ctx.value}) ` +
