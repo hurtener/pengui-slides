@@ -72,7 +72,13 @@ KEY RULES specific to document-model:
   canonical .pengui-{kind} class so universal break rules apply.
 - Do NOT copy soul tokens into each section — the composer injects them once.
 
-Confirm you understand by stating which model the user's task needs and why.`,
+Confirm you understand by stating which model the user's task needs and why.
+
+COLLABORATIVE EDITING — comment workflow (v4):
+- At the start of each turn on a deck you haven't touched this turn, call \`list_comments\` to pick up user feedback left since your last turn.
+- When you address a comment in the same turn, call \`resolve_comment\` with a brief resolution note.
+- When you need a decision from the user that can wait, call \`add_comment\` (kind: "question") to pin the question on the relevant slide/section rather than interrupting the conversation with prose. The user sees pins in the app.
+- Call \`get_session\` early — it returns the user's currently active deck + soul so you don't need to ask.`,
         },
       },
     ],
@@ -136,7 +142,9 @@ Export to the desired format(s): export_pptx, export_pdf, or export_html.
 
 IMPORTANT: Collaborative editing does not require every intermediate slide revision to reach score 1.0 immediately.
 Final exported decks still require slides to pass full validation.
-Read resource pengui://docs/validation for scoring details.`,
+Read resource pengui://docs/validation for scoring details.
+
+Check \`list_comments\` between turns for user feedback on this deck.`,
         },
       },
     ],
@@ -188,7 +196,7 @@ MOTION — Fast (~100ms), normal (~200ms), slow (~400ms) durations. Easing curve
   for default and emphasized transitions. Include a northStar design philosophy
   statement, do-rules, and don't-rules.
 
-After registering, approve the soul to generate tokens and recipes.`,
+After registering, approve the soul to generate tokens and recipes. After approving a soul, you can create a first draft deck (via \`create_deck\`) so the user can see tokens in context.`,
         },
       },
     ],
@@ -352,6 +360,8 @@ KEY RULES for document mode:
 - Wrap figures/charts/diagrams/callouts/quotes/images in .pengui-* classes so the universal break-inside: avoid rule catches them.
 - Use semantic <table> with <thead> for tabular data so the header repeats across pages.
 - export_pptx / export_google_slides refuse document-mode decks — use export_pdf.
+
+Check \`list_comments\` between turns for user feedback on this deck.
 `,
         },
       },

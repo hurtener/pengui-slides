@@ -59,6 +59,7 @@ import { registerResolveCommentTool } from './comments/resolve-comment.tool.js';
 import { registerGetSessionTool } from './session/get-session.tool.js';
 
 // MCP App tools
+import { registerAddCommentFromAppTool } from './app/add-comment-from-app.tool.js';
 import { registerApplyBlockEditTool } from './app/apply-block-edit.tool.js';
 import { registerApplyTextEditTool } from './app/apply-text-edit.tool.js';
 import { registerApplyTokenOverrideTool } from './app/apply-token-override.tool.js';
@@ -121,6 +122,7 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerGetSessionTool(server, container);
 
   // MCP App tools (alphabetical)
+  registerAddCommentFromAppTool(server, container);
   registerApplyBlockEditTool(server, container);
   registerApplyTextEditTool(server, container);
   registerApplyTokenOverrideTool(server, container);
