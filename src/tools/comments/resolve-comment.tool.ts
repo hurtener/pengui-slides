@@ -9,8 +9,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServiceContainer } from '../../container.js';
-import { textResponse } from '../_shared/responses.js';
+import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
+import { formatComment } from './_format.js';
 
 export function registerResolveCommentTool(server: McpServer, container: ServiceContainer): void {
   server.registerTool(
@@ -24,26 +25,24 @@ export function registerResolveCommentTool(server: McpServer, container: Service
         'COMMENT_ALREADY_RESOLVED if the comment was already closed.',
       inputSchema: z.object({
         comment_id: z.string().describe('The comment to resolve.'),
+        resolved_by: z
+          .enum(['user', 'agent'])
+          .nullish()
+          .describe('Who is resolving. Defaults to "agent" (this is the model-visible path); the MCP App may pass "user" when the user clicks Resolve.'),
         resolution_note: z
           .string()
           .nullish()
           .describe('Optional short note about how the comment was addressed.'),
       }),
     },
-    async ({ comment_id, resolution_note }) => {
+    async ({ comment_id, resolved_by, resolution_note }) => {
       try {
         const updated = await container.commentService.resolve({
           commentId: comment_id,
-          resolvedBy: 'agent',
+          resolvedBy: resolved_by ?? 'agent',
           ...(resolution_note ? { resolutionNote: resolution_note } : {}),
         });
-        return textResponse({
-          id: updated.id,
-          deck_id: updated.deckId,
-          resolved_at: updated.resolvedAt,
-          resolved_by: updated.resolvedBy,
-          ...(updated.resolutionNote ? { resolution_note: updated.resolutionNote } : {}),
-        });
+        return structuredResponse({ comment: formatComment(updated) });
       } catch (error) {
         return handleToolError(error);
       }

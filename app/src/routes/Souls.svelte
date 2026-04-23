@@ -8,9 +8,10 @@
 
   interface Props {
     bridge: McpDeckEditorBridge;
+    onOpenSoul?: (soulRef: string) => void;
   }
 
-  let { bridge }: Props = $props();
+  let { bridge, onOpenSoul }: Props = $props();
 
   let souls = $state<SoulListItem[]>([]);
   let loading = $state(true);
@@ -18,6 +19,11 @@
   let selectedSoulRef = $state<string | null>(null);
 
   const selectedSoul = $derived(selectedSoulRef ? souls.find((s) => s.soul_id === selectedSoulRef || s.slug === selectedSoulRef) ?? null : null);
+
+  function selectSoul(ref: string): void {
+    selectedSoulRef = ref;
+    onOpenSoul?.(ref);
+  }
 
   onMount(() => {
     void load();
@@ -83,7 +89,7 @@
           <button
             type="button"
             class={`soul-item ${selectedSoulRef === soul.soul_id ? 'selected' : ''} ${statusClass(soul.status)}`}
-            onclick={() => { selectedSoulRef = soul.soul_id; }}
+            onclick={() => selectSoul(soul.soul_id)}
             aria-label="View soul: {soul.name}"
             aria-pressed={selectedSoulRef === soul.soul_id}
           >

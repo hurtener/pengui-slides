@@ -10,7 +10,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServiceContainer } from '../../container.js';
-import { textResponse } from '../_shared/responses.js';
+import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 
 export function registerGetDeckSummaryTool(server: McpServer, container: ServiceContainer): void {
@@ -33,7 +33,7 @@ export function registerGetDeckSummaryTool(server: McpServer, container: Service
       try {
         const summary = await container.deckService.getDeckSummary(deck_id);
 
-        return textResponse({
+        return structuredResponse({
           id: summary.id,
           slug: summary.slug,
           soul_id: summary.soulId,

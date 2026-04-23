@@ -4,14 +4,15 @@
   Each item is clickable (emits onJump with the target string).
 -->
 <script lang="ts">
-  import type { CommentItem, McpDeckEditorBridge } from './bridge';
+  import type { CommentItem, CommentTarget, McpDeckEditorBridge } from './bridge';
+  import { targetLabel, kindClass } from './commentUtils';
 
   interface Props {
     bridge: McpDeckEditorBridge;
     deckId: string;
     open?: boolean;
     onClose?: () => void;
-    onJump?: (target: string) => void;
+    onJump?: (target: CommentTarget) => void;
   }
 
   let { bridge, deckId, open = false, onClose, onJump }: Props = $props();
@@ -41,7 +42,9 @@
     loading = true;
     error = '';
     try {
-      const result = await bridge.listComments(deckId);
+      // Pass resolved='all' so the drawer can filter between unresolved /
+      // resolved / all locally without re-fetching.
+      const result = await bridge.listComments(deckId, { resolved: 'all' });
       // Sort newest first
       comments = [...result.comments].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -57,7 +60,6 @@
     resolvingId = commentId;
     try {
       await bridge.resolveComment({
-        deck_id: deckId,
         comment_id: commentId,
         resolved_by: 'user',
       });
@@ -74,14 +76,6 @@
       return new Date(iso).toLocaleDateString(undefined, { dateStyle: 'short' });
     } catch {
       return iso;
-    }
-  }
-
-  function kindTone(kind: string): string {
-    switch (kind) {
-      case 'blocker': return 'error';
-      case 'suggestion': return 'warning';
-      default: return 'note';
     }
   }
 </script>
@@ -153,8 +147,9 @@
           {#each filtered as comment (comment.id)}
             <li class={`comment-item ${comment.resolved_at ? 'resolved' : ''}`}>
               <div class="comment-top">
-                <span class={`kind-dot ${kindTone(comment.kind)}`} aria-hidden="true"></span>
+                <span class={`kind-dot ${kindClass(comment.kind)}`} aria-hidden="true"></span>
                 <span class="comment-author">{comment.author}</span>
+                <span class={`kind-chip ${kindClass(comment.kind)}`}>{comment.kind}</span>
                 <span class="comment-date">{formatDate(comment.created_at)}</span>
                 {#if !comment.resolved_at}
                   <button
@@ -172,10 +167,10 @@
                 type="button"
                 class="comment-body-btn"
                 onclick={() => onJump?.(comment.target)}
-                title="Jump to: {comment.target}"
+                title="Jump to: {targetLabel(comment.target)}"
               >
                 <p class="comment-body">{comment.body}</p>
-                <span class="comment-target">{comment.target}</span>
+                <span class="comment-target">{targetLabel(comment.target)}</span>
               </button>
               {#if comment.resolved_at && comment.resolution_note}
                 <p class="resolution-note">Note: {comment.resolution_note}</p>
@@ -369,9 +364,25 @@
     flex-shrink: 0;
   }
 
-  .kind-dot.error { background: var(--error); }
-  .kind-dot.warning { background: var(--warning); }
-  .kind-dot.note { background: var(--mint); }
+  .kind-dot.kind-revision { background: var(--warning); }
+  .kind-dot.kind-question { background: var(--mint); }
+  .kind-dot.kind-approval { background: var(--success); }
+  .kind-dot.kind-note { background: var(--ink-3); }
+
+  .kind-chip {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: var(--r-pill);
+    text-transform: capitalize;
+    background: var(--surface-2);
+    color: var(--ink-3);
+  }
+
+  .kind-chip.kind-revision { color: var(--warning); background: var(--warning-tint); }
+  .kind-chip.kind-question { color: var(--mint-hover); background: var(--mint-tint); }
+  .kind-chip.kind-approval { color: var(--success); background: var(--success-tint); }
+  .kind-chip.kind-note { color: var(--ink-3); background: var(--surface-2); }
 
   .comment-author {
     font-size: 12px;

@@ -88,13 +88,45 @@
     await initialBridge.sendRevisionRequest(payload);
   }
 
+  // v4: active-workspace tracking so Assets scopes uploads correctly and the
+  // agent's `get_session` reflects what the user is looking at.
+  let activeDeckRef = $state<string | null>(null);
+  let activeSoulRef = $state<string | null>(null);
+
   function handleNav(key: string): void {
     route = key as typeof route;
+    // Fire-and-forget: tell the server which panels are open. Failure here
+    // does not block navigation.
+    void announceSession();
   }
 
   function handleOpenDeck(deckId: string): void {
     route = 'editor';
+    activeDeckRef = deckId;
     void deck.loadEditor(deckId);
+    void announceSession();
+  }
+
+  function handleOpenSoul(soulRef: string): void {
+    route = 'souls';
+    activeSoulRef = soulRef;
+    void announceSession();
+  }
+
+  async function announceSession(): Promise<void> {
+    const mcp = bridge as unknown as McpDeckEditorBridge;
+    // Only the concrete bridge has setActiveWorkspace; older test doubles
+    // may not. Guard defensively.
+    if (typeof mcp.setActiveWorkspace !== 'function') return;
+    try {
+      await mcp.setActiveWorkspace({
+        deck_ref: activeDeckRef ?? undefined,
+        soul_ref: activeSoulRef ?? undefined,
+        open_panels: [route],
+      });
+    } catch {
+      // Session announcement is best-effort; swallow and continue.
+    }
   }
 
   // Cast bridge to the concrete class type so v4 route components can use
@@ -142,13 +174,21 @@
       {:else if route === 'decks'}
         <Decks {deck} onOpenDeck={handleOpenDeck} />
       {:else if route === 'editor'}
-        <Editor {deck} onRevisionRequest={handleRevisionRequest} />
+        <Editor
+          {deck}
+          bridge={mcpBridge}
+          onRevisionRequest={handleRevisionRequest}
+        />
       {:else if route === 'export'}
         <Export {deck} {bridge} />
       {:else if route === 'souls'}
-        <Souls bridge={mcpBridge} />
+        <Souls bridge={mcpBridge} onOpenSoul={handleOpenSoul} />
       {:else if route === 'assets'}
-        <Assets bridge={mcpBridge} />
+        <Assets
+          bridge={mcpBridge}
+          activeDeckRef={activeDeckRef}
+          activeSoulRef={activeSoulRef}
+        />
       {/if}
     </main>
   </div>

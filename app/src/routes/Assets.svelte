@@ -7,21 +7,33 @@
   import { onMount } from 'svelte';
   import AssetCard from '../lib/AssetCard.svelte';
   import AssetUploader from '../lib/AssetUploader.svelte';
-  import type { McpDeckEditorBridge, AssetItem } from '../lib/bridge';
+  import type { McpDeckEditorBridge, AssetItem, AssetScopeWire } from '../lib/bridge';
 
   interface Props {
     bridge: McpDeckEditorBridge;
+    activeDeckRef?: string | null;
+    activeSoulRef?: string | null;
   }
 
-  let { bridge }: Props = $props();
+  let { bridge, activeDeckRef = null, activeSoulRef = null }: Props = $props();
 
   let assets = $state<AssetItem[]>([]);
   let loading = $state(true);
   let error = $state('');
-  let scopeFilter = $state<string>('all');
-  let roleFilter = $state<string>('all');
-  let uploadScope = $state('global');
-  let uploadRole = $state('content');
+  let scopeFilter = $state<'all' | 'soul' | 'deck' | 'global'>('all');
+  let roleFilter = $state<'all' | 'logo' | 'content'>('all');
+  let uploadScope = $state<'global' | 'deck' | 'soul'>('global');
+  let uploadRole = $state<'logo' | 'content'>('content');
+
+  function scopeKey(s: AssetScopeWire): 'soul' | 'deck' | 'global' {
+    return s.type;
+  }
+
+  function scopeDisplay(s: AssetScopeWire): string {
+    if (s.type === 'soul') return `soul:${(s.soulId ?? '').slice(0, 8)}`;
+    if (s.type === 'deck') return `deck:${(s.deckId ?? '').slice(0, 8)}`;
+    return 'global';
+  }
 
   onMount(() => {
     void load();
@@ -40,9 +52,9 @@
     }
   }
 
-  // Group the assets by scope → role
+  // Group the assets by scope type → role
   const scopes = $derived(
-    [...new Set(assets.map((a) => a.scope))].sort()
+    [...new Set(assets.map((a) => scopeKey(a.scope)))].sort()
   );
 
   const roles = $derived(
@@ -51,26 +63,27 @@
 
   const filtered = $derived(
     assets.filter((a) => {
-      const scopeOk = scopeFilter === 'all' || a.scope === scopeFilter;
+      const scopeOk = scopeFilter === 'all' || scopeKey(a.scope) === scopeFilter;
       const roleOk = roleFilter === 'all' || a.role === roleFilter;
       return scopeOk && roleOk;
     })
   );
 
-  // Group filtered assets by scope
+  // Group filtered assets by scope type
   const grouped = $derived(
     (() => {
       const map = new Map<string, AssetItem[]>();
       for (const a of filtered) {
-        const list = map.get(a.scope) ?? [];
+        const key = scopeKey(a.scope);
+        const list = map.get(key) ?? [];
         list.push(a);
-        map.set(a.scope, list);
+        map.set(key, list);
       }
       return map;
     })()
   );
 
-  function handleUploaded(assetId: string): void {
+  function handleUploaded(_assetId: string): void {
     // Reload the full list to pick up the new asset.
     void load();
   }
@@ -88,6 +101,8 @@
         {bridge}
         scope={uploadScope}
         role={uploadRole}
+        activeDeckRef={activeDeckRef ?? undefined}
+        activeSoulRef={activeSoulRef ?? undefined}
         onUploaded={handleUploaded}
       />
     </div>
@@ -189,7 +204,7 @@
             <h3 class="role-heading">{role} <span class="role-count">({roleItems.length})</span></h3>
             <div class="asset-grid">
               {#each roleItems as asset (asset.asset_id)}
-                <AssetCard {asset} />
+                <AssetCard {asset} label={scopeDisplay(asset.scope)} />
               {/each}
             </div>
           </div>

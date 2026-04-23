@@ -42,13 +42,17 @@
     aria-label="Comment: {comment.body}"
     aria-expanded={open}
   >
-    {#if comment.kind === 'blocker'}
+    {#if comment.kind === 'revision'}
       <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
         <path d="M6 1L1 10h10L6 1z"/>
       </svg>
-    {:else if comment.kind === 'suggestion'}
+    {:else if comment.kind === 'question'}
       <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
         <circle cx="6" cy="6" r="5"/>
+      </svg>
+    {:else if comment.kind === 'approval'}
+      <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M2 6l3 3 5-5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     {:else}
       <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
@@ -123,10 +127,11 @@
   }
 
   /* Kind-based colours */
-  .pin-badge.blocker { background: var(--error); }
-  .pin-badge.suggestion { background: var(--warning); }
-  .pin-badge.note { background: var(--mint); }
-  .pin-badge:not(.blocker):not(.suggestion):not(.note) { background: var(--slate); }
+  .pin-badge.revision { background: var(--warning); }
+  .pin-badge.question { background: var(--mint); }
+  .pin-badge.approval { background: var(--success); }
+  .pin-badge.note { background: var(--ink-3); }
+  .pin-badge:not(.revision):not(.question):not(.approval):not(.note) { background: var(--ink-3); }
   .pin-badge.resolved { background: var(--success); opacity: 0.7; }
 
   .pin-badge svg {

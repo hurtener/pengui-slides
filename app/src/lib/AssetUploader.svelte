@@ -5,20 +5,44 @@
 <script lang="ts">
   import type { McpDeckEditorBridge } from './bridge';
 
+  type UploadScope = 'soul' | 'deck' | 'global';
+  type UploadRole = 'logo' | 'content';
+  type UploadMime = 'image/png' | 'image/jpeg' | 'image/svg+xml' | 'image/webp';
+
   interface Props {
     bridge: McpDeckEditorBridge;
-    scope?: string;
-    role?: string;
+    scope?: UploadScope;
+    role?: UploadRole;
+    activeDeckRef?: string;
+    activeSoulRef?: string;
     onUploaded?: (assetId: string) => void;
   }
 
-  let { bridge, scope = 'global', role = 'content', onUploaded }: Props = $props();
+  let {
+    bridge,
+    scope = 'global',
+    role = 'content',
+    activeDeckRef,
+    activeSoulRef,
+    onUploaded,
+  }: Props = $props();
 
   const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+  const ALLOWED_MIMES: readonly UploadMime[] = [
+    'image/png',
+    'image/jpeg',
+    'image/svg+xml',
+    'image/webp',
+  ];
 
   let uploading = $state(false);
   let error = $state('');
   let inputEl = $state<HTMLInputElement | null>(null);
+
+  function normaliseMime(t: string): UploadMime | null {
+    const lower = t.toLowerCase();
+    return (ALLOWED_MIMES as readonly string[]).includes(lower) ? (lower as UploadMime) : null;
+  }
 
   async function handleChange(e: Event): Promise<void> {
     const file = (e.target as HTMLInputElement).files?.[0];
@@ -32,14 +56,44 @@
       return;
     }
 
+    const mime = normaliseMime(file.type || '');
+    if (!mime) {
+      error = `Unsupported file type: ${file.type || 'unknown'}. Allowed: PNG, JPEG, SVG, WebP.`;
+      if (inputEl) inputEl.value = '';
+      return;
+    }
+
+    // Build the structured scope expected by upload_asset_from_app.
+    let resolvedScope:
+      | { type: 'soul'; soul_ref: string }
+      | { type: 'deck'; deck_ref: string }
+      | { type: 'global' };
+    if (scope === 'soul') {
+      if (!activeSoulRef) {
+        error = 'No active soul — switch to Souls and select one before uploading soul-scoped assets.';
+        if (inputEl) inputEl.value = '';
+        return;
+      }
+      resolvedScope = { type: 'soul', soul_ref: activeSoulRef };
+    } else if (scope === 'deck') {
+      if (!activeDeckRef) {
+        error = 'No active deck — open a deck before uploading deck-scoped assets.';
+        if (inputEl) inputEl.value = '';
+        return;
+      }
+      resolvedScope = { type: 'deck', deck_ref: activeDeckRef };
+    } else {
+      resolvedScope = { type: 'global' };
+    }
+
     uploading = true;
     try {
       const data_base64 = await fileToBase64(file);
       const label = file.name;
       const result = await bridge.uploadAssetFromApp({
         data_base64,
-        mime_type: file.type || 'application/octet-stream',
-        scope,
+        mime_type: mime,
+        scope: resolvedScope,
         role,
         label,
       });
@@ -75,7 +129,7 @@
   <input
     bind:this={inputEl}
     type="file"
-    accept="image/*,application/pdf,.svg,.png,.jpg,.jpeg,.gif,.webp"
+    accept="image/png,image/jpeg,image/svg+xml,image/webp"
     onchange={handleChange}
     aria-label="Choose file to upload"
     class="file-input"

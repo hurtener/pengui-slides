@@ -50,19 +50,27 @@ export interface SoulLayer {
 
 export interface LayoutRecipe {
   id: string;
+  type?: string;
   name: string;
   description?: string;
+  tags?: string[];
+  source?: string;
+  medium?: string;
   html: string;
 }
 
 export interface DesignSoul {
   soul_id: string;
+  id: string;
   slug: string;
   name: string;
+  description?: string;
   status: string;
   layers: SoulLayer[];
   cssTokens: Record<string, string>;
+  cssTokensString?: string;
   recipes: LayoutRecipe[];
+  allowed_fonts?: string[];
   styleGuide?: string;
 }
 
@@ -70,15 +78,21 @@ export interface GetDesignSoulResponse {
   soul: DesignSoul;
 }
 
+export type CommentTarget =
+  | { kind: 'slide'; slide_id: string }
+  | { kind: 'section'; section_id: string }
+  | { kind: 'element'; container_id: string; edit_id: string };
+
 export interface CommentItem {
   id: string;
-  target: string;
-  author: string;
-  kind: string;
+  deck_id: string;
+  target: CommentTarget;
+  author: 'user' | 'agent';
+  kind: 'revision' | 'question' | 'approval' | 'note';
   body: string;
   created_at: string;
   resolved_at?: string;
-  resolved_by?: string;
+  resolved_by?: 'user' | 'agent';
   resolution_note?: string;
 }
 
@@ -96,18 +110,29 @@ export interface ResolveCommentResponse {
   comment: CommentItem;
 }
 
+export type AssetScopeWire =
+  | { type: 'soul'; soulId: string }
+  | { type: 'deck'; deckId: string }
+  | { type: 'global' };
+
 export interface AssetItem {
   asset_id: string;
-  scope: string;
-  role: string;
+  name?: string;
   label?: string;
+  ref?: string;
+  filename?: string;
   mime_type: string;
+  scope: AssetScopeWire;
+  role: 'logo' | 'content';
   size_bytes: number;
+  width?: number;
+  height?: number;
   created_at: string;
   data_base64?: string;
 }
 
 export interface ListAssetsResponse {
+  asset_count: number;
   assets: AssetItem[];
 }
 
@@ -119,9 +144,26 @@ export interface UploadAssetResponse {
   asset: AssetItem;
 }
 
+export interface SessionActiveDeck {
+  id: string;
+  deck_id: string;
+  slug: string;
+  title: string;
+  format: string;
+  authoring_model: string;
+}
+
+export interface SessionActiveSoul {
+  id: string;
+  soul_id: string;
+  slug: string;
+  name: string;
+  status: string;
+}
+
 export interface SessionResponse {
-  active_deck?: { id: string; slug: string; title: string };
-  active_soul?: { soul_id: string; slug: string; name: string };
+  active_deck?: SessionActiveDeck;
+  active_soul?: SessionActiveSoul;
   active_workflow?: string;
   open_panels: string[];
   updated_at?: string;
@@ -229,18 +271,26 @@ export class McpDeckEditorBridge implements DeckEditorBridge {
     return r.structuredContent;
   }
 
-  /** List comments for a deck. */
-  async listComments(deckId: string): Promise<ListCommentsResponse> {
-    const r = await this.callTool<ListCommentsResponse>('list_comments', { deck_id: deckId });
+  /** List comments for a deck. Pass `resolved: 'all'` to see closed items too. */
+  async listComments(
+    deckId: string,
+    opts: {
+      resolved?: 'unresolved' | 'resolved' | 'all';
+      target_kind?: 'slide' | 'section' | 'element';
+    } = {},
+  ): Promise<ListCommentsResponse> {
+    const args: Record<string, unknown> = { deck_id: deckId };
+    if (opts.resolved) args.resolved = opts.resolved;
+    if (opts.target_kind) args.target_kind = opts.target_kind;
+    const r = await this.callTool<ListCommentsResponse>('list_comments', args);
     return r.structuredContent ?? { deck_id: deckId, comment_count: 0, comments: [] };
   }
 
-  /** Add a comment from the model side. */
+  /** Add a comment from the model side (agent-authored). */
   async addComment(args: {
     deck_id: string;
-    target: string;
-    author: string;
-    kind: string;
+    target: CommentTarget;
+    kind: CommentItem['kind'];
     body: string;
   }): Promise<AddCommentResponse> {
     const r = await this.callTool<AddCommentResponse>('add_comment', args);
@@ -248,11 +298,10 @@ export class McpDeckEditorBridge implements DeckEditorBridge {
     return r.structuredContent;
   }
 
-  /** Resolve a comment. */
+  /** Resolve a comment. `resolved_by` defaults to 'agent' server-side. */
   async resolveComment(args: {
-    deck_id: string;
     comment_id: string;
-    resolved_by: string;
+    resolved_by?: 'user' | 'agent';
     resolution_note?: string;
   }): Promise<ResolveCommentResponse> {
     const r = await this.callTool<ResolveCommentResponse>('resolve_comment', args);
@@ -261,9 +310,9 @@ export class McpDeckEditorBridge implements DeckEditorBridge {
   }
 
   /** List assets (optionally filtered). */
-  async listAssets(args: { scope?: string; role?: string } = {}): Promise<ListAssetsResponse> {
+  async listAssets(args: { scope_type?: 'soul' | 'deck' | 'global'; role?: 'logo' | 'content' } = {}): Promise<ListAssetsResponse> {
     const r = await this.callTool<ListAssetsResponse>('list_assets', args);
-    return r.structuredContent ?? { assets: [] };
+    return r.structuredContent ?? { asset_count: 0, assets: [] };
   }
 
   /** Get a single asset (with data). */
@@ -283,20 +332,24 @@ export class McpDeckEditorBridge implements DeckEditorBridge {
 
   /** Set the active workspace context (deck, soul, workflow, open panels). */
   async setActiveWorkspace(args: {
-    deck_ref?: string;
-    soul_ref?: string;
-    workflow?: string;
+    deck_ref?: string | null;
+    soul_ref?: string | null;
+    workflow?: 'create-presentation' | 'create-document' | null;
     open_panels?: string[];
-  }): Promise<void> {
-    await this.callTool('set_active_workspace', args);
+  }): Promise<SessionResponse> {
+    const r = await this.callTool<SessionResponse>('set_active_workspace', args);
+    return r.structuredContent ?? { open_panels: [] };
   }
 
   /** Upload an asset directly from the app (base64 encoded). */
   async uploadAssetFromApp(args: {
     data_base64: string;
-    mime_type: string;
-    scope: string;
-    role: string;
+    mime_type: 'image/png' | 'image/jpeg' | 'image/svg+xml' | 'image/webp';
+    scope:
+      | { type: 'soul'; soul_ref: string }
+      | { type: 'deck'; deck_ref: string }
+      | { type: 'global' };
+    role: 'logo' | 'content';
     label?: string;
   }): Promise<UploadAssetResponse> {
     const r = await this.callTool<UploadAssetResponse>('upload_asset_from_app', args);
@@ -333,14 +386,13 @@ export class McpDeckEditorBridge implements DeckEditorBridge {
   /** Add a comment authored by the user (from the app, not the model). */
   async addCommentFromApp(args: {
     deck_id: string;
-    target: string;
-    kind: string;
+    target: CommentTarget;
+    kind: CommentItem['kind'];
     body: string;
+    view_uuid?: string;
+    scroll_snapshot?: string;
   }): Promise<AddCommentResponse> {
-    const r = await this.callTool<AddCommentResponse>('add_comment_from_app', {
-      ...args,
-      author: 'user',
-    });
+    const r = await this.callTool<AddCommentResponse>('add_comment_from_app', args);
     if (!r.structuredContent?.comment) throw new Error('add_comment_from_app returned no comment');
     return r.structuredContent;
   }

@@ -14,6 +14,7 @@
   import FormatBadge from '../lib/FormatBadge.svelte';
   import type { McpDeckEditorBridge, DeckListItem, SoulListItem, CommentItem } from '../lib/bridge';
   import type { FormatKind } from '../lib/types';
+  import { targetLabel, kindClass } from '../lib/commentUtils';
 
   interface Props {
     bridge: McpDeckEditorBridge;
@@ -299,11 +300,11 @@
             <ul class="comment-list">
               {#each unresolvedComments.slice(0, 4) as c (c.id)}
                 <li class="comment-row">
-                  <span class={`c-dot kind-${c.kind}`} aria-hidden="true"></span>
+                  <span class={`c-dot ${kindClass(c.kind)}`} aria-hidden="true"></span>
                   <div class="c-info">
                     <span class="c-author">{c.author}</span>
                     <p class="c-body">{c.body}</p>
-                    <span class="c-target">{c.target}</span>
+                    <span class="c-target">{targetLabel(c.target)}</span>
                   </div>
                 </li>
               {/each}
@@ -764,10 +765,10 @@
     flex-shrink: 0;
   }
 
-  .c-dot.kind-blocker { background: var(--error); }
-  .c-dot.kind-suggestion { background: var(--warning); }
-  .c-dot.kind-note { background: var(--mint); }
-  .c-dot:not(.kind-blocker):not(.kind-suggestion):not(.kind-note) { background: var(--slate); }
+  .c-dot.kind-revision { background: var(--warning); }
+  .c-dot.kind-question { background: var(--mint); }
+  .c-dot.kind-approval { background: var(--success); }
+  .c-dot.kind-note { background: var(--ink-3); }
 
   .c-info {
     min-width: 0;

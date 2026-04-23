@@ -8,7 +8,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServiceContainer } from '../../container.js';
-import { textResponse } from '../_shared/responses.js';
+import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 import { assetId } from '../../types/common.js';
 import { AssetService } from '../../domain/assets/asset-service.js';
@@ -34,18 +34,21 @@ export function registerGetAssetTool(server: McpServer, container: ServiceContai
           throw new AssetNotFoundError(asset_id);
         }
 
-        return textResponse({
-          asset_id: asset.id,
-          name: asset.name,
-          filename: asset.filename,
-          mime_type: asset.mimeType,
-          scope: asset.scope,
-          role: asset.role,
-          ref: AssetService.ref(asset.id),
-          size_bytes: asset.sizeBytes,
-          width: asset.width,
-          height: asset.height,
-          created_at: asset.createdAt,
+        return structuredResponse({
+          asset: {
+            asset_id: asset.id,
+            name: asset.name,
+            label: asset.name,
+            filename: asset.filename,
+            mime_type: asset.mimeType,
+            scope: asset.scope,
+            role: asset.role,
+            ref: AssetService.ref(asset.id),
+            size_bytes: asset.sizeBytes,
+            width: asset.width,
+            height: asset.height,
+            created_at: asset.createdAt,
+          },
         });
       } catch (error) {
         return handleToolError(error);

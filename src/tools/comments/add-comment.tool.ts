@@ -14,10 +14,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServiceContainer } from '../../container.js';
-import { textResponse } from '../_shared/responses.js';
+import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 import type { CommentTarget } from '../../types/comment.js';
 import { slideId, sectionId } from '../../types/common.js';
+import { formatComment } from './_format.js';
 
 const targetSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('slide'), slide_id: z.string() }),
@@ -71,15 +72,7 @@ export function registerAddCommentTool(server: McpServer, container: ServiceCont
           body,
         });
 
-        return textResponse({
-          id: comment.id,
-          deck_id: comment.deckId,
-          target: comment.target,
-          author: comment.author,
-          kind: comment.kind,
-          body: comment.body,
-          created_at: comment.createdAt,
-        });
+        return structuredResponse({ comment: formatComment(comment) });
       } catch (error) {
         return handleToolError(error);
       }

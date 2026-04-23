@@ -6,10 +6,20 @@
 
   interface Props {
     asset: AssetItem;
+    /** Optional override for the small scope label shown under the thumbnail. */
+    label?: string;
     onclick?: () => void;
   }
 
-  let { asset, onclick }: Props = $props();
+  let { asset, label, onclick }: Props = $props();
+
+  function scopeLabel(): string {
+    if (label) return label;
+    const s = asset.scope;
+    if (s.type === 'global') return 'global';
+    if (s.type === 'soul') return `soul:${(s.soulId ?? '').slice(0, 6)}`;
+    return `deck:${(s.deckId ?? '').slice(0, 6)}`;
+  }
 
   const isImage = $derived(asset.mime_type.startsWith('image/'));
 
@@ -62,7 +72,7 @@
   <div class="asset-meta">
     <span class="asset-label">{asset.label ?? asset.asset_id}</span>
     <div class="badge-row">
-      <span class="badge scope">{asset.scope}</span>
+      <span class="badge scope">{scopeLabel()}</span>
       <span class="badge role">{asset.role}</span>
     </div>
     <span class="asset-info">{formatBytes(asset.size_bytes)} · {formatDate(asset.created_at)}</span>

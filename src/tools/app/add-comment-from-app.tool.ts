@@ -21,6 +21,7 @@ import { slideId, sectionId } from '../../types/common.js';
 import { DECK_EDITOR_RESOURCE_URI } from '../../resources/app-resources.js';
 import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
+import { formatComment } from '../comments/_format.js';
 
 const targetSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('slide'), slide_id: z.string() }),
@@ -92,13 +93,7 @@ export function registerAddCommentFromAppTool(
         });
 
         const payload: Record<string, unknown> = {
-          id: comment.id,
-          deck_id: comment.deckId,
-          target: comment.target,
-          author: comment.author,
-          kind: comment.kind,
-          body: comment.body,
-          created_at: comment.createdAt,
+          comment: formatComment(comment),
         };
         if (view_uuid) payload.view_uuid = view_uuid;
         if (scroll_snapshot) payload.scroll_snapshot = scroll_snapshot;

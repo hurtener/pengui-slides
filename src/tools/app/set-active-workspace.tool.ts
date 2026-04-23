@@ -65,6 +65,7 @@ export function registerSetActiveWorkspaceTool(server: McpServer, container: Ser
               ? {
                   active_deck: {
                     id: session.activeDeck.id,
+                    deck_id: session.activeDeck.id,
                     slug: session.activeDeck.slug,
                     title: session.activeDeck.title,
                     format: session.activeDeck.format,
@@ -76,6 +77,7 @@ export function registerSetActiveWorkspaceTool(server: McpServer, container: Ser
               ? {
                   active_soul: {
                     id: session.activeSoul.id,
+                    soul_id: session.activeSoul.id,
                     slug: session.activeSoul.slug,
                     name: session.activeSoul.name,
                     status: session.activeSoul.status,

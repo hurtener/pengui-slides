@@ -13,8 +13,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServiceContainer } from '../../container.js';
-import { textResponse } from '../_shared/responses.js';
+import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
+import { formatComment } from './_format.js';
 
 export function registerListCommentsTool(server: McpServer, container: ServiceContainer): void {
   server.registerTool(
@@ -49,24 +50,10 @@ export function registerListCommentsTool(server: McpServer, container: ServiceCo
         if (target_kind) filter.targetKind = target_kind;
 
         const comments = await container.commentService.listByDeck(deck_id, filter);
-        return textResponse({
+        return structuredResponse({
           deck_id,
           comment_count: comments.length,
-          comments: comments.map((c) => ({
-            id: c.id,
-            target: c.target,
-            author: c.author,
-            kind: c.kind,
-            body: c.body,
-            created_at: c.createdAt,
-            ...(c.resolvedAt
-              ? {
-                  resolved_at: c.resolvedAt,
-                  resolved_by: c.resolvedBy,
-                  ...(c.resolutionNote ? { resolution_note: c.resolutionNote } : {}),
-                }
-              : {}),
-          })),
+          comments: comments.map(formatComment),
         });
       } catch (error) {
         return handleToolError(error);

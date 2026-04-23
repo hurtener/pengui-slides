@@ -1,11 +1,12 @@
 <!--
-  SoulPanel — detailed view of one design soul.
-  READ-ONLY in Wave 2 (edit UI is Wave 3).
+  SoulPanel — detailed view of one design soul with inline token editing (v4).
 
-  Shows:
-  - Token swatches grouped by layer
-  - Recipe previews (sandboxed iframe)
-  - StyleGuide markdown rendered as plain text sections
+  Tabs:
+  - Tokens  — swatches grouped by layer + inline editor (color pickers, number
+              inputs, text inputs) that dispatch `apply_token_override` via
+              the bridge and optimistically refresh.
+  - Recipes — sandboxed iframe previews of each layout recipe.
+  - Guide   — styleGuide markdown rendered as plain text sections.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
@@ -26,6 +27,65 @@
   let error = $state('');
   let activeTab = $state<'tokens' | 'recipes' | 'guide'>('tokens');
   let activeLayer = $state<string | null>(null);
+
+  // ── Inline editor (v4) ───────────────────────────────────────────────────
+  let editingToken = $state<string | null>(null);
+  let editingValue = $state<string>('');
+  let savingToken = $state<string | null>(null);
+  let editError = $state('');
+
+  function classifyValue(value: string): 'color' | 'numeric' | 'text' {
+    if (/^#[0-9a-f]{3,8}$/i.test(value)) return 'color';
+    if (/^rgba?\s*\(/i.test(value)) return 'color';
+    if (/^hsla?\s*\(/i.test(value)) return 'color';
+    if (/^-?\d+(\.\d+)?$/.test(value)) return 'numeric';
+    return 'text';
+  }
+
+  function beginEdit(tokenName: string, currentValue: string): void {
+    editingToken = tokenName;
+    editingValue = currentValue;
+    editError = '';
+  }
+
+  function cancelEdit(): void {
+    editingToken = null;
+    editingValue = '';
+    editError = '';
+  }
+
+  async function saveEdit(tokenName: string): Promise<void> {
+    if (!soul || !activeLayer) return;
+    savingToken = tokenName;
+    editError = '';
+    const currentLayer = soul.layers.find((l) => l.name === activeLayer);
+    const original = currentLayer?.tokens[tokenName] ?? '';
+    const parsedValue: string | number =
+      classifyValue(original) === 'numeric' && /^-?\d+(\.\d+)?$/.test(editingValue)
+        ? Number(editingValue)
+        : editingValue;
+
+    try {
+      await bridge.applyTokenOverride({
+        soul_ref: soulRef,
+        layer: activeLayer,
+        token_name: tokenName,
+        value: String(parsedValue),
+      });
+      // Optimistically update local view
+      if (currentLayer) {
+        currentLayer.tokens[tokenName] = String(parsedValue);
+      }
+      editingToken = null;
+      editingValue = '';
+      // Refetch to pull any side-effects (recipes, cssTokens) server-side.
+      await load();
+    } catch (err) {
+      editError = err instanceof Error ? err.message : String(err);
+    } finally {
+      savingToken = null;
+    }
+  }
 
   onMount(() => {
     void load();
@@ -173,9 +233,61 @@
           {#if currentTokenEntries.length === 0}
             <p class="muted">No tokens in this layer.</p>
           {:else}
+            {#if editError}
+              <div class="edit-error" role="alert">{editError}</div>
+            {/if}
             <div class="token-list">
               {#each currentTokenEntries as [name, value] (name)}
-                <TokenSwatch {name} {value} layer={activeLayer ?? ''} />
+                <div class="token-row">
+                  <div class="token-swatch-wrap">
+                    <TokenSwatch {name} {value} layer={activeLayer ?? ''} />
+                  </div>
+                  {#if editingToken === name}
+                    <div class="token-editor">
+                      {#if classifyValue(value) === 'color'}
+                        <input
+                          type="color"
+                          class="edit-color"
+                          bind:value={editingValue}
+                          aria-label="Token {name} color picker"
+                        />
+                      {:else if classifyValue(value) === 'numeric'}
+                        <input
+                          type="number"
+                          class="edit-number"
+                          bind:value={editingValue}
+                          step="1"
+                          aria-label="Token {name} numeric input"
+                        />
+                      {:else}
+                        <input
+                          type="text"
+                          class="edit-text"
+                          bind:value={editingValue}
+                          aria-label="Token {name} text input"
+                        />
+                      {/if}
+                      <button
+                        type="button"
+                        class="edit-save"
+                        onclick={() => saveEdit(name)}
+                        disabled={savingToken === name}
+                      >{savingToken === name ? '…' : 'Save'}</button>
+                      <button
+                        type="button"
+                        class="edit-cancel"
+                        onclick={cancelEdit}
+                      >Cancel</button>
+                    </div>
+                  {:else}
+                    <button
+                      type="button"
+                      class="edit-trigger"
+                      onclick={() => beginEdit(name, value)}
+                      aria-label="Edit token {name}"
+                    >Edit</button>
+                  {/if}
+                </div>
               {/each}
             </div>
           {/if}
@@ -404,6 +516,110 @@
   .token-list {
     display: flex;
     flex-direction: column;
+  }
+
+  .token-row {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    border-bottom: 1px solid var(--border-hairline);
+    padding: var(--s-2) 0;
+  }
+
+  .token-row:last-child {
+    border-bottom: none;
+  }
+
+  .token-swatch-wrap {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .edit-trigger {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-pill);
+    color: var(--ink-2);
+    background: var(--surface-1);
+    cursor: pointer;
+    transition: all var(--dur-micro) var(--ease);
+    flex-shrink: 0;
+  }
+
+  .edit-trigger:hover {
+    border-color: var(--mint);
+    color: var(--mint-hover);
+  }
+
+  .token-editor {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-1);
+    flex-shrink: 0;
+  }
+
+  .edit-color {
+    width: 32px;
+    height: 22px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-sm);
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .edit-number,
+  .edit-text {
+    font-size: 12px;
+    padding: 2px 6px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-sm);
+    background: var(--surface-1);
+    color: var(--ink-1);
+    min-width: 80px;
+    max-width: 160px;
+  }
+
+  .edit-save,
+  .edit-cancel {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: var(--r-pill);
+    cursor: pointer;
+    transition: background-color var(--dur-micro) var(--ease);
+  }
+
+  .edit-save {
+    background: var(--mint-tint);
+    border: 1px solid var(--mint);
+    color: var(--mint-hover);
+  }
+
+  .edit-save:hover:not(:disabled) {
+    background: var(--mint);
+    color: #fff;
+  }
+
+  .edit-cancel {
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--ink-3);
+  }
+
+  .edit-cancel:hover {
+    background: var(--surface-2);
+  }
+
+  .edit-error {
+    background: var(--error-tint);
+    border: 1px solid var(--error);
+    border-radius: var(--r-md);
+    padding: var(--s-2) var(--s-3);
+    font-size: 12px;
+    color: var(--error);
+    margin-bottom: var(--s-2);
   }
 
   /* Recipes tab */

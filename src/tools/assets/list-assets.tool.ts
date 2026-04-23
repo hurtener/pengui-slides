@@ -8,7 +8,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServiceContainer } from '../../container.js';
-import { textResponse } from '../_shared/responses.js';
+import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 import { soulId, deckId } from '../../types/common.js';
 import { AssetService } from '../../domain/assets/asset-service.js';
@@ -39,18 +39,21 @@ export function registerListAssetsTool(server: McpServer, container: ServiceCont
 
         const assets = await container.assetService.list(filter);
 
-        return textResponse(
-          assets.map((a) => ({
+        return structuredResponse({
+          asset_count: assets.length,
+          assets: assets.map((a) => ({
             asset_id: a.id,
             name: a.name,
+            label: a.name,
             filename: a.filename,
             mime_type: a.mimeType,
             scope: a.scope,
             role: a.role,
             ref: AssetService.ref(a.id),
             size_bytes: a.sizeBytes,
+            created_at: a.createdAt,
           })),
-        );
+        });
       } catch (error) {
         return handleToolError(error);
       }

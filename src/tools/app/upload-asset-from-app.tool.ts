@@ -101,14 +101,17 @@ export function registerUploadAssetFromAppTool(server: McpServer, container: Ser
 
         return structuredResponse(
           {
-            ref: AssetService.ref(asset.id),
-            asset_id: asset.id,
-            name: asset.name,
-            mime_type: asset.mimeType,
-            size_bytes: asset.sizeBytes,
-            scope: asset.scope,
-            role: asset.role,
-            created_at: asset.createdAt,
+            asset: {
+              asset_id: asset.id,
+              ref: AssetService.ref(asset.id),
+              name: asset.name,
+              label: asset.name,
+              mime_type: asset.mimeType,
+              size_bytes: asset.sizeBytes,
+              scope: asset.scope,
+              role: asset.role,
+              created_at: asset.createdAt,
+            },
           },
           `Asset "${asset.name}" uploaded (${(asset.sizeBytes / 1024).toFixed(1)} KB)`,
         );

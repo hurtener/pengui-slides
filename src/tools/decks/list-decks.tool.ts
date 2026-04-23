@@ -13,7 +13,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServiceContainer } from '../../container.js';
-import { textResponse } from '../_shared/responses.js';
+import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 
 export function registerListDecksTool(server: McpServer, container: ServiceContainer): void {
@@ -32,7 +32,7 @@ export function registerListDecksTool(server: McpServer, container: ServiceConta
     async () => {
       try {
         const decks = await container.deckService.listDecks();
-        return textResponse({
+        return structuredResponse({
           deck_count: decks.length,
           decks: decks.map((d) => ({
             id: d.id,

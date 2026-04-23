@@ -8,7 +8,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServiceContainer } from '../../container.js';
 import { StatusFilterSchema } from '../_shared/schemas.js';
-import { textResponse } from '../_shared/responses.js';
+import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 
 export function registerListDesignSoulsTool(
@@ -40,7 +40,7 @@ export function registerListDesignSoulsTool(
         // Trigger slug backfill for any legacy souls missing a slug.
         await Promise.all(souls.map((s) => container.soulService.slugFor(s.id)));
 
-        return textResponse({
+        return structuredResponse({
           souls: await Promise.all(
             souls.map(async (soul) => ({
               soul_id: soul.id,

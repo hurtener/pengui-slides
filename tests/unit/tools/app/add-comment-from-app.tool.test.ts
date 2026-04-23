@@ -82,10 +82,10 @@ describe('registerAddCommentFromAppTool', () => {
       body: 'Please make the title larger.',
     });
 
-    const structured = result.structuredContent as Record<string, unknown>;
-    expect(structured.author).toBe('user');
-    expect(structured.id).toBe('comment-001');
-    expect(structured.kind).toBe('revision');
+    const structured = result.structuredContent as { comment: Record<string, unknown> };
+    expect(structured.comment.author).toBe('user');
+    expect(structured.comment.id).toBe('comment-001');
+    expect(structured.comment.kind).toBe('revision');
   });
 
   it('echoes view_uuid in the response when provided', async () => {

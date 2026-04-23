@@ -13,7 +13,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServiceContainer } from '../../container.js';
-import { textResponse } from '../_shared/responses.js';
+import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 
 export function registerGetSessionTool(server: McpServer, container: ServiceContainer): void {
@@ -33,11 +33,12 @@ export function registerGetSessionTool(server: McpServer, container: ServiceCont
     async () => {
       try {
         const session = await container.editorService.getSession();
-        return textResponse({
+        return structuredResponse({
           ...(session.activeDeck
             ? {
                 active_deck: {
                   id: session.activeDeck.id,
+                  deck_id: session.activeDeck.id,
                   slug: session.activeDeck.slug,
                   title: session.activeDeck.title,
                   format: session.activeDeck.format,
@@ -49,6 +50,7 @@ export function registerGetSessionTool(server: McpServer, container: ServiceCont
             ? {
                 active_soul: {
                   id: session.activeSoul.id,
+                  soul_id: session.activeSoul.id,
                   slug: session.activeSoul.slug,
                   name: session.activeSoul.name,
                   status: session.activeSoul.status,

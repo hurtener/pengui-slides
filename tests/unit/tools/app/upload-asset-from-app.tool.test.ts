@@ -50,10 +50,10 @@ describe('registerUploadAssetFromAppTool', () => {
     });
 
     expect(result.isError).toBeUndefined();
-    const content = result.structuredContent as Record<string, unknown>;
-    expect(content.ref).toBe('asset://asset-123');
-    expect(content.asset_id).toBe('asset-123');
-    expect(content.mime_type).toBe('image/png');
+    const content = result.structuredContent as { asset: Record<string, unknown> };
+    expect(content.asset.ref).toBe('asset://asset-123');
+    expect(content.asset.asset_id).toBe('asset-123');
+    expect(content.asset.mime_type).toBe('image/png');
     expect(container.assetService.upload).toHaveBeenCalledOnce();
   });
 

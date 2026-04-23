@@ -9,17 +9,68 @@
   import IssueList from '../lib/IssueList.svelte';
   import PagePreview from '../lib/PagePreview.svelte';
   import FormatBadge from '../lib/FormatBadge.svelte';
+  import CommentDrawer from '../lib/CommentDrawer.svelte';
   import { Button, Card, Pill, Tabs, Textarea } from '../lib/primitives/index';
   import { buildRevisionFallback } from '../lib/revise';
   import type { DeckStore } from '../stores/deck.svelte';
   import type { ValidationPresentation, ValidationIssue, ValidationIssueSummary, SlideHealth, FormatKind } from '../lib/types';
+  import type { McpDeckEditorBridge, CommentTarget } from '../lib/bridge';
 
   interface Props {
     deck: DeckStore;
+    bridge?: McpDeckEditorBridge;
     onRevisionRequest?: (payload: unknown) => Promise<void>;
   }
 
-  let { deck, onRevisionRequest }: Props = $props();
+  let { deck, bridge, onRevisionRequest }: Props = $props();
+
+  // ── Comment drawer state (v4) ────────────────────────────────────────────
+  let commentDrawerOpen = $state(false);
+  let commentDraft = $state('');
+  let commentKind = $state<'revision' | 'question' | 'approval' | 'note'>('note');
+  let commentStatus = $state('');
+  let commentPending = $state(false);
+
+  function toggleCommentDrawer(): void {
+    commentDrawerOpen = !commentDrawerOpen;
+  }
+
+  async function submitComment(): Promise<void> {
+    if (!bridge || !deck.editorState || !commentDraft.trim()) return;
+    commentPending = true;
+    commentStatus = '';
+    try {
+      const target: CommentTarget = {
+        kind: 'slide',
+        slide_id: deck.editorState.selectedSlide.slideId,
+      };
+      await bridge.addCommentFromApp({
+        deck_id: deck.editorState.deck.id,
+        target,
+        kind: commentKind,
+        body: commentDraft.trim(),
+      });
+      commentDraft = '';
+      commentStatus = 'Pinned.';
+      commentDrawerOpen = true;
+    } catch (err) {
+      commentStatus = err instanceof Error ? err.message : String(err);
+    } finally {
+      commentPending = false;
+    }
+  }
+
+  function handleCommentJump(target: CommentTarget): void {
+    if (target.kind === 'slide') {
+      deck.selectSlide(target.slideId as unknown as string);
+      commentDrawerOpen = false;
+    } else if (target.kind === 'element') {
+      deck.selectSlide(target.containerId);
+      commentDrawerOpen = false;
+    }
+    // Section targets are not yet routable in the slide editor; Wave 5 will
+    // cover document-mode Editor.
+  }
 
   let detailsOpen = $state(false);
   let activePanel = $state<'overview' | 'checks' | 'details'>('overview');
@@ -178,6 +229,11 @@
             <Button variant="ghost" size="sm" onclick={() => detailsOpen = !detailsOpen}>
               {detailsOpen ? 'Hide details' : 'Slide details'}
             </Button>
+            {#if bridge}
+              <Button variant="ghost" size="sm" onclick={toggleCommentDrawer}>
+                Comments
+              </Button>
+            {/if}
           </div>
         </div>
 
@@ -206,6 +262,47 @@
           </div>
         {/if}
       </Card>
+
+      <!-- v4: Drop a comment on the selected slide -->
+      {#if bridge}
+        <Card padding="none" elevation="e1" class="comment-composer-card">
+          <div class="cc-head">
+            <p class="eyebrow">Pin a Comment</p>
+            {#if commentStatus}
+              <p class="cc-status">{commentStatus}</p>
+            {/if}
+          </div>
+          <div class="cc-body">
+            <div class="cc-kind-row">
+              {#each (['revision', 'question', 'approval', 'note'] as const) as k}
+                <button
+                  type="button"
+                  class={`cc-kind ${commentKind === k ? 'active' : ''}`}
+                  onclick={() => { commentKind = k; }}
+                >{k}</button>
+              {/each}
+            </div>
+            <Textarea
+              bind:value={commentDraft}
+              rows={2}
+              placeholder="Note something to discuss with the agent here (pinned to this slide)."
+            />
+            <div class="cc-actions">
+              <Button
+                variant="primary"
+                size="sm"
+                onclick={submitComment}
+                disabled={!commentDraft.trim() || commentPending}
+              >
+                {commentPending ? 'Pinning…' : 'Pin comment'}
+              </Button>
+              <Button variant="ghost" size="sm" onclick={toggleCommentDrawer}>
+                See all comments
+              </Button>
+            </div>
+          </div>
+        </Card>
+      {/if}
 
       <!-- Revision composer -->
       <Card padding="none" elevation="e1" class="composer-card">
@@ -367,6 +464,17 @@
           </section>
         {/if}
       </aside>
+    {/if}
+
+    <!-- v4 Comment drawer (overlay) -->
+    {#if bridge && deck.editorState}
+      <CommentDrawer
+        bridge={bridge}
+        deckId={deck.editorState.deck.id}
+        open={commentDrawerOpen}
+        onClose={() => { commentDrawerOpen = false; }}
+        onJump={handleCommentJump}
+      />
     {/if}
 
   </div>
@@ -554,6 +662,70 @@
 
   .section-label {
     padding: var(--s-3) var(--s-5) 0;
+  }
+
+  /* ── Comment composer (v4) ────────────────────────────────── */
+  :global(.comment-composer-card) {
+    display: grid !important;
+    grid-template-rows: auto auto !important;
+    overflow: hidden;
+  }
+
+  .cc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-3);
+    padding: var(--s-3) var(--s-5) var(--s-2);
+    border-bottom: 1px solid var(--border-hairline);
+  }
+
+  .cc-status {
+    font-size: 11px;
+    color: var(--ink-3);
+  }
+
+  .cc-body {
+    padding: var(--s-3) var(--s-5) var(--s-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+  }
+
+  .cc-kind-row {
+    display: flex;
+    gap: var(--s-1);
+    flex-wrap: wrap;
+  }
+
+  .cc-kind {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 10px;
+    border-radius: var(--r-pill);
+    border: 1px solid var(--border-subtle);
+    color: var(--ink-2);
+    background: var(--surface-1);
+    cursor: pointer;
+    text-transform: capitalize;
+  }
+
+  .cc-kind:hover {
+    border-color: var(--mint);
+    color: var(--mint-hover);
+  }
+
+  .cc-kind.active {
+    background: var(--mint-tint);
+    border-color: var(--mint);
+    color: var(--mint-hover);
+  }
+
+  .cc-actions {
+    display: flex;
+    gap: var(--s-2);
+    align-items: center;
+    padding-top: var(--s-1);
   }
 
   /* ── Composer card internals ──────────────────────────────── */
