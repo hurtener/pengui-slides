@@ -37,14 +37,20 @@ export function registerListDesignSoulsTool(
         );
         const recipeCountMap = new Map(recipeCounts.map((entry) => [entry.soulId, entry.recipeCount]));
 
+        // Trigger slug backfill for any legacy souls missing a slug.
+        await Promise.all(souls.map((s) => container.soulService.slugFor(s.id)));
+
         return textResponse({
-          souls: souls.map((soul) => ({
-            soul_id: soul.id,
-            name: soul.name,
-            status: soul.status,
-            token_count: soul.tokenNames.length,
-            recipe_count: recipeCountMap.get(soul.id) ?? 0,
-          })),
+          souls: await Promise.all(
+            souls.map(async (soul) => ({
+              soul_id: soul.id,
+              slug: soul.slug ?? (await container.soulService.slugFor(soul.id)),
+              name: soul.name,
+              status: soul.status,
+              token_count: soul.tokenNames.length,
+              recipe_count: recipeCountMap.get(soul.id) ?? 0,
+            })),
+          ),
         });
       } catch (error) {
         return handleToolError(error);

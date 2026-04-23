@@ -21,7 +21,7 @@ export function registerCreateDeckTool(server: McpServer, container: ServiceCont
       description:
         'Create a new empty deck linked to a Design Soul. The deck FORMAT determines geometry + authoring model: slides_16_9 → 1920×1080 presentation (default, authoringModel="slides", PPTX/PDF/HTML/Google Slides). print_a4_portrait / print_letter_portrait → continuous-document PDF (v3 default: authoringModel="document", use add_section not add_slide). Opt into the legacy slide-per-page print flow by passing authoringModel="slides" explicitly. Read pengui://docs/document-mode before authoring print decks in v3 mode, or pengui://docs/print-mode for the legacy per-slide flow.',
       inputSchema: z.object({
-        soul_id: z.string().describe('The ID of the Design Soul to use for this deck.'),
+        soul_id: z.string().describe('The Design Soul to use for this deck. Accepts UUID or slug.'),
         title: z.string().nullish().describe('Deck title. Defaults to "Untitled Deck".'),
         author: z.string().nullish().describe('Author name.'),
         format: z
@@ -50,6 +50,7 @@ export function registerCreateDeckTool(server: McpServer, container: ServiceCont
 
         return textResponse({
           deck_id: deck.id,
+          slug: deck.slug,
           soul_id: deck.soulId,
           format: deck.format,
           authoring_model: deck.authoringModel,

@@ -602,6 +602,45 @@ export class DeckService {
   }
 
   /**
+   * Lightweight deck list for the v4 workspace UI + agent-facing `list_decks`.
+   * One entry per deck; no HTML, no revisions, no slide/section detail.
+   */
+  async listDecks(): Promise<Array<{
+    id: DeckId;
+    slug: string;
+    soulId: string;
+    soulSlug: string;
+    title: string;
+    author: string;
+    format: FormatKind;
+    authoringModel: AuthoringModel;
+    slideCount: number;
+    sectionCount: number;
+    createdAt: string;
+    updatedAt: string;
+  }>> {
+    const decks = await this.deckStore.list();
+    // Sort newest first.
+    decks.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    return Promise.all(
+      decks.map(async (deck) => ({
+        id: deck.id,
+        slug: deck.slug ?? (await this.slugFor(deck.id)) ?? '',
+        soulId: deck.soulId as string,
+        soulSlug: (await this.soulService.slugFor(deck.soulId)) ?? '',
+        title: deck.title,
+        author: deck.author,
+        format: deck.format ?? DEFAULT_FORMAT,
+        authoringModel: DeckService.resolveAuthoringModel(deck),
+        slideCount: deck.slideIds.length,
+        sectionCount: (deck.sectionIds ?? []).length,
+        createdAt: deck.createdAt,
+        updatedAt: deck.updatedAt,
+      })),
+    );
+  }
+
+  /**
    * Legacy-safe reader that returns a deck's authoring model without
    * callers needing to read the full deck. Returns 'slides' for any
    * pre-v3 deck that lacks the field.

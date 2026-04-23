@@ -26,7 +26,7 @@ export function registerGetDeckSummaryTool(server: McpServer, container: Service
         'Also returns `format`, `slide_count` + `slides[]` for slide decks, and `section_count` + `sections[]` ' +
         'for document decks (both arrays always present — the non-active one is empty).',
       inputSchema: z.object({
-        deck_id: z.string().describe('The deck to summarise.'),
+        deck_id: z.string().describe('The deck to summarise. Accepts UUID or slug.'),
       }),
     },
     async ({ deck_id }) => {
@@ -35,7 +35,9 @@ export function registerGetDeckSummaryTool(server: McpServer, container: Service
 
         return textResponse({
           id: summary.id,
+          slug: summary.slug,
           soul_id: summary.soulId,
+          soul_slug: summary.soulSlug,
           title: summary.title,
           author: summary.author,
           format: summary.format,
