@@ -3,6 +3,7 @@
   import Sidebar from './lib/primitives/Sidebar.svelte';
   import Toast from './lib/primitives/Toast.svelte';
   import Editor from './routes/Editor.svelte';
+  import DocumentEditor from './routes/DocumentEditor.svelte';
   import Decks from './routes/Decks.svelte';
   import Export from './routes/Export.svelte';
   import Workspace from './routes/Workspace.svelte';
@@ -63,6 +64,16 @@
       const payload = result.structuredContent;
       if (payload && typeof payload === 'object' && 'editor_state' in payload && payload.editor_state) {
         route = 'editor';
+        // Pick up the deck reference + authoring model from the pushed state
+        // so document-mode decks open in the DocumentEditor, not the slide one.
+        const deckId =
+          typeof (payload as { deck_id?: unknown }).deck_id === 'string'
+            ? ((payload as { deck_id: string }).deck_id)
+            : null;
+        if (deckId) {
+          activeDeckRef = deckId;
+          void resolveAuthoringModelFor(deckId);
+        }
       }
     });
 
@@ -100,11 +111,31 @@
     void announceSession();
   }
 
+  // v4: authoring model of the currently-open deck. Drives the Editor route
+  // selection (slide-mode Editor vs document-mode DocumentEditor).
+  let activeAuthoringModel = $state<'slides' | 'document' | null>(null);
+
   function handleOpenDeck(deckId: string): void {
     route = 'editor';
     activeDeckRef = deckId;
+    void resolveAuthoringModelFor(deckId);
     void deck.loadEditor(deckId);
     void announceSession();
+  }
+
+  async function resolveAuthoringModelFor(deckRef: string): Promise<void> {
+    const mcp = bridge as unknown as McpDeckEditorBridge;
+    if (typeof mcp.callTool !== 'function') return;
+    try {
+      const r = await mcp.callTool<{ authoring_model?: 'slides' | 'document' }>(
+        'get_deck_summary',
+        { deck_id: deckRef },
+      );
+      const model = r.structuredContent?.authoring_model;
+      activeAuthoringModel = model === 'document' ? 'document' : 'slides';
+    } catch {
+      activeAuthoringModel = 'slides';
+    }
   }
 
   function handleOpenSoul(soulRef: string): void {
@@ -174,11 +205,15 @@
       {:else if route === 'decks'}
         <Decks {deck} onOpenDeck={handleOpenDeck} />
       {:else if route === 'editor'}
-        <Editor
-          {deck}
-          bridge={mcpBridge}
-          onRevisionRequest={handleRevisionRequest}
-        />
+        {#if activeAuthoringModel === 'document' && activeDeckRef}
+          <DocumentEditor bridge={mcpBridge} deckRef={activeDeckRef} />
+        {:else}
+          <Editor
+            {deck}
+            bridge={mcpBridge}
+            onRevisionRequest={handleRevisionRequest}
+          />
+        {/if}
       {:else if route === 'export'}
         <Export {deck} {bridge} />
       {:else if route === 'souls'}

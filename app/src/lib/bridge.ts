@@ -174,6 +174,54 @@ export interface GetThumbnailResponse {
   revision_hash: string;
 }
 
+// ── v4 document-mode section types ──────────────────────────────────────
+
+export interface SectionListItem {
+  id: string;
+  position: number;
+  kind: string;
+  title: string;
+  isValid: boolean;
+  styleScore?: number;
+}
+
+export interface ListSectionsResponse {
+  section_count: number;
+  sections: SectionListItem[];
+}
+
+export interface SectionBreakHints {
+  breakBefore?: 'auto' | 'page' | 'avoid';
+  breakAfter?: 'auto' | 'page' | 'avoid';
+  keepTogether?: boolean;
+  fullPage?: boolean;
+}
+
+export interface SectionDetail {
+  id: string;
+  deck_id: string;
+  position: number;
+  kind: string;
+  html: string;
+  break_hints?: SectionBreakHints;
+  metadata: {
+    title?: string;
+    narrative?: string;
+    tags?: string[];
+  };
+  last_validation?: {
+    passed: boolean;
+    issues?: unknown[];
+    styleScore?: { overall: number };
+  };
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface GetSectionResponse {
+  section: SectionDetail;
+}
+
 type ToolHandler = (payload: Record<string, unknown>) => void;
 type ToolResultHandler = (result: ToolCallResult<Record<string, unknown>>) => void;
 
@@ -367,9 +415,33 @@ export class McpDeckEditorBridge implements DeckEditorBridge {
     await this.callTool('apply_token_override', args);
   }
 
+  /** List sections for a document-mode deck (no HTML). */
+  async listSections(deckRef: string): Promise<ListSectionsResponse> {
+    const r = await this.callTool<ListSectionsResponse>('list_sections', { deck_id: deckRef });
+    return r.structuredContent ?? { section_count: 0, sections: [] };
+  }
+
+  /** Get one section with its HTML + break hints. */
+  async getSection(sectionId: string): Promise<GetSectionResponse> {
+    const r = await this.callTool<GetSectionResponse>('get_section', { section_id: sectionId });
+    if (!r.structuredContent?.section) throw new Error('get_section returned no section');
+    return r.structuredContent;
+  }
+
   /** Apply a block edit (section_kind, break_hints, chrome_config). */
-  async applyBlockEdit(args: Record<string, unknown>): Promise<void> {
-    await this.callTool('apply_block_edit', args);
+  async applyBlockEdit(
+    args:
+      | { kind: 'section_kind'; deck_ref: string; section_id: string; new_kind: string }
+      | { kind: 'break_hints'; deck_ref: string; section_id: string; hints: { break_before?: string; break_after?: string; keep_together?: boolean; full_page?: boolean } }
+      | { kind: 'chrome_config'; deck_ref: string; chrome: Record<string, unknown> },
+  ): Promise<{ deck?: unknown; section?: unknown } | undefined> {
+    const r = await this.callTool<{ deck?: unknown; section?: unknown }>('apply_block_edit', args);
+    return r.structuredContent;
+  }
+
+  /** Update deck-level document meta (chrome, TOC, page margins). */
+  async updateDocumentMeta(args: { deck_id: string; meta: Record<string, unknown> }): Promise<void> {
+    await this.callTool('update_document_meta', args);
   }
 
   /** Get a PNG thumbnail for a deck, slide, or section. */

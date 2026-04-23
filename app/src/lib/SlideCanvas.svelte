@@ -15,7 +15,18 @@
     renderNonce?: number;
     disabled?: boolean;
     format?: FormatKind;
+    /**
+     * When true, clicks on `[data-edit-id]` elements emit `onpintarget`
+     * instead of starting an inline text edit. Used by the v4 comment
+     * composer — the user picks the specific child element to pin their
+     * note to, which gives the agent a semantic target (editId) rather
+     * than a pixel coordinate.
+     */
+    pinMode?: boolean;
+    /** data-edit-ids of elements that already have comments attached. */
+    pinnedEditIds?: string[];
     oncommit?: (detail: { editId: string; text: string }) => void;
+    onpintarget?: (detail: { editId: string }) => void;
     onerror?: (detail: { message: string }) => void;
   }
 
@@ -25,7 +36,10 @@
     renderNonce = 0,
     disabled = false,
     format = 'slides_16_9',
+    pinMode = false,
+    pinnedEditIds = [],
     oncommit,
+    onpintarget,
     onerror,
   }: Props = $props();
 
@@ -77,19 +91,58 @@
         : null;
       if (!target) return;
       event.preventDefault();
+      if (pinMode) {
+        const editId = target.dataset.editId;
+        if (editId) onpintarget?.({ editId });
+        return;
+      }
       startEditing(target);
     };
 
     doc.addEventListener('click', clickHandler);
-    doc.querySelectorAll<HTMLElement>('[data-edit-id]').forEach((el) => {
-      el.style.cursor = disabled ? 'default' : 'text';
-    });
+    applyPinDecorations(doc);
 
     cleanupFrame = () => {
       doc.removeEventListener('click', clickHandler);
+      clearPinDecorations(doc);
       teardownActiveElement();
     };
   }
+
+  function applyPinDecorations(doc: Document): void {
+    const editables = doc.querySelectorAll<HTMLElement>('[data-edit-id]');
+    const pinnedSet = new Set(pinnedEditIds);
+    editables.forEach((el) => {
+      const isPinned = el.dataset.editId ? pinnedSet.has(el.dataset.editId) : false;
+      if (pinMode) {
+        el.style.cursor = 'crosshair';
+        el.style.outline = '1px dashed rgba(92, 64, 41, 0.4)';
+        el.style.outlineOffset = '2px';
+      } else {
+        el.style.cursor = disabled ? 'default' : 'text';
+        el.style.outline = isPinned ? '1px dashed rgba(47, 184, 166, 0.55)' : 'none';
+        el.style.outlineOffset = isPinned ? '2px' : '0';
+      }
+    });
+  }
+
+  function clearPinDecorations(doc: Document): void {
+    doc.querySelectorAll<HTMLElement>('[data-edit-id]').forEach((el) => {
+      el.style.cursor = '';
+      el.style.outline = '';
+      el.style.outlineOffset = '';
+    });
+  }
+
+  // Re-apply decorations if pinMode / pinnedEditIds change after initial load.
+  $effect(() => {
+    const doc = iframeEl?.contentDocument;
+    if (doc) {
+      void pinMode;
+      void pinnedEditIds;
+      applyPinDecorations(doc);
+    }
+  });
 
   function startEditing(element: HTMLElement): void {
     if (activeElement === element) return;

@@ -7,7 +7,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServiceContainer } from '../../container.js';
-import { textResponse } from '../_shared/responses.js';
+import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 
 export function registerGetSectionTool(server: McpServer, container: ServiceContainer): void {
@@ -24,17 +24,19 @@ export function registerGetSectionTool(server: McpServer, container: ServiceCont
     async ({ section_id }) => {
       try {
         const section = await container.documentService.getSection(section_id);
-        return textResponse({
-          id: section.id,
-          deck_id: section.deckId,
-          position: section.position,
-          kind: section.kind,
-          html: section.html,
-          break_hints: section.breakHints,
-          metadata: section.metadata,
-          last_validation: section.lastValidation,
-          created_at: section.createdAt,
-          updated_at: section.updatedAt,
+        return structuredResponse({
+          section: {
+            id: section.id,
+            deck_id: section.deckId,
+            position: section.position,
+            kind: section.kind,
+            html: section.html,
+            break_hints: section.breakHints,
+            metadata: section.metadata,
+            last_validation: section.lastValidation,
+            created_at: section.createdAt,
+            updated_at: section.updatedAt,
+          },
         });
       } catch (error) {
         return handleToolError(error);

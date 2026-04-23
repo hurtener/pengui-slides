@@ -30,9 +30,28 @@
   let commentKind = $state<'revision' | 'question' | 'approval' | 'note'>('note');
   let commentStatus = $state('');
   let commentPending = $state(false);
+  // Pin-mode: capture the clicked element's data-edit-id. Falls back to
+  // slide-level target when null. Element targets give the agent a semantic
+  // reference ("edit-id=title-node") instead of pixel coordinates.
+  let pinMode = $state(false);
+  let pinnedEditId = $state<string | null>(null);
+  // editIds of elements that already have (unresolved) comments — drives the
+  // dashed mint outline decoration on the canvas.
+  let commentedEditIds = $state<string[]>([]);
 
   function toggleCommentDrawer(): void {
     commentDrawerOpen = !commentDrawerOpen;
+  }
+
+  function togglePinMode(): void {
+    pinMode = !pinMode;
+    if (!pinMode) pinnedEditId = null;
+  }
+
+  function handlePinTarget(detail: { editId: string }): void {
+    pinnedEditId = detail.editId;
+    pinMode = false;
+    commentStatus = `Pinning to element: ${detail.editId}`;
   }
 
   async function submitComment(): Promise<void> {
@@ -40,10 +59,10 @@
     commentPending = true;
     commentStatus = '';
     try {
-      const target: CommentTarget = {
-        kind: 'slide',
-        slide_id: deck.editorState.selectedSlide.slideId,
-      };
+      const slideId = deck.editorState.selectedSlide.slideId;
+      const target: CommentTarget = pinnedEditId
+        ? { kind: 'element', container_id: slideId, edit_id: pinnedEditId }
+        : { kind: 'slide', slide_id: slideId };
       await bridge.addCommentFromApp({
         deck_id: deck.editorState.deck.id,
         target,
@@ -51,8 +70,10 @@
         body: commentDraft.trim(),
       });
       commentDraft = '';
+      pinnedEditId = null;
       commentStatus = 'Pinned.';
       commentDrawerOpen = true;
+      await refreshCommentedEditIds();
     } catch (err) {
       commentStatus = err instanceof Error ? err.message : String(err);
     } finally {
@@ -60,16 +81,40 @@
     }
   }
 
+  async function refreshCommentedEditIds(): Promise<void> {
+    if (!bridge || !deck.editorState) return;
+    try {
+      const result = await bridge.listComments(
+        deck.editorState.deck.id,
+        { resolved: 'unresolved', target_kind: 'element' },
+      );
+      const slideId = deck.editorState.selectedSlide.slideId;
+      commentedEditIds = result.comments
+        .filter((c) => c.target.kind === 'element' && c.target.container_id === slideId)
+        .map((c) => (c.target as { edit_id: string }).edit_id);
+    } catch {
+      commentedEditIds = [];
+    }
+  }
+
+  // Refresh element-level pin decorations whenever the selected slide or
+  // the bridge changes.
+  $effect(() => {
+    if (bridge && deck.editorState) {
+      void deck.editorState.selectedSlide.slideId;
+      void refreshCommentedEditIds();
+    }
+  });
+
   function handleCommentJump(target: CommentTarget): void {
     if (target.kind === 'slide') {
-      deck.selectSlide(target.slideId as unknown as string);
+      deck.selectSlide(target.slide_id);
       commentDrawerOpen = false;
     } else if (target.kind === 'element') {
-      deck.selectSlide(target.containerId);
+      deck.selectSlide(target.container_id);
       commentDrawerOpen = false;
     }
-    // Section targets are not yet routable in the slide editor; Wave 5 will
-    // cover document-mode Editor.
+    // Section targets route via the Document Editor, not this slide Editor.
   }
 
   let detailsOpen = $state(false);
@@ -242,9 +287,12 @@
             html={selectedSlide?.html ?? ''}
             revisionHash={selectedSlide?.revisionHash ?? ''}
             renderNonce={canvasNonce}
-            disabled={deck.saving}
+            disabled={deck.saving || pinMode}
             format={deckFormat}
+            pinMode={pinMode}
+            pinnedEditIds={commentedEditIds}
             oncommit={handleTextCommit}
+            onpintarget={handlePinTarget}
             onerror={(d) => console.error(d.message)}
           />
         </div>
@@ -282,10 +330,34 @@
                 >{k}</button>
               {/each}
             </div>
+            <div class="cc-target-row">
+              <span class="cc-target-label">Target:</span>
+              {#if pinnedEditId}
+                <span class="cc-pin-chip">
+                  <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" width="10" height="10"><circle cx="6" cy="6" r="4"/></svg>
+                  {pinnedEditId}
+                </span>
+                <button type="button" class="cc-clear" onclick={() => { pinnedEditId = null; commentStatus = ''; }}>clear</button>
+              {:else if pinMode}
+                <span class="cc-pin-active">Click an element in the slide…</span>
+                <button type="button" class="cc-clear" onclick={togglePinMode}>cancel</button>
+              {:else}
+                <span class="cc-target-note">whole slide</span>
+                <button
+                  type="button"
+                  class={`cc-pin-btn ${pinMode ? 'active' : ''}`}
+                  onclick={togglePinMode}
+                >
+                  Pin to element
+                </button>
+              {/if}
+            </div>
             <Textarea
               bind:value={commentDraft}
               rows={2}
-              placeholder="Note something to discuss with the agent here (pinned to this slide)."
+              placeholder={pinnedEditId
+                ? `Your note will pin to element "${pinnedEditId}". The agent sees this editId, not pixels.`
+                : 'Note something to discuss with the agent (pins to the whole slide).'}
             />
             <div class="cc-actions">
               <Button
@@ -726,6 +798,70 @@
     gap: var(--s-2);
     align-items: center;
     padding-top: var(--s-1);
+  }
+
+  .cc-target-row {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    font-size: 11px;
+    color: var(--ink-3);
+    flex-wrap: wrap;
+  }
+
+  .cc-target-label {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .cc-target-note {
+    color: var(--ink-2);
+  }
+
+  .cc-pin-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: var(--r-pill);
+    background: var(--mint-tint);
+    color: var(--mint-hover);
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+
+  .cc-pin-active {
+    padding: 2px 8px;
+    border-radius: var(--r-pill);
+    background: var(--warning-tint);
+    color: var(--warning);
+    font-weight: 500;
+  }
+
+  .cc-pin-btn {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 10px;
+    border-radius: var(--r-pill);
+    border: 1px solid var(--border-subtle);
+    background: var(--surface-1);
+    color: var(--ink-2);
+    cursor: pointer;
+  }
+
+  .cc-pin-btn:hover,
+  .cc-pin-btn.active {
+    border-color: var(--mint);
+    color: var(--mint-hover);
+    background: var(--mint-tint);
+  }
+
+  .cc-clear {
+    font-size: 11px;
+    color: var(--ink-3);
+    text-decoration: underline;
+    cursor: pointer;
   }
 
   /* ── Composer card internals ──────────────────────────────── */
