@@ -1,4 +1,5 @@
 import type { DeckService } from '../decks/deck-service.js';
+import type { SoulService } from '../souls/soul-service.js';
 import type { ValidationService } from '../validation/validation-service.js';
 import type { RenderService } from '../rendering/render-service.js';
 import type { MetadataEmbedder } from '../metadata/metadata-embedder.js';
@@ -6,6 +7,10 @@ import type { Logger } from '../../infrastructure/logger.js';
 import type { Slide } from '../../types/deck.js';
 import type { EditorState, EditorThumbnail, ApplyTextEditInput } from '../../types/editor.js';
 import type { SlideDocument, SlideTextElement } from '../../types/slide-document.js';
+import type {
+  SessionView,
+  SetActiveWorkspaceInput,
+} from '../../types/session.js';
 import { soulId } from '../../types/common.js';
 import { DeckNotFoundError, SlideNotFoundError, SlideRevisionConflictError } from '../../types/errors.js';
 import { TextEditableNormalizer } from './text-editable-normalizer.js';
@@ -20,9 +25,11 @@ import type { SlideDocumentService } from '../documents/index.js';
 
 export class EditorService {
   private readonly normalizer = new TextEditableNormalizer();
+  private session: SessionView = { openPanels: [] };
 
   constructor(
     private readonly deckService: DeckService,
+    private readonly soulService: SoulService,
     private readonly validationService: ValidationService,
     private readonly renderService: RenderService,
     private readonly metadataEmbedder: MetadataEmbedder,
@@ -32,6 +39,93 @@ export class EditorService {
 
   async getEditorState(deckId: string, slideId?: string): Promise<EditorState> {
     return this.buildEditorState(deckId, slideId);
+  }
+
+  // ── Session (v4) ─────────────────────────────────────────────────
+
+  /**
+   * Return the current workspace session as a light-weight view.
+   * Used by `get_session` (model-visible) so the agent can avoid
+   * asking "which deck?" on every turn.
+   */
+  async getSession(): Promise<SessionView> {
+    // Rebuild derived fields in case the deck/soul was renamed or deleted
+    // since the app last declared.
+    const view: SessionView = { openPanels: this.session.openPanels };
+    if (this.session.updatedAt) view.updatedAt = this.session.updatedAt;
+    if (this.session.activeWorkflow) view.activeWorkflow = this.session.activeWorkflow;
+    if (this.session.activeDeck) {
+      const summary = await this.deckService
+        .getDeckSummary(this.session.activeDeck.id)
+        .catch(() => null);
+      if (summary) {
+        view.activeDeck = {
+          id: summary.id,
+          slug: summary.slug,
+          title: summary.title,
+          format: summary.format,
+          authoringModel: summary.authoringModel,
+        };
+      }
+    }
+    if (this.session.activeSoul) {
+      const got = await this.soulService
+        .get(this.session.activeSoul.id)
+        .catch(() => null);
+      if (got) {
+        const soul = got.soul;
+        view.activeSoul = {
+          id: soul.id,
+          slug: soul.slug ?? (await this.soulService.slugFor(soul.id)) ?? '',
+          name: soul.name,
+          status: soul.status,
+        };
+      }
+    }
+    return view;
+  }
+
+  /**
+   * Update the active session. Called by the app-only `set_active_workspace`
+   * tool (Wave 3). Nullable refs clear the corresponding slot.
+   */
+  async setActiveWorkspace(input: SetActiveWorkspaceInput): Promise<SessionView> {
+    if (input.deckRef === null) {
+      delete this.session.activeDeck;
+    } else if (input.deckRef !== undefined) {
+      const did = await this.deckService.resolveRefOrThrow(input.deckRef);
+      const summary = await this.deckService.getDeckSummary(did);
+      this.session.activeDeck = {
+        id: summary.id,
+        slug: summary.slug,
+        title: summary.title,
+        format: summary.format,
+        authoringModel: summary.authoringModel,
+      };
+    }
+    if (input.soulRef === null) {
+      delete this.session.activeSoul;
+    } else if (input.soulRef !== undefined) {
+      const sid = await this.soulService.resolveRefOrThrow(input.soulRef);
+      const got = await this.soulService.get(sid);
+      const soul = got.soul;
+      this.session.activeSoul = {
+        id: soul.id,
+        slug: soul.slug ?? (await this.soulService.slugFor(soul.id)) ?? '',
+        name: soul.name,
+        status: soul.status,
+      };
+    }
+    if (input.workflow === null) {
+      delete this.session.activeWorkflow;
+    } else if (input.workflow !== undefined) {
+      this.session.activeWorkflow = input.workflow;
+    }
+    if (input.openPanels !== undefined) {
+      this.session.openPanels = [...input.openPanels];
+    }
+    this.session.updatedAt = new Date().toISOString();
+    return this.getSession();
   }
 
   async applyTextEdit(input: ApplyTextEditInput): Promise<EditorState> {

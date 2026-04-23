@@ -55,6 +55,9 @@ import { registerListCommentsTool } from './comments/list-comments.tool.js';
 import { registerAddCommentTool } from './comments/add-comment.tool.js';
 import { registerResolveCommentTool } from './comments/resolve-comment.tool.js';
 
+// Session tools (v4)
+import { registerGetSessionTool } from './session/get-session.tool.js';
+
 // MCP App tools
 import { registerOpenDeckEditorTool } from './app/open-deck-editor.tool.js';
 import { registerGetEditorStateTool } from './app/get-editor-state.tool.js';
@@ -108,6 +111,9 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerListCommentsTool(server, container);
   registerAddCommentTool(server, container);
   registerResolveCommentTool(server, container);
+
+  // Session tools (v4)
+  registerGetSessionTool(server, container);
 
   // MCP App tools
   registerOpenDeckEditorTool(server, container);

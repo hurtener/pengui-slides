@@ -111,6 +111,7 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
   );
   const editorService = new EditorService(
     deckService,
+    soulService,
     validationService,
     renderService,
     metadataEmbedder,
