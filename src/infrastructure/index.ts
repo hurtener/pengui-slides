@@ -7,6 +7,7 @@ export {
   generateRevisionId,
   generateTemplateId,
   generateAssetId,
+  generateCommentId,
 } from './id-generator.js';
 export { sha256, hashSlideContents } from './hash.js';
 export { SystemClock, FixedClock, systemClock, type Clock } from './clock.js';

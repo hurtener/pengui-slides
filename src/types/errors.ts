@@ -57,6 +57,10 @@ export enum ErrorCode {
   ASSET_NOT_FOUND = 'ASSET_NOT_FOUND',
   ASSET_INVALID_MIME = 'ASSET_INVALID_MIME',
 
+  // Comment errors (v4)
+  COMMENT_NOT_FOUND = 'COMMENT_NOT_FOUND',
+  COMMENT_ALREADY_RESOLVED = 'COMMENT_ALREADY_RESOLVED',
+
   // General
   INTERNAL_ERROR = 'INTERNAL_ERROR',
   INVALID_INPUT = 'INVALID_INPUT',
@@ -200,6 +204,22 @@ export class UnknownFormatError extends PenguiError {
       ErrorCode.UNKNOWN_FORMAT,
       `Unknown format "${format}". Known formats: ${known.join(', ')}.`,
       { format, known },
+    );
+  }
+}
+
+export class CommentNotFoundError extends PenguiError {
+  constructor(commentId: string) {
+    super(ErrorCode.COMMENT_NOT_FOUND, `Comment not found: ${commentId}`, { commentId });
+  }
+}
+
+export class CommentAlreadyResolvedError extends PenguiError {
+  constructor(commentId: string) {
+    super(
+      ErrorCode.COMMENT_ALREADY_RESOLVED,
+      `Comment already resolved: ${commentId}`,
+      { commentId },
     );
   }
 }

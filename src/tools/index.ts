@@ -50,6 +50,11 @@ import { registerExportPdfTool } from './export/export-pdf.tool.js';
 import { registerExportHtmlTool } from './export/export-html.tool.js';
 import { registerExportGoogleSlidesTool } from './export/export-google-slides.tool.js';
 
+// Comment tools (v4)
+import { registerListCommentsTool } from './comments/list-comments.tool.js';
+import { registerAddCommentTool } from './comments/add-comment.tool.js';
+import { registerResolveCommentTool } from './comments/resolve-comment.tool.js';
+
 // MCP App tools
 import { registerOpenDeckEditorTool } from './app/open-deck-editor.tool.js';
 import { registerGetEditorStateTool } from './app/get-editor-state.tool.js';
@@ -98,6 +103,11 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerExportPdfTool(server, container);
   registerExportHtmlTool(server, container);
   registerExportGoogleSlidesTool(server, container);
+
+  // Comment tools (v4)
+  registerListCommentsTool(server, container);
+  registerAddCommentTool(server, container);
+  registerResolveCommentTool(server, container);
 
   // MCP App tools
   registerOpenDeckEditorTool(server, container);

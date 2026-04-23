@@ -11,6 +11,7 @@ import {
   revisionId,
   templateId,
   assetId,
+  commentId,
   type SoulId,
   type DeckId,
   type SlideId,
@@ -18,6 +19,7 @@ import {
   type RevisionId,
   type TemplateId,
   type AssetId,
+  type CommentId,
 } from '../types/common.js';
 
 export function generateSoulId(): SoulId {
@@ -46,4 +48,8 @@ export function generateTemplateId(): TemplateId {
 
 export function generateAssetId(): AssetId {
   return assetId(uuidv4());
+}
+
+export function generateCommentId(): CommentId {
+  return commentId(uuidv4());
 }

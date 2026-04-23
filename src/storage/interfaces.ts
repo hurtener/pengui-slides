@@ -6,11 +6,19 @@
  * the call-site code.
  */
 
-import type { AssetId, DeckId, SlideId, SectionId, SoulId } from '../types/common.js';
+import type {
+  AssetId,
+  CommentId,
+  DeckId,
+  SlideId,
+  SectionId,
+  SoulId,
+} from '../types/common.js';
 import type { DesignSoul, LayoutRecipe, SoulStatus } from '../types/design-soul.js';
 import type { Deck, DeckRevision, Slide } from '../types/deck.js';
 import type { Section } from '../types/section.js';
 import type { Asset, AssetScope } from '../types/asset.js';
+import type { Comment, ListCommentsFilter } from '../types/comment.js';
 
 // ── Soul Store ───────────────────────────────────────────────────
 
@@ -71,4 +79,14 @@ export interface IAssetStore {
   getData(id: AssetId): Promise<Buffer | undefined>;
   list(filter?: AssetListFilter): Promise<Asset[]>;
   delete(id: AssetId): Promise<boolean>;
+}
+
+// ── Comment Store ────────────────────────────────────────────────
+
+export interface ICommentStore {
+  save(comment: Comment): Promise<void>;
+  get(id: CommentId): Promise<Comment | undefined>;
+  listByDeck(deckId: DeckId, filter?: ListCommentsFilter): Promise<Comment[]>;
+  delete(id: CommentId): Promise<boolean>;
+  deleteByDeck(deckId: DeckId): Promise<number>;
 }

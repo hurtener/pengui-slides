@@ -17,6 +17,7 @@ export type SectionId = Brand<string, 'SectionId'>;
 export type RevisionId = Brand<string, 'RevisionId'>;
 export type TemplateId = Brand<string, 'TemplateId'>;
 export type AssetId = Brand<string, 'AssetId'>;
+export type CommentId = Brand<string, 'CommentId'>;
 
 // ── Factory Functions ─────────────────────────────────────────────
 
@@ -40,6 +41,9 @@ export function templateId(id: string): TemplateId {
 }
 export function assetId(id: string): AssetId {
   return id as AssetId;
+}
+export function commentId(id: string): CommentId {
+  return id as CommentId;
 }
 
 // ── Timestamps ────────────────────────────────────────────────────
