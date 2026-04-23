@@ -5,9 +5,13 @@
   import Editor from './routes/Editor.svelte';
   import Decks from './routes/Decks.svelte';
   import Export from './routes/Export.svelte';
+  import Workspace from './routes/Workspace.svelte';
+  import Souls from './routes/Souls.svelte';
+  import Assets from './routes/Assets.svelte';
   import { createDeckStore } from './stores/deck.svelte';
   import type { DeckEditorBridge } from './lib/types';
   import type { RevisionPayload } from './lib/types';
+  import type { McpDeckEditorBridge } from './lib/bridge';
 
   import './styles/globals.css';
 
@@ -17,8 +21,17 @@
 
   let { bridge }: Props = $props();
 
-  // Route state
-  let route = $state<'decks' | 'editor' | 'export'>('editor');
+  // Route state — extended with v4 workspace routes
+  let route = $state<'workspace' | 'decks' | 'editor' | 'export' | 'souls' | 'assets'>('workspace');
+
+  // v4 sidebar nav items
+  const navItems = [
+    { key: 'workspace', label: 'Workspace', icon: 'library' as const },
+    { key: 'editor',    label: 'Editor',    icon: 'plus' as const },
+    { key: 'souls',     label: 'Souls',     icon: 'cog' as const },
+    { key: 'assets',    label: 'Assets',    icon: 'cog' as const },
+    { key: 'export',    label: 'Export',    icon: 'cog' as const },
+  ];
 
   // Create deck store — wraps all bridge-to-state logic.
   // The bridge is a singleton created once at mount; untrack() tells Svelte
@@ -44,6 +57,13 @@
 
     const disposeResult = initialBridge.onToolResult((result) => {
       deck.applyIncomingState(result);
+      // Auto-navigate to editor when the host pushes editor state (e.g. via
+      // open_deck_editor). This preserves pre-v4 behaviour while keeping
+      // workspace as the default landing page for direct opens.
+      const payload = result.structuredContent;
+      if (payload && typeof payload === 'object' && 'editor_state' in payload && payload.editor_state) {
+        route = 'editor';
+      }
     });
 
     void connectBridge();
@@ -77,6 +97,11 @@
     void deck.loadEditor(deckId);
   }
 
+  // Cast bridge to the concrete class type so v4 route components can use
+  // the new typed methods. The bridge prop is typed as the interface for
+  // test compatibility; at runtime it will always be McpDeckEditorBridge.
+  const mcpBridge = $derived(bridge as unknown as McpDeckEditorBridge);
+
   const isLoading = $derived(deck.loading && !deck.editorState);
   const hasError = $derived(!!errorMessage && !deck.editorState);
 </script>
@@ -108,15 +133,22 @@
       onNavigate={handleNav}
       wordmark="Pengui"
       sub="Slides"
+      items={navItems}
     />
 
     <main class="main-area">
-      {#if route === 'decks'}
+      {#if route === 'workspace'}
+        <Workspace bridge={mcpBridge} onOpenDeck={handleOpenDeck} onNavigate={handleNav} />
+      {:else if route === 'decks'}
         <Decks {deck} onOpenDeck={handleOpenDeck} />
       {:else if route === 'editor'}
         <Editor {deck} onRevisionRequest={handleRevisionRequest} />
       {:else if route === 'export'}
         <Export {deck} {bridge} />
+      {:else if route === 'souls'}
+        <Souls bridge={mcpBridge} />
+      {:else if route === 'assets'}
+        <Assets bridge={mcpBridge} />
       {/if}
     </main>
   </div>
