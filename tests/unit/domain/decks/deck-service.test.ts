@@ -2,12 +2,18 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { DeckService } from '../../../../src/domain/decks/deck-service.js';
 import { InMemoryDeckStore } from '../../../../src/storage/memory/deck-store.js';
 import { InMemorySlideStore } from '../../../../src/storage/memory/slide-store.js';
+import { InMemorySectionStore } from '../../../../src/storage/memory/section-store.js';
 import { InMemorySoulStore } from '../../../../src/storage/memory/soul-store.js';
 import { FixedClock } from '../../../../src/infrastructure/clock.js';
 import { Logger } from '../../../../src/infrastructure/logger.js';
 import { SoulService } from '../../../../src/domain/souls/soul-service.js';
 import { sampleSoulInput } from '../../../helpers/fixtures.js';
-import { DeckNotFoundError, SlideNotFoundError, SoulNotFoundError } from '../../../../src/types/errors.js';
+import {
+  DeckNotFoundError,
+  SlideNotFoundError,
+  SoulNotFoundError,
+  WrongAuthoringModelError,
+} from '../../../../src/types/errors.js';
 import type { SoulId } from '../../../../src/types/common.js';
 
 describe('DeckService', () => {
@@ -16,6 +22,7 @@ describe('DeckService', () => {
   let soulStore: InMemorySoulStore;
   let deckStore: InMemoryDeckStore;
   let slideStore: InMemorySlideStore;
+  let sectionStore: InMemorySectionStore;
   let clock: FixedClock;
   let logger: Logger;
   let approvedSoulId: string;
@@ -24,11 +31,12 @@ describe('DeckService', () => {
     soulStore = new InMemorySoulStore();
     deckStore = new InMemoryDeckStore();
     slideStore = new InMemorySlideStore();
+    sectionStore = new InMemorySectionStore();
     clock = new FixedClock('2026-01-15T12:00:00.000Z');
     logger = new Logger('test', 'error');
 
     soulService = new SoulService(soulStore, slideStore, clock, logger);
-    deckService = new DeckService(deckStore, slideStore, soulStore, clock, logger);
+    deckService = new DeckService(deckStore, slideStore, sectionStore, soulStore, clock, logger);
 
     // Create and approve a soul for deck creation
     const soul = await soulService.register(sampleSoulInput);
@@ -60,6 +68,87 @@ describe('DeckService', () => {
       await expect(
         deckService.createDeck({ soulId: 'non-existent' }),
       ).rejects.toThrow(SoulNotFoundError);
+    });
+
+    it('defaults authoringModel to "slides" for slides_16_9', async () => {
+      const deck = await deckService.createDeck({ soulId: approvedSoulId });
+      expect(deck.authoringModel).toBe('slides');
+      expect(deck.sectionIds).toEqual([]);
+    });
+
+    it('defaults authoringModel to "document" for print_a4_portrait', async () => {
+      const deck = await deckService.createDeck({
+        soulId: approvedSoulId,
+        format: 'print_a4_portrait',
+      });
+      expect(deck.authoringModel).toBe('document');
+    });
+
+    it('respects explicit authoringModel override for print formats (legacy opt-in)', async () => {
+      const deck = await deckService.createDeck({
+        soulId: approvedSoulId,
+        format: 'print_a4_portrait',
+        authoringModel: 'slides',
+      });
+      expect(deck.authoringModel).toBe('slides');
+    });
+  });
+
+  describe('authoring-model guards', () => {
+    it('addSlide throws WrongAuthoringModelError on document-mode decks', async () => {
+      const deck = await deckService.createDeck({
+        soulId: approvedSoulId,
+        format: 'print_a4_portrait',
+      });
+      await expect(
+        deckService.addSlide({
+          deckId: deck.id as string,
+          html: '<div class="slide"></div>',
+          metadata: { title: 't', type: 'content', narrative: '' },
+        }),
+      ).rejects.toThrow(WrongAuthoringModelError);
+    });
+
+    it('updateSlide throws on document-mode decks', async () => {
+      const deck = await deckService.createDeck({
+        soulId: approvedSoulId,
+        format: 'print_a4_portrait',
+      });
+      await expect(
+        deckService.updateSlide({
+          deckId: deck.id as string,
+          slideId: 'nope',
+          html: '<div></div>',
+        }),
+      ).rejects.toThrow(WrongAuthoringModelError);
+    });
+
+    it('reorderSlides throws on document-mode decks', async () => {
+      const deck = await deckService.createDeck({
+        soulId: approvedSoulId,
+        format: 'print_a4_portrait',
+      });
+      await expect(
+        deckService.reorderSlides(deck.id as string, []),
+      ).rejects.toThrow(WrongAuthoringModelError);
+    });
+
+    it('WrongAuthoringModelError names the suggested tool in the message', async () => {
+      const deck = await deckService.createDeck({
+        soulId: approvedSoulId,
+        format: 'print_a4_portrait',
+      });
+      try {
+        await deckService.addSlide({
+          deckId: deck.id as string,
+          html: '<div></div>',
+          metadata: { title: 't', type: 'content', narrative: '' },
+        });
+        expect.fail('expected WrongAuthoringModelError');
+      } catch (err) {
+        expect((err as Error).message).toContain('add_section');
+        expect((err as Error).message).toContain('document-mode');
+      }
     });
 
     it('persists the deck to the store', async () => {

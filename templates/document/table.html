@@ -1,0 +1,26 @@
+<!-- Pengui document recipe: table
+     Root MUST be <section class="pengui-section pengui-table">.
+     Fragment has an H3 followed by a <table> with <thead> + <tbody>.
+     Tables may split across pages; <thead> repeats on each page (the
+     composer sets thead { display: table-header-group }). -->
+<!-- @section-meta {"title":"Data Table","kind":"table","narrative":"Heading plus a <table> with a header row and six body rows. Columns are left-aligned text + numeric right-aligned columns. Tables split across pages with a repeating header.","tags":["table","data","print"]} -->
+<section class="pengui-section pengui-table">
+  <h3>Comparison Table</h3>
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Item</th>
+        <th scope="col" class="num">Value</th>
+        <th scope="col" class="num">Change</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>First metric</td><td class="num">1,240</td><td class="num">+4.2%</td></tr>
+      <tr><td>Second metric</td><td class="num">3,110</td><td class="num">−1.1%</td></tr>
+      <tr><td>Third metric</td><td class="num">987</td><td class="num">+0.8%</td></tr>
+      <tr><td>Fourth metric</td><td class="num">2,456</td><td class="num">+6.3%</td></tr>
+      <tr><td>Fifth metric</td><td class="num">540</td><td class="num">−2.9%</td></tr>
+      <tr><td>Sixth metric</td><td class="num">1,802</td><td class="num">+3.4%</td></tr>
+    </tbody>
+  </table>
+</section>

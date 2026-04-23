@@ -1,0 +1,36 @@
+/* Pengui document recipe: chart — scoped styles. */
+
+.pengui-section.pengui-chart {
+  padding: var(--space-lg, 24px) var(--space-xl, 48px);
+}
+
+.pengui-chart h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-md, 16px) 0;
+}
+
+.pengui-chart .pengui-chart,
+figure.pengui-chart {
+  margin: 0;
+  padding: var(--space-md, 16px);
+  background: var(--color-surface);
+  border: var(--border-width, 1px) solid var(--color-border);
+  border-radius: var(--radius-card, 8px);
+}
+
+.pengui-chart .chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.pengui-chart figcaption {
+  margin-top: var(--space-md, 16px);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  color: var(--color-text-tertiary);
+  text-align: center;
+}

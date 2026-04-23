@@ -1,0 +1,53 @@
+<!-- Pengui document recipe: chart
+     Root MUST be <section class="pengui-section pengui-chart">.
+     Contains an H3 followed by a <figure class="pengui-chart"> with an
+     inline SVG (viewBox required) and a <figcaption>. Composer applies
+     break-inside: avoid via .pengui-chart. -->
+<!-- @section-meta {"title":"Bar Chart","kind":"chart","narrative":"Heading plus a figure that wraps an inline SVG bar chart (axes, four bars, value labels) with a figcaption.","tags":["chart","bar","svg","data","print"]} -->
+<section class="pengui-section pengui-chart">
+  <h3>Chart Heading</h3>
+  <figure class="pengui-chart">
+    <svg
+      class="chart-svg"
+      viewBox="0 0 600 400"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-label="Bar chart comparing four categories"
+      role="img"
+    >
+      <!-- Plot area: 70..560 × 40..340 -->
+      <line class="axis" x1="70" y1="340" x2="560" y2="340" stroke="var(--color-border)" stroke-width="1.5" />
+      <line class="axis" x1="70" y1="40" x2="70" y2="340" stroke="var(--color-border)" stroke-width="1.5" />
+
+      <!-- Gridlines -->
+      <line x1="70" y1="265" x2="560" y2="265" stroke="var(--color-border)" stroke-width="0.5" stroke-dasharray="3,3" />
+      <line x1="70" y1="190" x2="560" y2="190" stroke="var(--color-border)" stroke-width="0.5" stroke-dasharray="3,3" />
+      <line x1="70" y1="115" x2="560" y2="115" stroke="var(--color-border)" stroke-width="0.5" stroke-dasharray="3,3" />
+
+      <!-- Bars (4 columns, 100px slot each, 60px bar width) -->
+      <rect x="100" y="160" width="60" height="180" fill="var(--color-category-a)" />
+      <rect x="220" y="100" width="60" height="240" fill="var(--color-category-b)" />
+      <rect x="340" y="200" width="60" height="140" fill="var(--color-category-c)" />
+      <rect x="460" y="70"  width="60" height="270" fill="var(--color-category-d)" />
+
+      <!-- Value labels -->
+      <text x="130" y="152" text-anchor="middle" font-family="var(--font-mono)" font-size="14" fill="var(--color-text-primary)">24</text>
+      <text x="250" y="92"  text-anchor="middle" font-family="var(--font-mono)" font-size="14" fill="var(--color-text-primary)">32</text>
+      <text x="370" y="192" text-anchor="middle" font-family="var(--font-mono)" font-size="14" fill="var(--color-text-primary)">19</text>
+      <text x="490" y="62"  text-anchor="middle" font-family="var(--font-mono)" font-size="14" fill="var(--color-text-primary)">36</text>
+
+      <!-- X-axis labels -->
+      <text x="130" y="365" text-anchor="middle" font-family="var(--font-body)" font-size="14" fill="var(--color-text-secondary)">Q1</text>
+      <text x="250" y="365" text-anchor="middle" font-family="var(--font-body)" font-size="14" fill="var(--color-text-secondary)">Q2</text>
+      <text x="370" y="365" text-anchor="middle" font-family="var(--font-body)" font-size="14" fill="var(--color-text-secondary)">Q3</text>
+      <text x="490" y="365" text-anchor="middle" font-family="var(--font-body)" font-size="14" fill="var(--color-text-secondary)">Q4</text>
+
+      <!-- Y-axis labels -->
+      <text x="60" y="344" text-anchor="end" font-family="var(--font-mono)" font-size="12" fill="var(--color-text-tertiary)">0</text>
+      <text x="60" y="269" text-anchor="end" font-family="var(--font-mono)" font-size="12" fill="var(--color-text-tertiary)">10</text>
+      <text x="60" y="194" text-anchor="end" font-family="var(--font-mono)" font-size="12" fill="var(--color-text-tertiary)">20</text>
+      <text x="60" y="119" text-anchor="end" font-family="var(--font-mono)" font-size="12" fill="var(--color-text-tertiary)">30</text>
+      <text x="60" y="44"  text-anchor="end" font-family="var(--font-mono)" font-size="12" fill="var(--color-text-tertiary)">40</text>
+    </svg>
+    <figcaption>Chart 1. Quarterly comparison — replace values and labels with your own data.</figcaption>
+  </figure>
+</section>

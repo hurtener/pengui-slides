@@ -1,0 +1,25 @@
+<!-- Pengui document recipe: figure
+     Root MUST be <section class="pengui-section pengui-figure">.
+     The fragment MUST contain exactly one <figure> with a <figcaption>.
+     The universal break rule `break-inside: avoid` is applied to
+     .pengui-figure by the composer — the figure will not split. -->
+<!-- @section-meta {"title":"Figure","kind":"figure","narrative":"A single <figure> containing an inline SVG illustration and a <figcaption>. Kept whole by the composer via break-inside: avoid on .pengui-figure.","tags":["figure","illustration","svg","print"]} -->
+<section class="pengui-section pengui-figure">
+  <figure class="pengui-figure">
+    <svg
+      class="figure-svg"
+      viewBox="0 0 600 400"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-label="Placeholder figure illustration"
+      role="img"
+    >
+      <rect x="0" y="0" width="600" height="400" fill="var(--color-surface)" />
+      <rect x="40" y="40" width="520" height="320" rx="12" fill="var(--color-surface-alt)" stroke="var(--color-border)" stroke-width="1.5" />
+      <circle cx="300" cy="200" r="96" fill="var(--color-accent-primary)" opacity="0.75" />
+      <circle cx="220" cy="240" r="64" fill="var(--color-accent-secondary)" opacity="0.75" />
+      <circle cx="380" cy="240" r="64" fill="var(--color-accent-warm)" opacity="0.75" />
+      <text x="300" y="340" text-anchor="middle" font-family="var(--font-body)" font-size="18" fill="var(--color-text-secondary)">Replace with your illustration</text>
+    </svg>
+    <figcaption>Figure 1. A short caption that describes the figure and its purpose in one sentence.</figcaption>
+  </figure>
+</section>

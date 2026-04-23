@@ -34,12 +34,15 @@ import { resolveAssetRefs } from '../assets/asset-resolver.js';
 import { applyDefensiveDefaults } from '../validation/stage0/defensive-injector.js';
 import type { PlaywrightPool } from './playwright-pool.js';
 import type { SlideRenderer } from './slide-renderer.js';
-import type { Slide } from '../../types/deck.js';
+import type { Slide, Deck, DocumentMeta } from '../../types/deck.js';
+import type { Section } from '../../types/section.js';
+import type { DesignSoul } from '../../types/design-soul.js';
 import type { FormatGeometry, FormatKind } from '../../types/format.js';
 import type { ExportResult, PdfMode } from '../../types/export.js';
 import { FORMAT_REGISTRY, getFormat } from '../formats/format-registry.js';
 import { parsePageChrome, resolvePageChrome } from '../metadata/page-chrome-parser.js';
 import type { ResolvedPageChrome } from '../../types/page-chrome.js';
+import { DocumentComposer } from './document-composer.js';
 
 // ── Defaults ─────────────────────────────────────────────────────
 
@@ -95,6 +98,20 @@ export interface PdfExportOptions {
   mode?: PdfMode;
   /** Either a FormatKind or a fully-resolved geometry. */
   format?: FormatKind;
+  geometry?: FormatGeometry;
+}
+
+/**
+ * Input for continuous-document PDF export (v3 flow). Sections, deck,
+ * and soul are consumed by the DocumentComposer; geometry falls back
+ * to the deck.format's registry entry when omitted.
+ */
+export interface DocumentPdfExportInput {
+  sections: Section[];
+  deck: Deck;
+  soul: DesignSoul;
+  documentMeta: DocumentMeta;
+  deckTitle: string;
   geometry?: FormatGeometry;
 }
 
@@ -215,6 +232,84 @@ export class PdfExporter {
       exportedAt: new Date().toISOString(),
       ...chromeMeta,
     };
+  }
+
+  // ── Continuous-document (v3) export path ─────────────────────
+
+  /**
+   * Export a continuous-document deck as a PDF. The composer assembles
+   * one HTML document; Playwright paginates it via its built-in paged
+   * media engine (`preferCSSPageSize: true`, margin: 0 — CSS owns the
+   * @page box).
+   *
+   * Stage 2 validation is NOT run here — it's the caller's job to
+   * decide whether to block on pagination issues before export.
+   */
+  async exportDocument(
+    input: DocumentPdfExportInput,
+  ): Promise<ExportResult & PdfExportMetadata> {
+    const { sections, deck, soul, deckTitle, documentMeta } = input;
+    const geometry =
+      input.geometry ??
+      (deck.format ? getFormat(deck.format).geometry : DEFAULT_GEOMETRY);
+
+    this.logger.info('Starting continuous-document PDF export', {
+      deckId: deck.id,
+      sectionCount: sections.length,
+      geometry: { width: geometry.widthPx, height: geometry.heightPx, physicalPage: geometry.physicalPage },
+    });
+
+    // Compose.
+    const composer = new DocumentComposer(this.logger.child('document-composer'));
+    const composed = await composer.compose({
+      sections,
+      deck,
+      soul,
+      geometry,
+      documentMeta,
+      assetService: this.assetService,
+    });
+
+    // Render via Playwright. preferCSSPageSize lets @page size rule the
+    // paginator; margin: 0 keeps the paginator from overriding CSS
+    // margins; displayHeaderFooter is off since chrome is fixed HTML.
+    const page = await this.pool.getPage();
+
+    try {
+      await page.setViewportSize({ width: geometry.widthPx, height: geometry.heightPx });
+      await page.emulateMedia({ media: 'print' });
+      await page.setContent(composed.html, { waitUntil: 'networkidle' });
+
+      const pdfBuffer = await page.pdf({
+        printBackground: true,
+        preferCSSPageSize: true,
+        margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
+      });
+
+      const filename = this.sanitizeFilename(deckTitle) + '.pdf';
+
+      this.logger.info('Continuous-document PDF export complete', {
+        filename,
+        sectionCount: sections.length,
+        bytes: pdfBuffer.length,
+      });
+
+      const result: ExportResult & PdfExportMetadata = {
+        format: 'pdf',
+        data: Buffer.from(pdfBuffer),
+        mimeType: 'application/pdf',
+        filename,
+        slideCount: sections.length, // report section count under the shared field
+        fileSizeBytes: pdfBuffer.length,
+        exportedAt: new Date().toISOString(),
+        pageChromeApplied: Boolean(documentMeta.chrome && !documentMeta.chrome.hide),
+        pageChromeMode: documentMeta.chrome ? 'uniform' : 'none',
+        warnings: composed.warnings,
+      };
+      return result;
+    } finally {
+      await this.pool.releasePage(page);
+    }
   }
 
   // ── Page chrome resolution ───────────────────────────────────

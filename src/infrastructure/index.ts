@@ -3,6 +3,7 @@ export {
   generateSoulId,
   generateDeckId,
   generateSlideId,
+  generateSectionId,
   generateRevisionId,
   generateTemplateId,
   generateAssetId,

@@ -12,6 +12,7 @@ import { ValidationService } from '../../../src/domain/validation/validation-ser
 import { Stage1Runner } from '../../../src/domain/validation/stage1/stage1-runner.js';
 import { InMemoryDeckStore } from '../../../src/storage/memory/deck-store.js';
 import { InMemorySlideStore } from '../../../src/storage/memory/slide-store.js';
+import { InMemorySectionStore } from '../../../src/storage/memory/section-store.js';
 import { InMemorySoulStore } from '../../../src/storage/memory/soul-store.js';
 import { FixedClock } from '../../../src/infrastructure/clock.js';
 import { Logger } from '../../../src/infrastructure/logger.js';
@@ -69,11 +70,19 @@ describe('print deck pipeline', () => {
     const soulStore = new InMemorySoulStore();
     const deckStore = new InMemoryDeckStore();
     const slideStore = new InMemorySlideStore();
+    const sectionStore = new InMemorySectionStore();
     const clock = new FixedClock('2026-04-22T12:00:00.000Z');
     const logger = new Logger('test', 'error');
 
     const soulService = new SoulService(soulStore, slideStore, clock, logger);
-    deckService = new DeckService(deckStore, slideStore, soulStore, clock, logger);
+    deckService = new DeckService(
+      deckStore,
+      slideStore,
+      sectionStore,
+      soulStore,
+      clock,
+      logger,
+    );
     validationService = new ValidationService(soulStore, defaultConfig, logger);
 
     const soul = await soulService.register(sampleSoulInput);

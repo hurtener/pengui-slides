@@ -1,0 +1,52 @@
+/* Pengui document recipe: bibliography — scoped styles. */
+
+.pengui-bibliography {
+  padding: var(--space-lg, 24px) var(--space-xl, 48px);
+  color: var(--color-text-primary);
+}
+
+.pengui-bibliography h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-md, 16px) 0;
+}
+
+.pengui-bibliography .biblio-list {
+  margin: 0;
+  padding-left: 1.6em;
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  color: var(--color-text-primary);
+}
+
+.pengui-bibliography .biblio-entry {
+  margin: 0 0 var(--space-sm, 8px) 0;
+  line-height: var(--leading-body);
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.pengui-bibliography .biblio-author {
+  font-weight: var(--weight-medium);
+  color: var(--color-text-primary);
+}
+
+.pengui-bibliography .biblio-title {
+  font-style: italic;
+  color: var(--color-text-primary);
+}
+
+.pengui-bibliography .biblio-source {
+  color: var(--color-text-secondary);
+}
+
+.pengui-bibliography .biblio-year {
+  color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.pengui-bibliography .biblio-entry > * + * {
+  margin-left: 0.35em;
+}

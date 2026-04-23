@@ -19,7 +19,7 @@ export function registerCreateDeckTool(server: McpServer, container: ServiceCont
     {
       title: 'Create Deck',
       description:
-        'Create a new empty deck linked to a Design Soul. The deck FORMAT determines required .slide dimensions for every slide in this deck: slides_16_9 → 1920×1080 (default, 16:9 presentations, all exports), print_a4_portrait → 1240×1754 (A4, PDF-only), print_letter_portrait → 1275×1650 (US Letter, PDF-only). Subsequent add_slide / update_slide calls must author HTML at the matching dimensions. Print decks: read pengui://docs/print-mode and pengui://docs/charts-and-diagrams before authoring.',
+        'Create a new empty deck linked to a Design Soul. The deck FORMAT determines geometry + authoring model: slides_16_9 → 1920×1080 presentation (default, authoringModel="slides", PPTX/PDF/HTML/Google Slides). print_a4_portrait / print_letter_portrait → continuous-document PDF (v3 default: authoringModel="document", use add_section not add_slide). Opt into the legacy slide-per-page print flow by passing authoringModel="slides" explicitly. Read pengui://docs/document-mode before authoring print decks in v3 mode, or pengui://docs/print-mode for the legacy per-slide flow.',
       inputSchema: z.object({
         soul_id: z.string().describe('The ID of the Design Soul to use for this deck.'),
         title: z.string().nullish().describe('Deck title. Defaults to "Untitled Deck".'),
@@ -30,22 +30,31 @@ export function registerCreateDeckTool(server: McpServer, container: ServiceCont
           .describe(
             'Output format. slides_16_9 = 1920×1080 presentation (PPTX / PDF / HTML / Google Slides). print_a4_portrait / print_letter_portrait = printable PDF document (PDF-only). Defaults to slides_16_9.',
           ),
+        authoring_model: z
+          .enum(['slides', 'document'])
+          .nullish()
+          .describe(
+            'Override the authoring pipeline. Omit to use the format default: slides_16_9→slides, print formats→document. Pass "slides" on a print format to author legacy slide-per-page print decks (not recommended for new work).',
+          ),
       }),
     },
-    async ({ soul_id, title, author, format }) => {
+    async ({ soul_id, title, author, format, authoring_model }) => {
       try {
         const deck = await container.deckService.createDeck({
           soulId: soul_id,
           title: title ?? undefined,
           author: author ?? undefined,
           format: format ?? DEFAULT_FORMAT,
+          authoringModel: authoring_model ?? undefined,
         });
 
         return textResponse({
           deck_id: deck.id,
           soul_id: deck.soulId,
           format: deck.format,
+          authoring_model: deck.authoringModel,
           slide_count: 0,
+          section_count: 0,
         });
       } catch (error) {
         return handleToolError(error);

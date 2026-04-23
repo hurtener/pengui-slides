@@ -1,0 +1,68 @@
+/* Pengui document recipe: comparison — scoped styles. */
+
+.pengui-comparison {
+  padding: var(--space-lg, 24px) var(--space-xl, 48px);
+  color: var(--color-text-primary);
+}
+
+.pengui-comparison h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-md, 16px) 0;
+}
+
+.pengui-comparison .compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg, 24px);
+}
+
+.pengui-comparison .compare-col {
+  padding: var(--space-md, 16px) var(--space-lg, 24px);
+  background: var(--color-surface);
+  border: var(--border-width, 1px) solid var(--color-border);
+  border-radius: var(--radius-card, 8px);
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.pengui-comparison .compare-a { border-top: 4px solid var(--color-accent-primary); }
+.pengui-comparison .compare-b { border-top: 4px solid var(--color-accent-secondary); }
+
+.pengui-comparison .compare-title {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-xs, 8px) 0;
+}
+
+.pengui-comparison .compare-summary {
+  margin: 0 0 var(--space-md, 16px) 0;
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  color: var(--color-text-secondary);
+}
+
+.pengui-comparison .compare-label {
+  margin: var(--space-md, 16px) 0 var(--space-xs, 6px) 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-heading);
+  color: var(--color-text-tertiary);
+}
+
+.pengui-comparison .compare-list {
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: var(--text-body);
+  color: var(--color-text-primary);
+}
+
+.pengui-comparison .compare-list li { margin: 0.2em 0; }
+
+.pengui-comparison .compare-pros li::marker { color: var(--color-success, #5CB8A4); }
+.pengui-comparison .compare-cons li::marker { color: var(--color-warning, #E8835E); }

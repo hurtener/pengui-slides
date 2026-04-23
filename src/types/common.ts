@@ -13,6 +13,7 @@ type Brand<T, B extends string> = T & { readonly [__brand]: B };
 export type SoulId = Brand<string, 'SoulId'>;
 export type DeckId = Brand<string, 'DeckId'>;
 export type SlideId = Brand<string, 'SlideId'>;
+export type SectionId = Brand<string, 'SectionId'>;
 export type RevisionId = Brand<string, 'RevisionId'>;
 export type TemplateId = Brand<string, 'TemplateId'>;
 export type AssetId = Brand<string, 'AssetId'>;
@@ -27,6 +28,9 @@ export function deckId(id: string): DeckId {
 }
 export function slideId(id: string): SlideId {
   return id as SlideId;
+}
+export function sectionId(id: string): SectionId {
+  return id as SectionId;
 }
 export function revisionId(id: string): RevisionId {
   return id as RevisionId;

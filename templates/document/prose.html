@@ -1,0 +1,19 @@
+<!-- Pengui document recipe: prose
+     Root MUST be <section class="pengui-section pengui-prose">.
+     Use var(--*) tokens. Do not add :root blocks, <style> blocks, or
+     fixed page-shaped dimensions — the composer handles those.
+     Prose sections are flowing: Chromium may split them across pages. -->
+<!-- @section-meta {"title":"Body Copy Section","kind":"prose","narrative":"H2 heading followed by two paragraphs of body copy and an optional bullet list, with an optional aside callout floated beside the text.","tags":["prose","paragraphs","print"]} -->
+<section class="pengui-section pengui-prose">
+  <h2>Section Heading</h2>
+  <p>Opening paragraph introduces the topic in plain language. Keep sentences concrete and specific; avoid filler. Chromium will paginate this prose wherever it needs to — orphan/widow hints are set by the composer.</p>
+  <p>A second paragraph develops the thread. Body text inherits typography from the soul (<code>--font-body</code>, <code>--text-body</code>, <code>--leading-body</code>) so it looks consistent across every document rendered with this soul.</p>
+  <ul class="prose-bullets">
+    <li>First bullet that earns its place.</li>
+    <li>Second bullet that adds a distinct point.</li>
+    <li>Third bullet wrapping up the list.</li>
+  </ul>
+  <aside class="prose-aside">
+    <p>Asides sit beside the main prose in print formats wide enough to accommodate them. The composer does not split this aside across pages.</p>
+  </aside>
+</section>

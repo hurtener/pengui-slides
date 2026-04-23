@@ -1,0 +1,42 @@
+/* Pengui document recipe: toc — scoped styles.
+   These styles are emitted into pengui-block-styles AND referenced by
+   the composer's TOC auto-generation. */
+
+.pengui-toc {
+  padding: var(--space-xxl, 64px) var(--space-xl, 48px);
+  color: var(--color-text-primary);
+}
+
+.pengui-toc h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-h1);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-lg, 24px) 0;
+}
+
+.pengui-toc nav.pengui-toc ol,
+.pengui-toc ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.pengui-toc li {
+  margin: 0.4em 0;
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  color: var(--color-text-primary);
+}
+
+.pengui-toc li a {
+  text-decoration: none;
+  color: var(--color-text-primary);
+  display: block;
+}
+
+.pengui-toc li a::after {
+  content: leader('.') target-counter(attr(href), page);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}

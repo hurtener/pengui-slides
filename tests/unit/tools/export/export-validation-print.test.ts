@@ -17,10 +17,14 @@ describe('validateSlidesForExport — format threading', () => {
     const soul = await container.soulService.register(sampleSoulInput);
     await container.soulService.approve(soul.id);
 
+    // Explicit `authoringModel: 'slides'` opts into the legacy per-slide
+    // print pipeline (pre-v3). The v3 default for print formats is
+    // 'document', which routes through Section-based authoring.
     const deck = await container.deckService.createDeck({
       soulId: soul.id as string,
       title: 'Print Deck',
       format: 'print_a4_portrait',
+      authoringModel: 'slides',
     });
 
     const slide = await container.deckService.addSlide({

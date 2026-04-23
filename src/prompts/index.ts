@@ -234,6 +234,89 @@ KEY RULES for print:
   }));
 
   /* ---------------------------------------------------------------- */
+  /*  create-document — continuous-document (v3) print workflow        */
+  /* ---------------------------------------------------------------- */
+  server.registerPrompt('create-document', {
+    title: 'Create a Continuous Print Document (v3 flow)',
+    description:
+      'Guided workflow for authoring a PDF as a continuous flowing document — not a stack of page-sized slides. Use this for new print decks; the v3 authoringModel "document" is the default for print formats.',
+    argsSchema: {
+      topic: z.string().describe('The topic of the document'),
+      section_count: z.string().optional().describe('Rough number of sections (default: 15)'),
+      style_description: z.string().optional().describe('Visual style description'),
+      page_format: z.string().optional().describe('"a4" (default) or "letter"'),
+    },
+  }, (args) => ({
+    messages: [
+      {
+        role: 'user',
+        content: {
+          type: 'text',
+          text: `Create a continuous-document PDF about: "${args.topic}"
+${args.section_count ? `Section count: ${args.section_count}` : 'Section count: ~15'}
+${args.style_description ? `Visual style: ${args.style_description}` : ''}
+Page format: ${args.page_format?.toLowerCase() === 'letter' ? 'print_letter_portrait (US Letter)' : 'print_a4_portrait (A4)'}
+
+Document mode is the v3 authoring model for print decks. A deck is a linear list of **sections** (content blocks), not page-sized slides. The exporter composes sections into one HTML document and lets Chromium paginate. Universal CSS break rules keep figures/charts/diagrams whole; tables split with a repeating header row.
+
+Follow this workflow:
+
+STEP 1 — Read the document-mode authoring guide
+- Read resource pengui://docs/document-mode — fragment contract, kinds, wrapper classes, break hints, validation.
+- Read resource pengui://docs/charts-and-diagrams — inline SVG diagrams (tree/mind-map, flow, bar/line/pie, timeline) with soul-token styling.
+- Read resource pengui://docs/design-souls — the 7-layer soul schema.
+
+STEP 2 — Design Soul
+Register a Design Soul tuned for print reading (smaller body type, generous leading). Approve the soul.
+
+STEP 3 — Create the deck
+Call create_deck with format: "${args.page_format?.toLowerCase() === 'letter' ? 'print_letter_portrait' : 'print_a4_portrait'}". Do NOT pass authoringModel — the default for print formats is "document" in v3, which is what you want. The deck exposes authoring_model in get_deck_summary so you can confirm.
+
+STEP 4 — Configure document meta (optional)
+Call update_document_meta with:
+- chrome: running title + page numbers + footerAlign
+- toc: { includeKinds: ["chapter_header"] } if you want auto-generated TOC
+
+STEP 5 — Build the document, section by section
+Call add_section N times. Each section is an HTML FRAGMENT — not a full HTML document. Rules (enforced by Section Stage 1 lints):
+  - Root: <section class="pengui-section pengui-{kind}">
+  - Preceded by <!-- @section-meta {...} --> comment
+  - NO <!DOCTYPE>, <html>, <head>, <body>, <script>, <link>
+  - NO standalone <style> blocks — soul tokens are injected once by the composer
+  - NO :root { ... } blocks — same reason
+  - NO fixed page-shaped dimensions (no width: 1240px, height: 1754px, overflow: hidden on the wrapper)
+  - Wrap keep-together content in canonical classes (.pengui-figure, .pengui-chart, .pengui-diagram, .pengui-callout, .pengui-quote, .pengui-image)
+
+Typical study-summary structure:
+  1. cover           — title, subtitle, author, date (break_hints: { full_page: true })
+  2. toc             — empty sentinel (auto-filled from chapter_header sections)
+  3. chapter_header  — chapter opener (break_hints: { full_page: true })
+  4. prose           — chapter 1 body, possibly multiple prose sections
+  5. figure or diagram — key taxonomy or concept map (keep_together applies automatically)
+  6. chart           — quantitative data (break-inside: avoid baked in)
+  7. table           — comparison data (splits cleanly, header repeats)
+  8. callout         — sidebars / warnings
+  9. glossary        — key terms
+ 10. bibliography    — sources
+
+For per-section chrome overrides (e.g., chapter running title), pass metadata.chromeOverrides.runningTitle.
+
+STEP 6 — Validate and export
+Each add_section runs fast Section Stage 1 (<100ms). At export time the composer runs Document Stage 2 which measures every keep-together block against page boundaries and flags splits. Call export_pdf when the document reads end-to-end.
+
+KEY RULES for document mode:
+- Sections are fragments, not full HTML documents. Let the composer do the wrapping.
+- Do NOT copy soul tokens into each section — they live once at document scope.
+- Wrap figures/charts/diagrams/callouts/quotes/images in .pengui-* classes so the universal break-inside: avoid rule catches them.
+- Use semantic <table> with <thead> for tabular data so the header repeats across pages.
+- export_pptx / export_google_slides refuse document-mode decks — use export_pdf.
+`,
+        },
+      },
+    ],
+  }));
+
+  /* ---------------------------------------------------------------- */
   /*  slide-html-quickref — copy-paste ready template                 */
   /* ---------------------------------------------------------------- */
   server.registerPrompt('slide-html-quickref', {

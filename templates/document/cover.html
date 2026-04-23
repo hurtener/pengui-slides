@@ -1,0 +1,17 @@
+<!-- Pengui document recipe: cover
+     Root MUST be <section class="pengui-section pengui-cover">.
+     Use var(--*) tokens. Do not add :root blocks, <style> blocks, or
+     fixed page-shaped dimensions — the composer handles those. -->
+<!-- @section-meta {"title":"Document Cover","kind":"cover","narrative":"Full-page cover hero with title, subtitle, author, and date. No running chrome. Composer renders this as data-full-page=\"true\" and data-chrome=\"off\".","tags":["cover","hero","print"]} -->
+<section class="pengui-section pengui-cover">
+  <div class="cover-stripe" aria-hidden="true"></div>
+  <div class="cover-inner">
+    <p class="cover-eyebrow">Pengui Slides</p>
+    <h1 class="cover-title">Document Title</h1>
+    <p class="cover-subtitle">A descriptive subtitle that frames the narrative of the report.</p>
+    <div class="cover-meta">
+      <p class="cover-author">Author Name</p>
+      <p class="cover-date">Month Year</p>
+    </div>
+  </div>
+</section>

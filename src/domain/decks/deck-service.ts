@@ -16,12 +16,28 @@ import type {
   CreateDeckInput,
   AddSlideInput,
   UpdateSlideInput,
+  AuthoringModel,
 } from '../../types/deck.js';
+import type { SectionSummary } from '../../types/section.js';
 import type { FormatKind } from '../../types/format.js';
-import { DEFAULT_FORMAT, assertKnownFormat } from '../formats/format-registry.js';
+import {
+  DEFAULT_FORMAT,
+  assertKnownFormat,
+  defaultAuthoringModelFor,
+} from '../formats/format-registry.js';
 import type { SlideMetadata, SlideType } from '../../types/metadata.js';
-import { DeckNotFoundError, SlideNotFoundError, SoulNotFoundError } from '../../types/errors.js';
-import type { IDeckStore, ISlideStore, ISoulStore } from '../../storage/interfaces.js';
+import {
+  DeckNotFoundError,
+  SlideNotFoundError,
+  SoulNotFoundError,
+  WrongAuthoringModelError,
+} from '../../types/errors.js';
+import type {
+  IDeckStore,
+  ISlideStore,
+  ISectionStore,
+  ISoulStore,
+} from '../../storage/interfaces.js';
 import {
   generateDeckId,
   generateSlideId,
@@ -34,6 +50,7 @@ import { RevisionTracker } from './revision-tracker.js';
 export class DeckService {
   private readonly deckStore: IDeckStore;
   private readonly slideStore: ISlideStore;
+  private readonly sectionStore: ISectionStore;
   private readonly soulStore: ISoulStore;
   private readonly clock: Clock;
   private readonly logger: Logger;
@@ -42,16 +59,65 @@ export class DeckService {
   constructor(
     deckStore: IDeckStore,
     slideStore: ISlideStore,
+    sectionStore: ISectionStore,
     soulStore: ISoulStore,
     clock: Clock,
     logger: Logger,
   ) {
     this.deckStore = deckStore;
     this.slideStore = slideStore;
+    this.sectionStore = sectionStore;
     this.soulStore = soulStore;
     this.clock = clock;
     this.logger = logger;
     this.revisionTracker = new RevisionTracker(clock);
+  }
+
+  // ── Authoring model helpers ──────────────────────────────────────
+
+  /**
+   * Legacy-safe reader: returns the deck's authoring model, defaulting
+   * missing values to 'slides' (pre-v3 decks never had this field and
+   * were, historically, slides_16_9 or legacy slide-per-page print — both
+   * of which render through the slides pipeline).
+   */
+  static resolveAuthoringModel(deck: Deck): AuthoringModel {
+    return deck.authoringModel ?? 'slides';
+  }
+
+  /**
+   * Guard used by slide verbs (add_slide, update_slide, ...) to refuse
+   * operating on document-model decks. Names the correct tool so the
+   * caller (an LLM) can recover without re-exploring the API.
+   */
+  private assertSlidesModel(deck: Deck, suggestedTool: string): void {
+    const model = DeckService.resolveAuthoringModel(deck);
+    if (model === 'document') {
+      throw new WrongAuthoringModelError(
+        deck.id as string,
+        'slides',
+        'document',
+        suggestedTool,
+        'pengui://docs/document-mode',
+      );
+    }
+  }
+
+  /**
+   * Guard used by section verbs (add_section, update_section, ...) to
+   * refuse operating on slide-model decks.
+   */
+  assertDocumentModel(deck: Deck, suggestedTool: string): void {
+    const model = DeckService.resolveAuthoringModel(deck);
+    if (model === 'slides') {
+      throw new WrongAuthoringModelError(
+        deck.id as string,
+        'document',
+        'slides',
+        suggestedTool,
+        'pengui://docs/print-mode',
+      );
+    }
   }
 
   // ── Create Deck ──────────────────────────────────────────────────
@@ -71,13 +137,17 @@ export class DeckService {
     const now = this.clock.now();
     const format: FormatKind = input.format ?? DEFAULT_FORMAT;
     assertKnownFormat(format);
+    const authoringModel: AuthoringModel =
+      input.authoringModel ?? defaultAuthoringModelFor(format);
     const deck: Deck = {
       id: generateDeckId(),
       soulId: sid,
       title: input.title ?? 'Untitled Deck',
       author: input.author ?? '',
       slideIds: [],
+      sectionIds: [],
       format,
+      authoringModel,
       createdAt: now,
       updatedAt: now,
     };
@@ -114,6 +184,7 @@ export class DeckService {
     if (!deck) {
       throw new DeckNotFoundError(input.deckId);
     }
+    this.assertSlidesModel(deck, 'add_section');
 
     const now = this.clock.now();
     const position = input.position ?? deck.slideIds.length;
@@ -216,6 +287,7 @@ export class DeckService {
     if (!deck) {
       throw new DeckNotFoundError(input.deckId);
     }
+    this.assertSlidesModel(deck, 'update_section');
 
     const slide = await this.slideStore.get(sid);
     if (!slide || (slide.deckId as string) !== (did as string)) {
@@ -337,6 +409,7 @@ export class DeckService {
     if (!deck) {
       throw new DeckNotFoundError(deckIdStr);
     }
+    this.assertSlidesModel(deck, 'remove_section');
 
     const slideIndex = deck.slideIds.findIndex((id) => (id as string) === (sid as string));
     if (slideIndex === -1) {
@@ -390,6 +463,7 @@ export class DeckService {
     if (!deck) {
       throw new DeckNotFoundError(deckIdStr);
     }
+    this.assertSlidesModel(deck, 'reorder_sections');
 
     const now = this.clock.now();
     const newSlideIds = newOrder.map((id) => slideId(id));
@@ -432,10 +506,12 @@ export class DeckService {
     }
 
     const slides = await this.slideStore.getByDeck(did);
+    const sections = await this.sectionStore.getByDeck(did);
     const revisions = await this.deckStore.getRevisions(did);
 
-    // Sort slides by position
+    // Sort by position
     const sortedSlides = slides.sort((a, b) => a.position - b.position);
+    const sortedSections = sections.sort((a, b) => a.position - b.position);
 
     const slideSummaries: SlideSummary[] = sortedSlides.map((slide) => ({
       id: slide.id,
@@ -448,18 +524,46 @@ export class DeckService {
         : {}),
     }));
 
+    const sectionSummaries: SectionSummary[] = sortedSections.map((section) => ({
+      id: section.id,
+      position: section.position,
+      kind: section.kind,
+      title: section.metadata.title,
+      isValid: section.lastValidation?.passed ?? false,
+      ...(section.lastValidation?.styleScore
+        ? { styleScore: section.lastValidation.styleScore.overall }
+        : {}),
+    }));
+
     return {
       id: deck.id,
       soulId: deck.soulId,
       title: deck.title,
       author: deck.author,
       format: deck.format ?? DEFAULT_FORMAT,
+      authoringModel: DeckService.resolveAuthoringModel(deck),
       slideCount: deck.slideIds.length,
       slides: slideSummaries,
+      sectionCount: (deck.sectionIds ?? []).length,
+      sections: sectionSummaries,
       revisionCount: revisions.length,
       createdAt: deck.createdAt,
       updatedAt: deck.updatedAt,
     };
+  }
+
+  /**
+   * Legacy-safe reader that returns a deck's authoring model without
+   * callers needing to read the full deck. Returns 'slides' for any
+   * pre-v3 deck that lacks the field.
+   */
+  async getAuthoringModel(deckIdStr: string): Promise<AuthoringModel> {
+    const did = deckId(deckIdStr);
+    const deck = await this.deckStore.get(did);
+    if (!deck) {
+      throw new DeckNotFoundError(deckIdStr);
+    }
+    return DeckService.resolveAuthoringModel(deck);
   }
 
   /**

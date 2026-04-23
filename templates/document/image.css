@@ -1,0 +1,29 @@
+/* Pengui document recipe: image — scoped styles. */
+
+.pengui-section.pengui-image {
+  padding: var(--space-lg, 24px) var(--space-xl, 48px);
+}
+
+.pengui-image .pengui-image,
+figure.pengui-image {
+  margin: 0;
+  padding: var(--space-md, 16px);
+  background: var(--color-surface);
+  border: var(--border-width, 1px) solid var(--color-border);
+  border-radius: var(--radius-card, 8px);
+}
+
+.pengui-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm, 4px);
+}
+
+.pengui-image figcaption {
+  margin-top: var(--space-md, 16px);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  color: var(--color-text-tertiary);
+  text-align: center;
+}

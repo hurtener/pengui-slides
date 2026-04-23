@@ -1,0 +1,52 @@
+/* Pengui document recipe: table — scoped styles.
+   Universal rules handle table { break-inside: auto } + repeating thead;
+   these scoped rules tune typography and spacing. */
+
+.pengui-table {
+  padding: var(--space-lg, 24px) var(--space-xl, 48px);
+  color: var(--color-text-primary);
+}
+
+.pengui-table h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-md, 16px) 0;
+}
+
+.pengui-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+}
+
+.pengui-table thead th {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--letter-spacing-heading);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  padding: var(--space-sm, 8px) var(--space-md, 16px);
+  border-bottom: var(--border-width, 1px) solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.pengui-table th.num,
+.pengui-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.pengui-table tbody td {
+  padding: var(--space-sm, 8px) var(--space-md, 16px);
+  border-bottom: var(--border-width, 1px) solid var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.pengui-table tbody tr:last-child td {
+  border-bottom: none;
+}

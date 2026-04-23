@@ -38,8 +38,12 @@ export function registerExportPptxTool(server: McpServer, container: ServiceCont
       try {
         // Get deck info and all slides
         const summary = await container.deckService.getDeckSummary(deck_id);
-        if (isPrintFormat(summary.format)) {
-          throw new FormatNotExportableError(summary.format, 'export_pptx', 'export_pdf');
+        if (isPrintFormat(summary.format) || summary.authoringModel === 'document') {
+          throw new FormatNotExportableError(
+            summary.format,
+            'export_pptx',
+            'export_pdf',
+          );
         }
         const slides = await Promise.all(
           summary.slides.map((s) => container.deckService.getSlide(s.id as string)),

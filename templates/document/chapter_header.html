@@ -1,0 +1,13 @@
+<!-- Pengui document recipe: chapter_header
+     Root MUST be <section class="pengui-section pengui-chapter_header">.
+     Use var(--*) tokens. Do not add :root blocks, <style> blocks, or
+     fixed page-shaped dimensions — the composer handles those. -->
+<!-- @section-meta {"title":"Chapter Header","kind":"chapter_header","narrative":"Full-page chapter opener with chapter number, title, lead paragraph, and a divider. Composer renders this as data-full-page=\"true\".","tags":["chapter","divider","print"]} -->
+<section class="pengui-section pengui-chapter_header">
+  <div class="chapter-inner">
+    <p class="chapter-number">Chapter 01</p>
+    <h1 class="chapter-title">Chapter Title Goes Here</h1>
+    <hr class="chapter-rule" />
+    <p class="chapter-lead">A single paragraph that frames the chapter ahead. Keep it short — three sentences at most — and let the chapter body do the heavy lifting. This paragraph should earn the full page it occupies.</p>
+  </div>
+</section>

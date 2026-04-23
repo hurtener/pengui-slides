@@ -1,0 +1,12 @@
+<!-- Pengui document recipe: image
+     Root MUST be <section class="pengui-section pengui-image">.
+     Single <figure class="pengui-image"> with an <img> and <figcaption>.
+     The src is an asset:// ref resolved by the composer at render time.
+     Composer applies break-inside: avoid via .pengui-image. -->
+<!-- @section-meta {"title":"Image","kind":"image","narrative":"A raster image with a caption. Kept whole across page breaks.","tags":["image","photo","print"]} -->
+<section class="pengui-section pengui-image">
+  <figure class="pengui-image">
+    <img src="asset://placeholder-cover" alt="Replace with a meaningful alt description." />
+    <figcaption>Image caption. Describe what the reader is looking at and why it matters.</figcaption>
+  </figure>
+</section>

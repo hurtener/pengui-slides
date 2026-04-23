@@ -1,0 +1,20 @@
+<!-- Pengui document recipe: callout
+     Root MUST be <section class="pengui-section pengui-callout">.
+     Contains an <aside class="pengui-callout callout-tip|callout-warning|callout-info">
+     with an icon strip, a heading, and a short body. Composer applies
+     break-inside: avoid via .pengui-callout. -->
+<!-- @section-meta {"title":"Callout","kind":"callout","narrative":"Boxed note with icon, heading, and body. Variants: callout-tip (mint), callout-warning (coral), callout-info (slate).","tags":["callout","note","tip","warning","print"]} -->
+<section class="pengui-section pengui-callout">
+  <aside class="pengui-callout callout-tip" role="note">
+    <div class="callout-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.6" />
+        <path d="M8 12l3 3 5-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </div>
+    <div class="callout-body">
+      <p class="callout-heading">Tip</p>
+      <p class="callout-text">Short, actionable guidance that a reader can apply right now. One or two sentences — anything longer belongs in prose.</p>
+    </div>
+  </aside>
+</section>

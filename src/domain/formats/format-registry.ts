@@ -9,6 +9,7 @@
  */
 
 import type { Format, FormatKind } from '../../types/format.js';
+import type { AuthoringModel } from '../../types/deck.js';
 
 export const FORMAT_REGISTRY: Record<FormatKind, Format> = {
   slides_16_9: {
@@ -81,4 +82,13 @@ export function assertKnownFormat(kind: string): asserts kind is FormatKind {
       `unknown_format: "${kind}" is not a registered format. Known: ${Object.keys(FORMAT_REGISTRY).join(', ')}`,
     );
   }
+}
+
+/**
+ * Default authoring model per format. Print formats produce continuous
+ * documents; slide formats produce page-bound slides. Called once at deck
+ * creation; the chosen model is then stored on the deck.
+ */
+export function defaultAuthoringModelFor(kind: FormatKind): AuthoringModel {
+  return isPrintFormat(kind) ? 'document' : 'slides';
 }

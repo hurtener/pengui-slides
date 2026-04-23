@@ -26,6 +26,15 @@ import { getFormat } from '../formats/format-registry.js';
 import { applyDefensiveDefaults, type Injection } from './stage0/defensive-injector.js';
 import { Stage1Runner } from './stage1/stage1-runner.js';
 import { Stage2Runner } from './stage2/stage2-runner.js';
+import {
+  SectionStage1Runner,
+  type SectionStage1Context,
+} from './stage1/section-stage1-runner.js';
+import { DocumentStage2Runner } from './stage2/document-stage2-runner.js';
+import { DocumentComposer } from '../rendering/document-composer.js';
+import type { Section } from '../../types/section.js';
+import type { Deck, DocumentMeta } from '../../types/deck.js';
+import type { AssetService } from '../assets/asset-service.js';
 
 // ── Score Weights ──────────────────────────────────────────────────
 
@@ -50,6 +59,13 @@ const RULE_CATEGORY: Record<string, keyof typeof SCORE_WEIGHTS> = {
   'overflow-detector': 'structural',
   'color-sampler': 'token',
   'legibility-check': 'contrast',
+  // Section / document-mode rules
+  'section-structural': 'structural',
+  'section-wrapper-class': 'structural',
+  'section-figure-shape': 'structural',
+  'section-table-shape': 'structural',
+  'split-keep-together': 'structural',
+  'orphan-heading': 'structural',
 };
 
 /** Deduction per error issue. */
@@ -241,6 +257,198 @@ export class ValidationService {
     });
 
     return result;
+  }
+
+  /**
+   * Validate a single Section FRAGMENT against its deck's soul.
+   *
+   * Fast path: runs only the section Stage 1 checks (no Playwright).
+   * Meant to be called from add_section / update_section so authors see
+   * fragment-contract errors in one turn. Stage 2 (render-truth) runs
+   * later via validateDocument at export time or on explicit request.
+   */
+  async validateSection(
+    section: Section,
+    soulId: SoulId,
+    format?: FormatKind,
+  ): Promise<ValidationResult> {
+    this.logger.info('Starting section validation', {
+      soulId,
+      sectionId: section.id,
+      kind: section.kind,
+      format,
+    });
+
+    const soul = await this.soulStore.get(soulId);
+    if (!soul) {
+      throw new SoulNotFoundError(soulId);
+    }
+
+    const soulTokenNames = soul.tokenNames;
+    const allowedFonts = soul.allowedFonts;
+    const resolvedFormat = format ?? 'print_a4_portrait';
+    const geometry: FormatGeometry = getFormat(resolvedFormat).geometry;
+    const validationContext: ValidationContext = { geometry, formatKind: resolvedFormat };
+    const sectionCtx: SectionStage1Context = { kind: section.kind };
+
+    const runner = new SectionStage1Runner();
+    const stage1Result = runner.run(
+      section.html,
+      soulTokenNames,
+      allowedFonts,
+      sectionCtx,
+      validationContext,
+    );
+
+    const allIssues = stage1Result.issues;
+    const styleScore = computeStyleScore(allIssues);
+    const errorCount = allIssues.filter((i) => i.severity === 'error').length;
+    const warningCount = allIssues.filter((i) => i.severity === 'warning').length;
+    const infoCount = allIssues.filter((i) => i.severity === 'info').length;
+
+    return {
+      passed: errorCount === 0,
+      issues: allIssues,
+      styleScore,
+      errorCount,
+      warningCount,
+      infoCount,
+      stage1ElapsedMs: stage1Result.elapsedMs,
+      stage2Skipped: true,
+      validatedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Validate a composed document (all sections of a deck) end-to-end.
+   *
+   * Stage 1: runs section-level lints on every fragment (aggregates).
+   * Stage 2 (depth === 'full'): composes the full document, renders in
+   * Playwright, runs pagination-aware checks (split-keep-together,
+   * orphan-heading, figure-exceeds-page).
+   *
+   * Called by export_pdf for document-mode decks. Stage 2 cost scales
+   * with document size but runs in a single browser context.
+   */
+  async validateDocument(
+    deck: Deck,
+    sections: Section[],
+    soulId: SoulId,
+    depth: ValidationDepth = 'lint',
+    assetService?: AssetService,
+  ): Promise<ValidationResult> {
+    this.logger.info('Starting document validation', {
+      soulId,
+      deckId: deck.id,
+      sectionCount: sections.length,
+      depth,
+    });
+
+    const soul = await this.soulStore.get(soulId);
+    if (!soul) {
+      throw new SoulNotFoundError(soulId);
+    }
+
+    const soulTokenNames = soul.tokenNames;
+    const allowedFonts = soul.allowedFonts;
+    const resolvedFormat: FormatKind = deck.format ?? 'print_a4_portrait';
+    const geometry: FormatGeometry = getFormat(resolvedFormat).geometry;
+    const validationContext: ValidationContext = { geometry, formatKind: resolvedFormat };
+
+    // Stage 1 — section lints on every fragment.
+    const sectionRunner = new SectionStage1Runner();
+    const stage1Issues: ValidationIssue[] = [];
+    let stage1ElapsedMs = 0;
+    for (const section of sections) {
+      const result = sectionRunner.run(
+        section.html,
+        soulTokenNames,
+        allowedFonts,
+        { kind: section.kind },
+        validationContext,
+      );
+      stage1ElapsedMs += result.elapsedMs;
+      // Prefix issue ids with the section's dom id so they can be routed
+      // back to a specific section in the UI.
+      for (const issue of result.issues) {
+        stage1Issues.push({
+          ...issue,
+          id: `sec-${section.position + 1}:${issue.id}`,
+        });
+      }
+    }
+
+    let stage2Issues: ValidationIssue[] = [];
+    let stage2ElapsedMs: number | undefined;
+    let stage2Skipped = true;
+
+    if (depth === 'full') {
+      stage2Skipped = false;
+      let browser: import('playwright').Browser | undefined;
+
+      try {
+        // Compose the full document.
+        const composer = new DocumentComposer(this.logger.child('document-composer'));
+        const composed = await composer.compose({
+          sections,
+          deck,
+          soul,
+          geometry,
+          documentMeta: deck.documentMeta ?? ({} as DocumentMeta),
+          assetService,
+        });
+
+        // Launch Playwright, emulate print media, measure.
+        const pw = await import('playwright');
+        browser = await pw.chromium.launch({ headless: this.config.headless });
+        const context = await browser.newContext({
+          viewport: { width: geometry.widthPx, height: geometry.heightPx },
+        });
+        const page = await context.newPage();
+        await page.emulateMedia({ media: 'print' });
+        await page.setContent(composed.html, { waitUntil: 'networkidle' });
+
+        const runner = new DocumentStage2Runner();
+        const result = await runner.run(page, soulTokenNames, validationContext);
+        stage2Issues = result.issues;
+        stage2ElapsedMs = result.elapsedMs;
+
+        await context.close();
+      } catch (err) {
+        this.logger.error('Document Stage 2 validation failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        stage2Issues.push({
+          id: 'document-stage2-runtime-error',
+          stage: 'stage2_render',
+          severity: 'warning',
+          rule: 'stage2-runner',
+          message: `Document Stage 2 validation failed: ${err instanceof Error ? err.message : String(err)}`,
+          fixSuggestion: 'Ensure Playwright is installed and the composed document is valid.',
+        });
+      } finally {
+        if (browser) await browser.close();
+      }
+    }
+
+    const allIssues = [...stage1Issues, ...stage2Issues];
+    const styleScore = computeStyleScore(allIssues);
+    const errorCount = allIssues.filter((i) => i.severity === 'error').length;
+    const warningCount = allIssues.filter((i) => i.severity === 'warning').length;
+    const infoCount = allIssues.filter((i) => i.severity === 'info').length;
+
+    return {
+      passed: errorCount === 0,
+      issues: allIssues,
+      styleScore,
+      errorCount,
+      warningCount,
+      infoCount,
+      stage1ElapsedMs,
+      stage2ElapsedMs,
+      stage2Skipped,
+      validatedAt: new Date().toISOString(),
+    };
   }
 
   /**

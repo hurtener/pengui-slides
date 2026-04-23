@@ -4,6 +4,7 @@ export * from './format.js';
 export * from './metadata.js';
 export * from './design-soul.js';
 export * from './deck.js';
+export * from './section.js';
 export * from './validation.js';
 export * from './export.js';
 export * from './slide-document.js';

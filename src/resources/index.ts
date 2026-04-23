@@ -9,6 +9,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerChartsAndDiagramsResource } from './print-charts-and-diagrams.resource.js';
 import { registerPrintModeResource } from './print-mode.resource.js';
+import { registerDocumentModeResource } from './document-mode.resource.js';
 
 /* ------------------------------------------------------------------ */
 /*  Content                                                           */
@@ -626,6 +627,7 @@ Step 3 — Reuse
 export function registerAllResources(server: McpServer): void {
   registerChartsAndDiagramsResource(server);
   registerPrintModeResource(server);
+  registerDocumentModeResource(server);
   server.registerResource('overview', 'pengui://docs/overview', {
     description: 'High-level overview of Pengui Slides: concepts, workflow, and key rules.',
     mimeType: 'text/markdown',

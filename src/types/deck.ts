@@ -1,8 +1,15 @@
 /**
- * Deck and slide types for Pengui Slides.
+ * Deck, Slide, and Section types for Pengui Slides.
  */
 
-import type { DeckId, SlideId, SoulId, RevisionId, ISOTimestamp } from './common.js';
+import type {
+  DeckId,
+  SlideId,
+  SectionId,
+  SoulId,
+  RevisionId,
+  ISOTimestamp,
+} from './common.js';
 import type { FormatKind } from './format.js';
 import type { SlideMetadata } from './metadata.js';
 import type { ValidationResult } from './validation.js';
@@ -11,6 +18,23 @@ import type {
   SlideSourceKind,
   SlideTranslationIssue,
 } from './slide-document.js';
+import type { PageChromeDirective } from './page-chrome.js';
+import type { SectionKind, SectionSummary } from './section.js';
+
+// ── Authoring Model ───────────────────────────────────────────────
+
+/**
+ * Which authoring pipeline applies to this deck.
+ *
+ * - `'slides'`: one HTML doc per page (slides_16_9 today; legacy print
+ *   decks pre-v3 are treated as slides when read).
+ * - `'document'`: continuous document composed from Section fragments.
+ *
+ * Always derivable from `deck.format` at creation time, but stored
+ * explicitly because (a) it's the discriminant the service layer + MCP
+ * tools use, and (b) future formats may want to override the default.
+ */
+export type AuthoringModel = 'slides' | 'document';
 
 // ── Slide Entity ──────────────────────────────────────────────────
 
@@ -28,6 +52,36 @@ export interface Slide {
   updatedAt: ISOTimestamp;
 }
 
+// ── Document Meta (document-model decks) ──────────────────────────
+
+/**
+ * Deck-level configuration for continuous documents. Consumed by the
+ * DocumentComposer. None of these are required; reasonable defaults
+ * apply per geometry.
+ */
+export interface DocumentMeta {
+  /** Running chrome (header/footer + page numbers). */
+  chrome?: PageChromeDirective;
+  /**
+   * Page box margins. Strings in CSS units (e.g. `"18mm"`). When absent,
+   * the composer derives margins from `geometry.safeAreaInsetPx`.
+   */
+  pageMargin?: {
+    top: string;
+    right: string;
+    bottom: string;
+    left: string;
+  };
+  /**
+   * TOC auto-generation. When set, the composer fills in any `kind: 'toc'`
+   * section whose fragment is the empty sentinel.
+   */
+  toc?: {
+    maxDepth?: number;
+    includeKinds?: SectionKind[];
+  };
+}
+
 // ── Deck Entity ───────────────────────────────────────────────────
 
 export interface Deck {
@@ -36,12 +90,22 @@ export interface Deck {
   title: string;
   author: string;
   slideIds: SlideId[];
+  /** Parallel list for document-model decks. Empty for slide-model decks. */
+  sectionIds: SectionId[];
   /**
    * Output format for this deck. Absent on legacy decks; the deck-service
    * treats a missing value as `slides_16_9` at read time. New decks always
    * carry this field — see CreateDeckInput.
    */
   format?: FormatKind;
+  /**
+   * Which authoring pipeline this deck uses. Absent on pre-v3 decks; the
+   * deck-service treats a missing value as `'slides'` at read time. New
+   * decks always carry this field — derived from `format` at creation.
+   */
+  authoringModel?: AuthoringModel;
+  /** Document-model configuration. Only meaningful when authoringModel = 'document'. */
+  documentMeta?: DocumentMeta;
   createdAt: ISOTimestamp;
   updatedAt: ISOTimestamp;
 }
@@ -53,7 +117,12 @@ export type DeckMutationType =
   | 'slide_added'
   | 'slide_updated'
   | 'slide_removed'
-  | 'slides_reordered';
+  | 'slides_reordered'
+  | 'section_added'
+  | 'section_updated'
+  | 'section_removed'
+  | 'sections_reordered'
+  | 'document_meta_updated';
 
 export interface DeckRevision {
   id: RevisionId;
@@ -61,6 +130,11 @@ export interface DeckRevision {
   type: DeckMutationType;
   description: string;
   slideIdsSnapshot: SlideId[];
+  /**
+   * Only set for document-model mutations. Legacy revisions written
+   * before v3 omit this field; readers tolerate that.
+   */
+  sectionIdsSnapshot?: SectionId[];
   contentHash: string;
   createdAt: ISOTimestamp;
   createdBy?: string;
@@ -83,8 +157,13 @@ export interface DeckSummary {
   title: string;
   author: string;
   format: FormatKind;
-  slideCount: number;
+  authoringModel: AuthoringModel;
+  /** Non-empty when authoringModel = 'slides'. */
   slides: SlideSummary[];
+  slideCount: number;
+  /** Non-empty when authoringModel = 'document'. */
+  sections: SectionSummary[];
+  sectionCount: number;
   revisionCount: number;
   createdAt: ISOTimestamp;
   updatedAt: ISOTimestamp;
@@ -100,6 +179,11 @@ export interface CreateDeckInput {
    * Output format. Omission preserves legacy behavior (slides_16_9).
    */
   format?: FormatKind;
+  /**
+   * Explicit authoring model override. Omitted callers get the default
+   * for the chosen format (print → document, slides_16_9 → slides).
+   */
+  authoringModel?: AuthoringModel;
 }
 
 export interface AddSlideInput {

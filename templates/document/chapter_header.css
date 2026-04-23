@@ -1,0 +1,57 @@
+/* Pengui document recipe: chapter_header — scoped styles. */
+
+.pengui-chapter_header {
+  /* Section wrapper: no padding — composer zeros it so the full-page
+     band is truly full-bleed. Padding lives on .chapter-inner. */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: var(--color-canvas);
+  color: var(--color-text-primary);
+}
+
+.pengui-chapter_header .chapter-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg, 24px);
+  max-width: 70%;
+  padding: var(--space-xxxl, 96px) var(--space-xxl, 64px);
+  box-sizing: border-box;
+}
+
+.pengui-chapter_header .chapter-number {
+  font-family: var(--font-mono);
+  font-size: var(--text-h2);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--letter-spacing-heading);
+  text-transform: uppercase;
+  color: var(--color-accent-primary);
+  margin: 0;
+}
+
+.pengui-chapter_header .chapter-title {
+  font-family: var(--font-display);
+  font-size: var(--text-hero);
+  font-weight: var(--weight-bold);
+  line-height: var(--line-height-heading);
+  letter-spacing: var(--letter-spacing-heading);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.pengui-chapter_header .chapter-rule {
+  border: 0;
+  height: var(--border-width, 1px);
+  background: var(--color-border);
+  width: 96px;
+  margin: var(--space-md, 16px) 0;
+}
+
+.pengui-chapter_header .chapter-lead {
+  font-family: var(--font-body);
+  font-size: var(--text-h3);
+  line-height: var(--leading-body);
+  color: var(--color-text-secondary);
+  margin: 0;
+  max-width: 60ch;
+}

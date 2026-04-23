@@ -22,6 +22,14 @@ export enum ErrorCode {
   SLIDE_TEXT_EDIT_INVALID = 'SLIDE_TEXT_EDIT_INVALID',
   SLIDE_REVISION_CONFLICT = 'SLIDE_REVISION_CONFLICT',
 
+  // Section errors (continuous-document mode)
+  SECTION_NOT_FOUND = 'SECTION_NOT_FOUND',
+  SECTION_INVALID_FRAGMENT = 'SECTION_INVALID_FRAGMENT',
+  SECTION_INVALID_POSITION = 'SECTION_INVALID_POSITION',
+
+  // Authoring-model mismatch (wrong verb for deck's model)
+  WRONG_AUTHORING_MODEL = 'WRONG_AUTHORING_MODEL',
+
   // Validation errors
   VALIDATION_FAILED = 'VALIDATION_FAILED',
   VALIDATION_HARD_ERROR = 'VALIDATION_HARD_ERROR',
@@ -96,6 +104,34 @@ export class DeckNotFoundError extends PenguiError {
 export class SlideNotFoundError extends PenguiError {
   constructor(slideId: string) {
     super(ErrorCode.SLIDE_NOT_FOUND, `Slide not found: ${slideId}`, { slideId });
+  }
+}
+
+export class SectionNotFoundError extends PenguiError {
+  constructor(sectionId: string) {
+    super(ErrorCode.SECTION_NOT_FOUND, `Section not found: ${sectionId}`, { sectionId });
+  }
+}
+
+/**
+ * Thrown when a verb targets the wrong authoring model — e.g. add_slide
+ * on a document-model deck, or add_section on a slides-model deck. The
+ * error names the expected tool so callers (LLMs) can recover in one turn.
+ */
+export class WrongAuthoringModelError extends PenguiError {
+  constructor(
+    deckId: string,
+    got: 'slides' | 'document',
+    expected: 'slides' | 'document',
+    suggestedTool: string,
+    helpResource: string,
+  ) {
+    super(
+      ErrorCode.WRONG_AUTHORING_MODEL,
+      `This deck uses the '${expected}' authoring model but the call targeted the '${got}' model. ` +
+        `Use ${suggestedTool} instead. See ${helpResource} for the authoring guide.`,
+      { deckId, got, expected, suggestedTool, helpResource },
+    );
   }
 }
 

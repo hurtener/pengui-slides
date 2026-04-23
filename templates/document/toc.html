@@ -1,0 +1,8 @@
+<!-- Pengui document recipe: toc
+     Root MUST be <section class="pengui-section pengui-toc">.
+     An empty <section> is a sentinel: the DocumentComposer will walk the
+     deck's sections (filtered by documentMeta.toc.includeKinds — default
+     chapter_header) and fill in the <nav><ol>…</ol></nav>. Leave the
+     body blank. -->
+<!-- @section-meta {"title":"Table of Contents","kind":"toc","narrative":"Empty sentinel filled by the composer when documentMeta.toc is set. Composer emits a <nav class=\"pengui-toc\"><ol>…</ol></nav> with one <li><a href=\"#sec-N\">Title</a></li> per includeKinds match.","tags":["toc","navigation","print"]} -->
+<section class="pengui-section pengui-toc"></section>

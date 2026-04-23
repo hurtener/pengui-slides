@@ -23,8 +23,12 @@ export function registerExportGoogleSlidesTool(server: McpServer, container: Ser
     async ({ deck_id }) => {
       try {
         const summary = await container.deckService.getDeckSummary(deck_id);
-        if (isPrintFormat(summary.format)) {
-          throw new FormatNotExportableError(summary.format, 'export_google_slides', 'export_pdf');
+        if (isPrintFormat(summary.format) || summary.authoringModel === 'document') {
+          throw new FormatNotExportableError(
+            summary.format,
+            'export_google_slides',
+            'export_pdf',
+          );
         }
         const slides = await Promise.all(
           summary.slides.map((slideSummary) => container.deckService.getSlide(slideSummary.id as string)),

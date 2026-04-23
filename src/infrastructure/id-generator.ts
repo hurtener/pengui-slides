@@ -7,12 +7,14 @@ import {
   soulId,
   deckId,
   slideId,
+  sectionId,
   revisionId,
   templateId,
   assetId,
   type SoulId,
   type DeckId,
   type SlideId,
+  type SectionId,
   type RevisionId,
   type TemplateId,
   type AssetId,
@@ -28,6 +30,10 @@ export function generateDeckId(): DeckId {
 
 export function generateSlideId(): SlideId {
   return slideId(uuidv4());
+}
+
+export function generateSectionId(): SectionId {
+  return sectionId(uuidv4());
 }
 
 export function generateRevisionId(): RevisionId {

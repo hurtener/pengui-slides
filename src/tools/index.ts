@@ -24,6 +24,13 @@ import { registerGetSlideTool } from './decks/get-slide.tool.js';
 import { registerRemoveSlideTool } from './decks/remove-slide.tool.js';
 import { registerReorderSlidesTool } from './decks/reorder-slides.tool.js';
 import { registerGetDeckSummaryTool } from './decks/get-deck-summary.tool.js';
+import { registerAddSectionTool } from './decks/add-section.tool.js';
+import { registerUpdateSectionTool } from './decks/update-section.tool.js';
+import { registerGetSectionTool } from './decks/get-section.tool.js';
+import { registerRemoveSectionTool } from './decks/remove-section.tool.js';
+import { registerReorderSectionsTool } from './decks/reorder-sections.tool.js';
+import { registerListSectionsTool } from './decks/list-sections.tool.js';
+import { registerUpdateDocumentMetaTool } from './decks/update-document-meta.tool.js';
 
 // Validation tools
 import { registerValidateSlideTool } from './validation/validate-slide.tool.js';
@@ -62,6 +69,15 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerRemoveSlideTool(server, container);
   registerReorderSlidesTool(server, container);
   registerGetDeckSummaryTool(server, container);
+
+  // Document (continuous-document mode) tools
+  registerAddSectionTool(server, container);
+  registerUpdateSectionTool(server, container);
+  registerGetSectionTool(server, container);
+  registerRemoveSectionTool(server, container);
+  registerReorderSectionsTool(server, container);
+  registerListSectionsTool(server, container);
+  registerUpdateDocumentMetaTool(server, container);
 
   // Asset tools
   registerUploadAssetTool(server, container);

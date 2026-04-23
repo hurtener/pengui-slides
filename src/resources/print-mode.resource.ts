@@ -11,7 +11,16 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 const RESOURCE_URI = 'pengui://docs/print-mode';
 
-const CONTENT = `# Print Mode — Authoring Guide
+const CONTENT = `# Print Mode — Authoring Guide (LEGACY v2 flow)
+
+> **⚠️ v3 Notice:** This guide documents the v2 per-slide-per-page print flow,
+> kept for backward compatibility. New print decks default to the continuous-document
+> model in v3 — see \`pengui://docs/document-mode\` for the recommended flow
+> (sections instead of page-sized slides, intelligent pagination, no manual
+> page-box wrestling). The rest of this guide applies only when you explicitly
+> opt into the legacy flow by passing \`authoring_model: "slides"\` at
+> \`create_deck\` time. \`scripts/migrate-legacy-print-deck.mts\` converts a
+> legacy deck into v3 sections.
 
 Pengui Slides v2.0 adds a second output medium: **printable PDF documents** (A4 or US Letter portrait). Print mode shares Design Souls, the asset pipeline, and the validation engine with slide mode. Nothing about existing slide behavior changes.
 

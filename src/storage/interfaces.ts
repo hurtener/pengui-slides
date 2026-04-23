@@ -6,9 +6,10 @@
  * the call-site code.
  */
 
-import type { AssetId, DeckId, SlideId, SoulId } from '../types/common.js';
+import type { AssetId, DeckId, SlideId, SectionId, SoulId } from '../types/common.js';
 import type { DesignSoul, LayoutRecipe, SoulStatus } from '../types/design-soul.js';
 import type { Deck, DeckRevision, Slide } from '../types/deck.js';
+import type { Section } from '../types/section.js';
 import type { Asset, AssetScope } from '../types/asset.js';
 
 // ── Soul Store ───────────────────────────────────────────────────
@@ -41,6 +42,16 @@ export interface ISlideStore {
   get(id: SlideId): Promise<Slide | undefined>;
   getByDeck(deckId: DeckId): Promise<Slide[]>;
   delete(id: SlideId): Promise<boolean>;
+  deleteByDeck(deckId: DeckId): Promise<number>;
+}
+
+// ── Section Store (continuous-document mode) ─────────────────────
+
+export interface ISectionStore {
+  save(section: Section): Promise<void>;
+  get(id: SectionId): Promise<Section | undefined>;
+  getByDeck(deckId: DeckId): Promise<Section[]>;
+  delete(id: SectionId): Promise<boolean>;
   deleteByDeck(deckId: DeckId): Promise<number>;
 }
 

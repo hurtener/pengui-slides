@@ -1,5 +1,18 @@
 # Pengui Slides — Functional Specification
 
+> **⚠️ v2.1 Notice:** The Print Mode pipeline described below (one-slide-per-page)
+> has been superseded by the **continuous-document authoring model** in v3. New
+> print decks default to `authoringModel: 'document'` and are composed from
+> **Section** fragments by the `DocumentComposer` — not from a stack of
+> page-sized slide HTML documents. See **[SPEC-v3.md](./SPEC-v3.md)** for the
+> full v3 design, rollout waves, and the rationale for the shift.
+>
+> v2.0 Print Mode (slide-per-page) remains available by passing
+> `authoringModel: 'slides'` at `create_deck` time, but is not recommended for
+> new work. The one-shot migration script
+> `scripts/migrate-legacy-print-deck.ts` converts existing slide-per-page
+> decks to v3 sections.
+
 **Version:** 2.0 (Print Mode addition)
 **Status:** Draft
 **Purpose:** Add a second, equally first-class output medium to Pengui Slides — printable PDF documents (A4 / US Letter portrait) — suitable for exam study summaries, handouts, whitepapers, and any print-oriented content. Print mode shares the Design Soul system, asset pipeline, validation engine, and MCP App editor shell with the existing slide presentation mode. Nothing about existing slide behavior changes.

@@ -1,0 +1,64 @@
+/* Pengui document recipe: callout — scoped styles. */
+
+.pengui-section.pengui-callout {
+  padding: var(--space-md, 16px) var(--space-xl, 48px);
+}
+
+.pengui-callout .pengui-callout,
+aside.pengui-callout {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-md, 16px);
+  align-items: flex-start;
+  padding: var(--space-md, 16px) var(--space-lg, 24px);
+  border-radius: var(--radius-card, 8px);
+  border: var(--border-width, 1px) solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.pengui-callout .callout-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full, 999px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pengui-callout .callout-heading {
+  margin: 0 0 var(--space-xs, 6px) 0;
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-primary);
+}
+
+.pengui-callout .callout-text {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  color: var(--color-text-secondary);
+  max-width: 60ch;
+}
+
+/* Variants — mint / coral / slate derived from soul semantic tokens. */
+.pengui-callout .callout-tip {
+  border-left: 4px solid var(--color-success, #5CB8A4);
+  background: color-mix(in srgb, var(--color-success, #5CB8A4) 10%, var(--color-surface));
+}
+.pengui-callout .callout-tip .callout-icon { color: var(--color-success, #5CB8A4); }
+
+.pengui-callout .callout-warning {
+  border-left: 4px solid var(--color-warning, #E8835E);
+  background: color-mix(in srgb, var(--color-warning, #E8835E) 10%, var(--color-surface));
+}
+.pengui-callout .callout-warning .callout-icon { color: var(--color-warning, #E8835E); }
+
+.pengui-callout .callout-info {
+  border-left: 4px solid var(--color-info, #6B7A8F);
+  background: color-mix(in srgb, var(--color-info, #6B7A8F) 10%, var(--color-surface));
+}
+.pengui-callout .callout-info .callout-icon { color: var(--color-info, #6B7A8F); }

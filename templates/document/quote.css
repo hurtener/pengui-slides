@@ -1,0 +1,41 @@
+/* Pengui document recipe: quote — scoped styles. */
+
+.pengui-section.pengui-quote {
+  padding: var(--space-xl, 48px) var(--space-xxl, 64px);
+}
+
+.pengui-quote .pengui-quote,
+figure.pengui-quote {
+  margin: 0;
+  padding: var(--space-lg, 24px) var(--space-xl, 48px);
+  background: var(--color-surface);
+  border-left: 6px solid var(--color-accent-primary);
+  border-radius: var(--radius-card, 8px);
+}
+
+.pengui-quote .quote-body {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  font-weight: var(--weight-medium);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-primary);
+  quotes: "\201C" "\201D" "\2018" "\2019";
+}
+
+.pengui-quote .quote-body::before {
+  content: open-quote;
+  color: var(--color-accent-primary);
+}
+
+.pengui-quote .quote-body::after {
+  content: close-quote;
+  color: var(--color-accent-primary);
+}
+
+.pengui-quote .quote-attribution {
+  margin-top: var(--space-md, 16px);
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  color: var(--color-text-secondary);
+}

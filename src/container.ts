@@ -9,7 +9,13 @@ import { Logger, systemClock, type Clock } from './infrastructure/index.js';
 
 // Storage
 import { createStorage } from './storage/factory.js';
-import type { ISoulStore, IDeckStore, ISlideStore, IAssetStore } from './storage/interfaces.js';
+import type {
+  ISoulStore,
+  IDeckStore,
+  ISlideStore,
+  ISectionStore,
+  IAssetStore,
+} from './storage/interfaces.js';
 
 // Domain services
 import { SoulService } from './domain/souls/soul-service.js';
@@ -21,7 +27,7 @@ import { MetadataExporter } from './domain/metadata/metadata-exporter.js';
 import { RenderService } from './domain/rendering/render-service.js';
 import { AssetService } from './domain/assets/asset-service.js';
 import { EditorService } from './domain/editor/editor-service.js';
-import { SlideDocumentService } from './domain/documents/index.js';
+import { SlideDocumentService, DocumentService } from './domain/documents/index.js';
 import { GoogleSlidesExportService } from './domain/export/google-slides-export-service.js';
 
 export interface ServiceContainer {
@@ -33,11 +39,13 @@ export interface ServiceContainer {
   soulStore: ISoulStore;
   deckStore: IDeckStore;
   slideStore: ISlideStore;
+  sectionStore: ISectionStore;
   assetStore: IAssetStore;
 
   // Services
   soulService: SoulService;
   deckService: DeckService;
+  documentService: DocumentService;
   validationService: ValidationService;
   metadataParser: MetadataParser;
   metadataEmbedder: MetadataEmbedder;
@@ -54,11 +62,26 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
   const clock = systemClock;
 
   // Storage layer - uses file-based persistence if persistDir is configured
-  const { soulStore, deckStore, slideStore, assetStore } = createStorage(config.persistDir);
+  const { soulStore, deckStore, slideStore, sectionStore, assetStore } = createStorage(
+    config.persistDir,
+  );
 
   // Domain services
   const soulService = new SoulService(soulStore, slideStore, clock, logger.child('souls'));
-  const deckService = new DeckService(deckStore, slideStore, soulStore, clock, logger.child('decks'));
+  const deckService = new DeckService(
+    deckStore,
+    slideStore,
+    sectionStore,
+    soulStore,
+    clock,
+    logger.child('decks'),
+  );
+  const documentService = new DocumentService(
+    deckStore,
+    sectionStore,
+    clock,
+    logger.child('documents'),
+  );
   const validationService = new ValidationService(soulStore, config, logger.child('validation'));
   const metadataParser = new MetadataParser();
   const metadataEmbedder = new MetadataEmbedder();
@@ -96,9 +119,11 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
     soulStore,
     deckStore,
     slideStore,
+    sectionStore,
     assetStore,
     soulService,
     deckService,
+    documentService,
     validationService,
     metadataParser,
     metadataEmbedder,

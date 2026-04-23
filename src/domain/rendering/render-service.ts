@@ -10,7 +10,9 @@ import type { PenguiConfig } from '../../config.js';
 import type { Logger } from '../../infrastructure/logger.js';
 import type { AssetService } from '../assets/asset-service.js';
 import type { SoulService } from '../souls/soul-service.js';
-import type { Slide } from '../../types/deck.js';
+import type { Slide, Deck, DocumentMeta } from '../../types/deck.js';
+import type { Section } from '../../types/section.js';
+import type { DesignSoul } from '../../types/design-soul.js';
 import type { FormatKind } from '../../types/format.js';
 import type {
   PreviewResult,
@@ -137,6 +139,22 @@ export class RenderService {
   ): Promise<ExportResult & PdfExportMetadata> {
     const exporter = this.ensurePdfExporter();
     return exporter.export(slides, deckTitle, { mode, format });
+  }
+
+  /**
+   * Export a continuous-document deck as a PDF (v3 authoring model).
+   * Delegates to PdfExporter.exportDocument which calls DocumentComposer
+   * and uses Playwright with preferCSSPageSize.
+   */
+  async exportDocumentPdf(input: {
+    sections: Section[];
+    deck: Deck;
+    soul: DesignSoul;
+    deckTitle: string;
+    documentMeta: DocumentMeta;
+  }): Promise<ExportResult & PdfExportMetadata> {
+    const exporter = this.ensurePdfExporter();
+    return exporter.exportDocument(input);
   }
 
   // ── HTML Export ──────────────────────────────────────────────
