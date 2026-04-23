@@ -262,7 +262,7 @@ ${navigationScript}
       : `${geometry.widthPx}px ${geometry.heightPx}px`;
 
     return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-pengui-medium="print">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">

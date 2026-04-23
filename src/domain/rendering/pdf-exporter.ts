@@ -82,10 +82,13 @@ const CHROME_FALLBACK_COLORS: ChromeColors = {
  * - STRIP_HEIGHT_PX: height of the chrome strip itself.
  * - HORIZONTAL_INSET_PX: matches the deck's safe-area inset so the
  *   running title and page number align visually with body content.
+ * - GUARD_PX: extra padding injected onto the .slide element when chrome
+ *   is present, keeping body content clear of the chrome rule line.
  */
 const CHROME_PAGE_INSET_PX = 48;
 const CHROME_STRIP_HEIGHT_PX = 24;
 const CHROME_HORIZONTAL_INSET_PX = 96;
+const CHROME_GUARD_PX = 80;
 
 export interface PdfExportOptions {
   mode?: PdfMode;
@@ -314,7 +317,7 @@ export class PdfExporter {
       .join('\n');
 
     const html = `<!DOCTYPE html>
-<html>
+<html${geometry.medium === 'print' ? ' data-pengui-medium="print"' : ''}>
 <head>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -395,11 +398,16 @@ ${imgTags}
     const sections = extracted
       .map((slide, index) => {
         const chrome = chromePlan.perSlide[index];
-        const chromeHtml =
-          chromePlan.pageChromeApplied && !chrome.hide
-            ? this.buildSectionChromeHtml(chrome, pageNumbers[index], visiblePageTotal, colors)
-            : '';
-        return `<section class="slide-page" id="slide-${index + 1}">${chromeHtml}${slide.body}</section>`;
+        const showChrome = chromePlan.pageChromeApplied && !chrome.hide;
+        const hasHeader = showChrome && Boolean(chrome.runningTitle);
+        const hasFooter = showChrome && chrome.pageNumber;
+        const chromeHtml = showChrome
+          ? this.buildSectionChromeHtml(chrome, pageNumbers[index], visiblePageTotal, colors)
+          : '';
+        const sectionClasses = ['slide-page'];
+        if (hasHeader) sectionClasses.push('with-chrome-header');
+        if (hasFooter) sectionClasses.push('with-chrome-footer');
+        return `<section class="${sectionClasses.join(' ')}" id="slide-${index + 1}">${chromeHtml}${slide.body}</section>`;
       })
       .join('\n');
 
@@ -434,11 +442,22 @@ ${imgTags}
     letter-spacing: 0.04em;
     font-variant-numeric: tabular-nums;
   }
+  /* Guard gap between chrome strip and authored content. The .slide
+     element (inside each section) gets extra padding so the body never
+     butts against the chrome rule line. box-sizing:border-box keeps the
+     overall slide dimensions stable; the inner content area shrinks.
+     !important is required because some slides set padding inline. */
+  .slide-page.with-chrome-header .slide {
+    padding-top: calc(var(--space-safe-area, 96px) + ${CHROME_GUARD_PX}px) !important;
+  }
+  .slide-page.with-chrome-footer .slide {
+    padding-bottom: calc(var(--space-safe-area, 96px) + ${CHROME_GUARD_PX}px) !important;
+  }
 `
       : '';
 
     const html = `<!DOCTYPE html>
-<html>
+<html${geometry.medium === 'print' ? ' data-pengui-medium="print"' : ''}>
 <head>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }

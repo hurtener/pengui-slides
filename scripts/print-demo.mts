@@ -313,8 +313,6 @@ async function main() {
     name: 'export_pdf',
     arguments: { deck_id: deckId, mode: 'direct' },
   });
-  const rawText = (exported as { content: Array<{ text: string }> }).content?.[0]?.text;
-  log('📦', `Raw response: ${rawText?.slice(0, 2000)}`);
   const meta = jsonBody(exported);
   log('✅', `PDF exported → ${meta.file_path}`);
   log('📊', `${meta.slide_count} pages, ${Math.round((meta.file_size_bytes as number) / 1024)} KB`);
