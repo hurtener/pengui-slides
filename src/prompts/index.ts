@@ -15,31 +15,64 @@ export function registerAllPrompts(server: McpServer): void {
   server.registerPrompt('onboarding', {
     title: 'Pengui Slides Onboarding',
     description:
-      'Start here. Teaches you the core concepts, slide format rules, and the standard workflow for creating presentations.',
+      'Start here. Teaches you the two authoring models (slides vs. document), the key rules for each, and points you at the right docs and workflows.',
   }, () => ({
     messages: [
       {
         role: 'user',
         content: {
           type: 'text',
-          text: `You are about to use Pengui Slides, an MCP server for creating branded slide decks.
+          text: `You are about to use Pengui Slides, an MCP server for creating branded decks and print documents.
 
-Before you begin, read these documentation resources to understand the system:
+IMPORTANT: Pengui Slides has TWO authoring models. Pick the right one first.
 
-1. Read resource pengui://docs/overview — core concepts and key rules
-2. Read resource pengui://docs/slide-format — the exact HTML structure every slide must follow
-3. Read resource pengui://docs/validation — how slides are scored and what to avoid
+  authoringModel "slides"   — default for slides_16_9 decks (1920×1080 presentations).
+                              Also the legacy mode for per-page print, opt-in only.
+                              You author full HTML documents per slide.
+                              Verbs: add_slide, update_slide, render_preview.
+                              Exports: pptx, pdf, html, google_slides.
 
-KEY RULES (never forget these):
-- Every slide is a STANDALONE HTML document with its own <style> block containing ALL soul CSS tokens.
+  authoringModel "document" — DEFAULT for print_a4_portrait / print_letter_portrait (v3).
+                              You author HTML FRAGMENTS per Section; the composer
+                              paginates on export. NO DOCTYPE, NO :root tokens,
+                              NO <style> blocks inside a section — the composer
+                              injects soul tokens once.
+                              Verbs: add_section, update_section, list_sections,
+                                     update_document_meta.
+                              Exports: pdf only.
+
+Before you begin, read these documentation resources:
+
+1. pengui://docs/overview — core concepts, the two models, workflow maps
+2. pengui://docs/design-souls — the 7-layer visual identity schema
+3. pengui://docs/validation — checks and scoring for BOTH pipelines
+
+Then read EITHER (not both):
+   - pengui://docs/slide-format — canonical slide HTML (slide-model)
+   - pengui://docs/document-mode — section fragments & composer (document-model)
+
+KEY RULES (apply to both models):
 - Never use literal colors (#hex, rgb()) — always var(--color-*).
 - Never use literal spacing (24px) for padding/margin/gap — always var(--space-*).
 - Never reference external URLs (no Google Fonts, no CDN links).
-- The slide frame is exactly 1920×1080 px.
 - Use asset://UUID refs for images, never raw base64.
+- Call get_deck_summary first on an existing deck — it returns authoringModel.
 
-After reading the resources, confirm you understand by summarizing the workflow:
-register_design_soul → approve_design_soul → upload_asset → create_deck → add_slide → export`,
+KEY RULES specific to slide-model:
+- Every slide is a STANDALONE HTML document with its own <style> block containing ALL soul CSS tokens.
+- The slide frame dimensions come from the deck format
+  (slides_16_9 = 1920×1080, print_a4_portrait = 1240×1754, print_letter_portrait = 1275×1650).
+- .slide must have position: relative AND padding: var(--space-safe-area).
+- Declare html, body { margin: 0; padding: 0 } EXPLICITLY.
+
+KEY RULES specific to document-model:
+- Sections are FRAGMENTS: a single <section class="pengui-section pengui-{kind}"> root.
+  No DOCTYPE, no <html>/<head>/<body>, no <style>, no :root, no fixed page dimensions.
+- Wrap keep-together content (figure/chart/diagram/callout/quote/image) in its
+  canonical .pengui-{kind} class so universal break rules apply.
+- Do NOT copy soul tokens into each section — the composer injects them once.
+
+Confirm you understand by stating which model the user's task needs and why.`,
         },
       },
     ],
@@ -49,9 +82,9 @@ register_design_soul → approve_design_soul → upload_asset → create_deck �
   /*  create-presentation — full workflow guide                       */
   /* ---------------------------------------------------------------- */
   server.registerPrompt('create-presentation', {
-    title: 'Create a Presentation',
+    title: 'Create a Slide Presentation (16:9)',
     description:
-      'Guided workflow for creating a complete presentation: soul → deck → slides → export.',
+      'Guided workflow for creating a 16:9 slide presentation (authoringModel="slides", 1920×1080). For printable PDF documents, use the create-document prompt instead (v3 continuous-document flow).',
     argsSchema: {
       topic: z.string().describe('The topic or title of the presentation'),
       slide_count: z.string().optional().describe('Number of slides to create (default: 5)'),
@@ -63,9 +96,14 @@ register_design_soul → approve_design_soul → upload_asset → create_deck �
         role: 'user',
         content: {
           type: 'text',
-          text: `Create a presentation about: "${args.topic}"
+          text: `Create a 16:9 slide presentation about: "${args.topic}"
 ${args.slide_count ? `Number of slides: ${args.slide_count}` : 'Number of slides: 5'}
 ${args.style_description ? `Visual style: ${args.style_description}` : ''}
+
+This prompt is for the SLIDE model (authoringModel="slides", deck format slides_16_9).
+For printable PDFs (handouts / whitepapers / study summaries), abort and invoke the
+\`create-document\` prompt instead — the v3 continuous-document flow produces much
+better print output than stacking page-sized slides.
 
 Follow this exact workflow:
 
@@ -160,9 +198,9 @@ After registering, approve the soul to generate tokens and recipes.`,
   /*  create-print-document — print-mode workflow                     */
   /* ---------------------------------------------------------------- */
   server.registerPrompt('create-print-document', {
-    title: 'Create a Print Document (Study Summary, Handout, Whitepaper)',
+    title: '[LEGACY v2] Create a Print Document via Slide-per-Page',
     description:
-      'Guided workflow for creating a printable PDF document (A4 / Letter portrait). Use this for exam summaries, study handouts, whitepapers, and any content meant to be read on paper rather than projected.',
+      '⚠️ LEGACY v2 FLOW. Prefer `create-document` (v3 continuous-document) for any new print work. This prompt drives the per-page print model (authoring_model: "slides" on a print format) which is only kept for backward compatibility and requires manual page-box wrestling. Only use when the user explicitly asks for the legacy flow or is editing an existing v2 print deck.',
     argsSchema: {
       topic: z.string().describe('The topic of the document'),
       page_count: z.string().optional().describe('Approximate page count (default: 8)'),
@@ -175,10 +213,14 @@ After registering, approve the soul to generate tokens and recipes.`,
         role: 'user',
         content: {
           type: 'text',
-          text: `Create a printable PDF document about: "${args.topic}"
+          text: `⚠️ LEGACY v2 PRINT FLOW — only proceed if the user explicitly asked for the per-page slide model or is editing an existing v2 print deck. For new print documents prefer the \`create-document\` prompt (continuous-document v3).
+
+Create a printable PDF document about: "${args.topic}"
 ${args.page_count ? `Page count: ${args.page_count}` : 'Page count: 8'}
 ${args.style_description ? `Visual style: ${args.style_description}` : ''}
 Page format: ${args.page_format?.toLowerCase() === 'letter' ? 'print_letter_portrait (US Letter)' : 'print_a4_portrait (A4)'}
+
+To use this legacy flow you MUST explicitly pass \`authoring_model: "slides"\` to \`create_deck\`. Without it, print decks default to authoringModel="document" (v3) and the section verbs, which this prompt does not cover.
 
 PRINT MODE is a second medium of Pengui Slides. Pages are A4/Letter portrait, validation and rendering are geometry-aware, and the only supported export is PDF (PPTX / Google Slides will refuse print decks).
 
@@ -193,7 +235,7 @@ STEP 2 — Design Soul
 Register a Design Soul tuned for print reading (smaller body type, more generous leading). Typography defaults differ for print — the soul token generator emits a print-scoped block automatically, so the same soul can serve both slides and print. Approve the soul.
 
 STEP 3 — Create the deck with a print format
-Use create_deck with format: "${args.page_format?.toLowerCase() === 'letter' ? 'print_letter_portrait' : 'print_a4_portrait'}".
+Use create_deck with format: "${args.page_format?.toLowerCase() === 'letter' ? 'print_letter_portrait' : 'print_a4_portrait'}" AND authoring_model: "slides". Without authoring_model the deck would default to document mode and add_slide would refuse it.
 
 STEP 4 — Build the document pages
 Use the print recipe family (one HTML document per page). Typical structure for a study summary:

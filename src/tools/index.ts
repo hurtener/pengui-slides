@@ -34,6 +34,7 @@ import { registerUpdateDocumentMetaTool } from './decks/update-document-meta.too
 
 // Validation tools
 import { registerValidateSlideTool } from './validation/validate-slide.tool.js';
+import { registerValidateSectionTool } from './validation/validate-section.tool.js';
 
 // Asset tools
 import { registerUploadAssetTool } from './assets/upload-asset.tool.js';
@@ -87,6 +88,7 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
 
   // Validation tools
   registerValidateSlideTool(server, container);
+  registerValidateSectionTool(server, container);
 
   // Export tools
   registerRenderPreviewTool(server, container);

@@ -563,7 +563,7 @@ async function main() {
   log('📥', 'Fetching css tokens...');
   const gs = await client.callTool({
     name: 'get_design_soul',
-    arguments: { soul_id: soulId, include_skeletons: true },
+    arguments: { soul_id: soulId, include_recipes: true },
   });
   const cssTokens = ((jsonBody(gs).soul as { css_tokens: string }).css_tokens) ?? '';
   if (!cssTokens) throw new Error('css_tokens missing');

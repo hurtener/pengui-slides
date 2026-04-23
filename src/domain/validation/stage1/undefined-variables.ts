@@ -145,7 +145,7 @@ export class UndefinedVariablesCheck implements Stage1Check {
         expected: `:root { ${name}: <value>; ... }`,
         actual: 'variable referenced without a :root declaration and without a fallback',
         fixSuggestion:
-          `Paste the soul's full token block into :root (use get_design_soul with include_skeletons: true to fetch css_tokens), ` +
+          `Paste the soul's full token block into :root (use get_design_soul with include_recipes: true to fetch css_tokens), ` +
           `or add a fallback to the reference: \`var(${name}, <fallback>)\`. ` +
           'Do NOT replace the var() with a literal — that breaks token compliance and brand consistency.',
       });

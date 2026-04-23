@@ -12,6 +12,7 @@ import type { ServiceContainer } from '../../container.js';
 import { BooleanParamSchema } from '../_shared/schemas.js';
 import { textResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
+import { FormatNotExportableError } from '../../types/errors.js';
 import { validateSlidesForExport } from './export-validation.js';
 
 export function registerExportHtmlTool(server: McpServer, container: ServiceContainer): void {
@@ -19,7 +20,11 @@ export function registerExportHtmlTool(server: McpServer, container: ServiceCont
     'export_html',
     {
       title: 'Export HTML',
-      description: 'Export a deck as a self-contained HTML file with optional slide navigation. Set include_data to true to also receive the HTML content in the response.',
+      description:
+        'Export a slide-model deck as a self-contained HTML file with optional slide navigation. ' +
+        'ONLY applies to decks with authoringModel="slides" — document-model decks cannot be exported as HTML, ' +
+        'use export_pdf instead (a FormatNotExportableError names the correct tool). ' +
+        'Set include_data to true to also receive the HTML content in the response.',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to export.'),
         include_navigation: BooleanParamSchema.describe('Whether to include slide navigation controls. Defaults to false.'),
@@ -30,6 +35,13 @@ export function registerExportHtmlTool(server: McpServer, container: ServiceCont
       try {
         // Get deck info and all slides
         const summary = await container.deckService.getDeckSummary(deck_id);
+        if (summary.authoringModel === 'document') {
+          throw new FormatNotExportableError(
+            summary.format,
+            'export_html',
+            'export_pdf',
+          );
+        }
         const slides = await Promise.all(
           summary.slides.map((s) => container.deckService.getSlide(s.id as string)),
         );

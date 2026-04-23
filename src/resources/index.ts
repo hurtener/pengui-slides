@@ -17,41 +17,85 @@ import { registerDocumentModeResource } from './document-mode.resource.js';
 
 const OVERVIEW = `# Pengui Slides — System Overview
 
-Pengui Slides is an MCP server that lets LLM agents create branded slide decks.
+Pengui Slides is an MCP server that lets LLM agents create branded decks and print
+documents. Two authoring models live inside it; pick the right one FIRST.
+
+## The two authoring models
+
+| \`authoringModel\` | Default for | You author | Exports |
+|-------------------|-------------|------------|---------|
+| \`"slides"\` | \`slides_16_9\` (and legacy print, opt-in) | Per-page slide HTML documents of fixed dimensions (1920×1080 or 1240×1754 / 1275×1650). Each slide is self-contained: its own DOCTYPE, own \`<style>\`, all soul tokens in \`:root\`. | \`export_pptx\`, \`export_pdf\`, \`export_html\`, \`export_google_slides\`, \`render_preview\` |
+| \`"document"\` | \`print_a4_portrait\`, \`print_letter_portrait\` (v3 default) | Linear list of **Section FRAGMENTS** — one \`<section class="pengui-section pengui-{kind}">\`. NO DOCTYPE, NO \`<html>\`/\`<head>\`/\`<body>\`, NO \`<style>\` blocks, NO \`:root\` tokens (the composer injects them once). The exporter composes sections into one flowing HTML document and lets Chromium paginate. | \`export_pdf\` only |
+
+\`create_deck\` picks the default model from the \`format\` argument; pass
+\`authoring_model\` explicitly to override. After creation, call
+\`get_deck_summary\` — the \`authoringModel\` field tells you whether to use
+slide verbs or section verbs.
 
 ## Core Concepts
 
 | Concept | What it is |
 |---------|-----------|
-| **Design Soul** | A complete visual identity (colors, typography, spacing, shapes, depth, components, motion). Generates ~73 CSS custom-property tokens and 6 layout recipes. |
-| **Deck** | An ordered collection of slides tied to one Design Soul. |
-| **Slide** | A self-contained HTML document (1920×1080 px) carrying its own \`<style>\` block with all soul tokens. |
-| **Asset** | An uploaded image (PNG, SVG, JPEG). Referenced in slide HTML as \`asset://UUID\` — never as raw base64. |
-| **Recipe** | A validated layout template (title-slide, two-column, metrics, features-grid, closing-cta, blank-themed). |
-| **Validation** | Two-stage pipeline (static lint + render-truth) producing a 0–1 style score. |
+| **Design Soul** | A complete visual identity (colors, typography, spacing, shapes, depth, components, motion). Generates ~73 CSS custom-property tokens, 6 slide recipes, and 11 print recipes. Shared across both authoring models. |
+| **Deck** | An ordered collection of slides **or** sections tied to one Design Soul, with a \`format\` and an \`authoringModel\`. |
+| **Slide** | (slide-model only) A self-contained HTML document carrying its own \`<style>\` block with all soul tokens. Dimensions come from the deck \`format\`. |
+| **Section** | (document-model only) An HTML FRAGMENT — a content block (\`prose\`, \`figure\`, \`chart\`, \`diagram\`, \`table\`, \`callout\`, \`cover\`, \`chapter_header\`, \`toc\`, and more). The composer wraps it and handles pagination. |
+| **Asset** | An uploaded image (PNG, SVG, JPEG). Referenced as \`asset://UUID\` — never raw base64. |
+| **Recipe** | A validated layout template. Slide recipes (title-slide, two-column, metrics, features-grid, closing-cta, blank-themed) ship with every soul; print recipes (cover, toc, chapter_intro, content, content_chart, content_diagram, compare, glossary, timeline, summary, bibliography) ship alongside them. |
+| **Validation** | Runs automatically on add/update. Slide validator (Stage 1 + 2) for slide-model; Section Stage 1 for each fragment + Document Stage 2 at export for document-model. Produces a 0–1 style score. |
 
-## Typical Workflow
+## Pick-your-path workflow
 
+**Slide-model deck (slides_16_9, or legacy print with \`authoring_model: "slides"\`):**
 \`\`\`
-1. register_design_soul  → creates a draft soul
-2. approve_design_soul   → generates CSS tokens + 6 recipes
-3. upload_asset           → store logo / content images, get asset://UUID refs
-4. create_deck            → empty deck linked to the soul
-5. add_slide (×N)         → each slide is self-contained HTML; validated automatically
-6. export_pptx / export_pdf / export_html → final output
+1. register_design_soul   → draft soul
+2. approve_design_soul    → generates tokens + recipes
+3. upload_asset (×N)      → asset://UUID refs
+4. create_deck            → slide-model deck
+5. add_slide (×N)         → each slide is a full HTML document
+6. export_pptx / export_pdf / export_html / export_google_slides
+\`\`\`
+
+**Document-model deck (print_a4_portrait / print_letter_portrait, v3 default):**
+\`\`\`
+1. register_design_soul   → draft soul
+2. approve_design_soul    → generates tokens + recipes
+3. upload_asset (×N)      → asset://UUID refs
+4. create_deck { format: 'print_a4_portrait' }   → document-model deck (automatic)
+5. update_document_meta   → (optional) running chrome + TOC config
+6. add_section (×N)       → each section is an HTML fragment
+7. export_pdf             → document composed, paginated by Chromium
 \`\`\`
 
 ## Key Rules
 
-- **Every slide must include ALL soul CSS tokens** in its own \`<style>\` block.
-  Slides are rendered in isolation — there is no shared stylesheet.
+- **Choose the right verbs for the model.** Slide verbs (\`add_slide\`, \`update_slide\`,
+  \`render_preview\`, \`export_html\`, \`export_pptx\`, \`export_google_slides\`) reject
+  document-model decks with a \`WRONG_AUTHORING_MODEL\` or \`FORMAT_NOT_EXPORTABLE\`
+  error naming the right tool. Section verbs (\`add_section\`, \`update_section\`,
+  \`list_sections\`, \`update_document_meta\`) do the mirror check.
+- **Tokens are mandatory.** Slide-model: every slide's \`<style>\` includes ALL soul
+  CSS tokens in \`:root\`. Document-model: tokens are injected once by the composer,
+  so section fragments MUST NOT repeat them (validation flags it).
 - **Never use literal colors or spacing values.** Use \`var(--token)\` everywhere.
-  The validation pipeline rejects \`#hex\`, \`rgb()\`, and literal \`px\` values for
-  spacing properties.
+  Literal hex / rgb / px values for spacing fail validation.
 - **Never reference external URLs.** No Google Fonts, no CDN links, no remote images.
-  Everything must be self-contained. Use \`asset://UUID\` for images.
-- **The slide frame is exactly 1920×1080 px.** The \`.slide\` container must declare
-  \`width: 1920px; height: 1080px\`.
+  Use \`asset://UUID\` for images; the server resolves refs at render/export time.
+- **Slide dimensions come from the deck format.** \`slides_16_9\` → 1920×1080,
+  \`print_a4_portrait\` → 1240×1754, \`print_letter_portrait\` → 1275×1650. The
+  safe-area check reports the expected size in its error message.
+
+## Where to go next
+
+- \`pengui://docs/slide-format\` — canonical slide HTML (slide-model decks)
+- \`pengui://docs/document-mode\` — continuous-document authoring guide (document-model decks)
+- \`pengui://docs/print-mode\` — legacy per-page print flow (only if opted-in via \`authoring_model: "slides"\`)
+- \`pengui://docs/design-souls\` — the 7 layers + every CSS token they emit
+- \`pengui://docs/validation\` — all lints, scoring, tips for score 1.0
+- \`pengui://docs/assets\` — upload & reference images
+- \`pengui://docs/recipes\` — the built-in layout templates
+- \`pengui://docs/workflows\` — step-by-step guides for each path
+- \`pengui://docs/charts-and-diagrams\` — copy-paste SVG templates for print
 `;
 
 const SLIDE_FORMAT = `# Slide HTML Format — Complete Reference
@@ -310,31 +354,62 @@ Use \`get_design_soul\` with \`include_recipes: true\` to see the generated HTML
 
 const VALIDATION = `# Validation — Checks and Scoring
 
-Validation runs automatically on \`add_slide\` and \`update_slide\`.
-You can also call \`validate_slide\` directly.
+Validation runs automatically on add/update. Two parallel pipelines exist, one per
+authoring model. Always check \`authoringModel\` on \`get_deck_summary\` first.
 
-## Two Stages
+## Slide-model pipeline
+
+Runs on \`add_slide\` / \`update_slide\`. Callable directly via \`validate_slide\`
+(pass \`deck_id\` so the checks use the deck's format geometry; without it the
+defaults are \`slides_16_9\` at 1920×1080).
 
 ### Stage 1 — Static Lint (always runs)
 | Check | Category | Severity | What it catches |
 |-------|----------|----------|----------------|
 | structural-check | structural | error | Missing DOCTYPE, missing/invalid @slide-meta, missing \`<div class="slide">\` |
 | network-isolation | structural | error | Any \`http://\`, \`https://\`, or \`//\` URL in the HTML |
-| safe-area-check | structural | warning | \`.slide\` missing \`width:1920px\` or \`height:1080px\` |
+| safe-area-check | structural | error/warning | \`.slide\` missing the deck-format \`width\`/\`height\`, missing \`padding: var(--space-safe-area)\`, or missing \`position: relative\` |
 | token-compliance | token | error | Literal hex/rgb/hsl colors in CSS (must use \`var(--color-*)\`) |
 | spacing-compliance | spacing | warning | Literal px/rem/em values for padding/margin/gap (must use \`var(--space-*)\`) |
 | font-compliance | typography | error | Font families not in soul's allowed list or CSS generic families |
+| diagram-legibility | typography/token | warning | (print recipes \`content_chart\`/\`content_diagram\` only) SVG missing viewBox, literal px font-sizes, literal hex fills, missing legend on multi-series charts |
 
 ### Stage 2 — Render Truth (only when \`depth: "full"\`)
-Uses Playwright at 1920×1080 to render the slide, then checks:
+Uses Playwright at the deck's format geometry to render the slide, then checks:
 | Check | Category | Severity | What it catches |
 |-------|----------|----------|----------------|
 | contrast-checker | contrast | error | WCAG 2.1 contrast ratio failures (4.5:1 normal, 3:1 large text) |
-| overflow-detector | structural | warning | Elements overflowing the 1920×1080 frame |
+| overflow-detector | structural | warning | Elements overflowing the format frame |
 | color-sampler | token | warning | Rendered colors not matching soul token values |
 | legibility-check | contrast | error | Invisible text (opacity < 0.1, visibility:hidden, display:none) or font-size < 10px |
 
-## Scoring
+## Document-model pipeline
+
+Runs on \`add_section\` / \`update_section\`. Callable directly via \`validate_section\`.
+Disabled for document mode: \`safe-area-check\`, \`overflow-detector\`, slide-shaped
+\`structural-check\` (they assume a fixed-size \`.slide\` container).
+
+### Section Stage 1 — fast (always runs on add/update)
+| Check | Category | Severity | What it catches |
+|-------|----------|----------|----------------|
+| fragment-contract | structural | error | Fragment is not a single \`<section class="pengui-section pengui-{kind}">\` root, or contains DOCTYPE / \`<html>\` / \`<head>\` / \`<body>\` / \`<script>\` / \`<link>\` / standalone \`<style>\` / \`:root\` tokens / fixed page-shaped dimensions |
+| wrapper-class | structural | error | Keep-together kinds (figure, chart, diagram, callout, quote, image) missing the canonical \`.pengui-*\` class |
+| section-shape | structural | error | Kind-specific shape failure (e.g. \`figure\` missing \`<figure>\`/\`<figcaption>\`, \`table\` missing \`<thead>\`/\`<tbody>\`) |
+| token-compliance | token | error | Literal hex/rgb/hsl colors |
+| spacing-compliance | spacing | warning | Literal px/rem/em in padding/margin/gap |
+| font-compliance | typography | error | Fonts not in soul's allowed list |
+| network-isolation | structural | error | External URLs |
+
+### Document Stage 2 — render-truth (runs at \`export_pdf\` time)
+Composes the full document, renders with Playwright, measures pagination:
+| Check | Category | Severity | What it catches |
+|-------|----------|----------|----------------|
+| split-keep-together | structural | warning | Keep-together block (figure / chart / diagram / callout / quote / image) splits across a page boundary |
+| orphan-heading | structural | warning | An H2/H3 ends up alone at the bottom of a page with no following body |
+| contrast-checker | contrast | error | WCAG contrast failures (as in slide mode) |
+| color-sampler | token | warning | Rendered colors not matching soul tokens |
+
+## Scoring (shared by both pipelines)
 
 | Category | Weight |
 |----------|--------|
@@ -345,20 +420,28 @@ Uses Playwright at 1920×1080 to render the slide, then checks:
 | Structural | 15% |
 
 Deductions: **−0.20 per error**, **−0.05 per warning**, clamped to [0, 1] per category.
-Overall score = weighted average of all categories.
-
-\`passed: true\` when \`errorCount === 0\`.
+Overall score = weighted average of all categories. \`passed: true\` when \`errorCount === 0\`.
 
 ## Tips for Score 1.0
 
+**Slide model:**
 1. Include ALL soul CSS tokens in the \`:root { }\` block.
 2. Use \`var(--color-*)\` for every color property.
 3. Use \`var(--space-*)\` for every padding, margin, and gap.
 4. Use only the soul's fonts (check \`allowedFonts\` from the soul).
-5. Ensure \`.slide { width: 1920px; height: 1080px; }\`.
-6. No external URLs — everything self-contained.
-7. Ensure sufficient contrast between text and backgrounds.
-8. Keep all content within the 1920×1080 frame.
+5. Ensure \`.slide\` carries the right dimensions (from deck format), \`padding: var(--space-safe-area)\`, AND \`position: relative\`.
+6. Declare \`html, body { margin: 0; padding: 0 }\` explicitly — the universal \`*\` selector won't override the UA stylesheet.
+7. No external URLs — everything self-contained.
+8. Ensure sufficient contrast between text and backgrounds.
+9. Keep all content within the format's frame.
+
+**Document model:**
+1. Root is ONE \`<section class="pengui-section pengui-{kind}">\` element.
+2. No DOCTYPE / html / head / body / script / link / standalone style / :root in the fragment.
+3. Wrap keep-together content (figure/chart/diagram/callout/quote/image) in its canonical \`.pengui-*\` class so the universal \`break-inside: avoid\` rule applies.
+4. Use \`<table><thead><tbody>\` for tabular data so the header repeats across pages.
+5. Use \`var(--*)\` tokens, not literals. Don't re-declare tokens — the composer injects them once.
+6. For page breaks, use \`break_hints\` on \`add_section\`, never filler content.
 `;
 
 const ASSETS = `# Asset System — Image Management
@@ -525,99 +608,150 @@ Empty slide container with CSS theme applied and optional page number.
 
 const WORKFLOWS = `# Workflows — Step-by-Step Guides
 
-## Workflow 1: Create a Full Presentation
+Which workflow you follow depends on the deck's \`authoringModel\`. For any
+existing deck, call \`get_deck_summary\` first to see it.
+
+## Workflow 1a: Create a Slide Presentation (slide-model)
+
+Use for \`slides_16_9\` decks, or for legacy print decks opted into
+\`authoring_model: "slides"\`.
 
 \`\`\`
 Step 1 — Register the Design Soul
   Tool: register_design_soul
-  Input: name, description, all 7 layers (color, typography, spacing, shape, depth, components, motion)
-  Result: soul in "draft" status with an ID
+  Input: name, description, all 7 layers
+  Result: soul in "draft" status
 
 Step 2 — Approve the Soul
   Tool: approve_design_soul
   Input: soul_id
-  Result: ~73 CSS tokens + 6 recipes generated
+  Result: ~73 CSS tokens + slide recipes + print recipes
 
 Step 3 — Upload Assets (optional)
   Tool: upload_asset (once per image)
-  Input: name, filename, mime_type, scope, role, data_base64
   Result: asset_id + ref (asset://UUID) for each
 
 Step 4 — Get the Soul's Style Guide
-  Tool: get_design_soul
-  Input: soul_id, include_recipes: true, include_style_guide: true
-  Result: CSS tokens, utility classes, recipe HTML templates
+  Tool: get_design_soul { include_recipes: true, include_style_guide: true }
 
 Step 5 — Create a Deck
-  Tool: create_deck
-  Input: soul_id, title
-  Result: deck_id
+  Tool: create_deck { soul_id, title, format: "slides_16_9" }  // or a print
+                                                                // format +
+                                                                // authoring_model:
+                                                                // "slides" for
+                                                                // the legacy
+                                                                // print flow
+  Result: deck_id, authoringModel: "slides"
 
-Step 6 — Add Slides
-  Tool: add_slide (repeat for each slide)
-  Input: deck_id, html (full HTML document with all tokens), metadata
+Step 6 — Add Slides (repeat per slide)
+  Tool: add_slide
+  Input: deck_id, html (complete HTML document with all tokens in :root), metadata
   Result: slide_id, validation score
   IMPORTANT: Do not introduce new blocking issues while iterating.
   Fix pre-existing issues when requested or before export.
 
 Step 7 — Export
-  Tool: export_pptx, export_pdf, or export_html
-  Input: deck_id
+  Tool: export_pptx, export_pdf, export_html, or export_google_slides
   Result: file path to the exported output
 \`\`\`
 
-## Workflow 2: Add an Image to a Slide
+## Workflow 1b: Create a Print Document (document-model, v3 default)
+
+Use for \`print_a4_portrait\` and \`print_letter_portrait\` decks (the v3 default is
+\`authoringModel: "document"\`). Read \`pengui://docs/document-mode\` first.
+
+\`\`\`
+Step 1 — Register + approve the Design Soul (same as 1a, Steps 1–4)
+
+Step 5 — Create a Deck
+  Tool: create_deck { soul_id, title, format: "print_a4_portrait" }
+  Result: deck_id, authoringModel: "document" (automatic)
+
+Step 6 — Configure document meta (optional but recommended)
+  Tool: update_document_meta
+  Input: deck_id, meta: { chrome: { runningTitle, pageNumber, footerAlign },
+                          toc: { includeKinds: ["chapter_header"] } }
+  Result: deck.documentMeta is set — running chrome + auto TOC active
+
+Step 7 — Add Sections (repeat per content block)
+  Tool: add_section
+  Input: deck_id, kind, html (FRAGMENT — no DOCTYPE/html/head/body/:root/style),
+         metadata, break_hints (optional)
+  Result: section_id, position, validation score
+  Sections are content blocks, not pages. The composer paginates on export.
+
+Step 8 — Export
+  Tool: export_pdf  (only export supported for document decks)
+  Result: paginated PDF with running chrome and keep-together guards applied
+\`\`\`
+
+## Workflow 2: Add an Image
+
+Same shape in both models — only the reference site differs.
 
 \`\`\`
 Step 1 — Upload the image
   Tool: upload_asset
-  Input: name, filename, mime_type, scope: { type: "deck", deck_id: "..." }, role: "content", data_base64
+  Input: name, filename, mime_type,
+         scope_type: "deck" | "soul" | "global",
+         soul_id or deck_id (per scope),
+         role: "logo" | "content",
+         data_base64
   Result: ref = "asset://UUID"
 
-Step 2 — Use the ref in slide HTML
-  <img src="asset://UUID" style="width: var(--space-xxxl); border-radius: var(--radius-md);">
+Step 2 — Use the ref where images live
+  Slide-model:    <img src="asset://UUID" ...> inside the slide HTML
+  Document-model: <img src="asset://UUID" ...> inside a figure/image section
+                  fragment (wrapped in .pengui-figure or .pengui-image)
 
 Step 3 — The server resolves refs at render/export time
   asset://UUID → data:image/png;base64,...
 \`\`\`
 
-## Workflow 3: Iterate on a Slide
+## Workflow 3a: Iterate on a Slide (slide-model)
 
 \`\`\`
-Step 1 — Add or update the slide
-  Tool: add_slide or update_slide
-  Result: validation results with score, issues list
-
-Step 2 — Review the issues
-  Common fixes:
-  - "literal color" → replace #hex with var(--color-*)
-  - "literal spacing" → replace 24px with var(--space-lg)
-  - "font not allowed" → use only fonts from the soul
-  - "external URL" → remove CDN links, use asset:// for images
-  - "missing DOCTYPE" → ensure <!DOCTYPE html> is first
-  - "missing root container" → use <div class="slide">
-
-Step 3 — Resubmit the fixed HTML
-  Tool: update_slide with corrected HTML
-  Repeat until no new blocking issues remain.
-  For final export, all slides must still pass full validation.
+Step 1 — add_slide or update_slide → validation results
+Step 2 — Common fixes:
+  - "literal color" → var(--color-*)
+  - "literal spacing" → var(--space-*)
+  - "font not allowed" → use the soul's allowedFonts
+  - "external URL" → upload_asset and use asset://UUID
+  - "missing DOCTYPE" → <!DOCTYPE html> first
+  - "missing root container" → <div class="slide">
+  - "safe-area-check: missing position: relative" → add it to .slide
+  - "missing html, body margin reset" → html, body { margin: 0; padding: 0 }
+Step 3 — Resubmit via update_slide. Or call validate_slide standalone
+         (pass deck_id so dimension checks match the deck's format).
 \`\`\`
 
-## Workflow 4: Create a Custom Recipe
+## Workflow 3b: Iterate on a Section (document-model)
 
 \`\`\`
-Step 1 — Create a slide with your custom layout
-  Tool: add_slide with the custom HTML
-  Requirement: must pass validation before saving as a reusable template
-
-Step 2 — Save as template
-  Tool: save_as_template
-  Input: slide_id, name, description, type, tags
-  Result: new recipe added to the soul
-
-Step 3 — Reuse
-  The template appears in get_design_soul with include_recipes: true
+Step 1 — add_section or update_section → validation results
+Step 2 — Common fixes (Section Stage 1):
+  - "fragment-contract: DOCTYPE/html/body/head found" → strip everything
+    except the <section> root; the composer wraps for you
+  - "fragment-contract: :root block" → delete it; tokens are injected once
+  - "wrapper-class: missing .pengui-figure" → add the canonical class on
+    the inner wrapper of keep-together kinds
+  - "section-shape: figure missing figcaption" → add one
+  - "literal color/spacing/font" → switch to var(--*) / soul fonts
+Step 3 — Resubmit via update_section. Or call validate_section standalone
+         (pass deck_id for format-aware geometry). Stage 2 (split-keep-together,
+         orphan-heading) only runs at export_pdf time.
 \`\`\`
+
+## Workflow 4: Create a Custom Slide Recipe
+
+\`\`\`
+Step 1 — add_slide with the custom HTML (must pass validation)
+Step 2 — save_as_template → new recipe on the soul
+Step 3 — get_design_soul { include_recipes: true } — the new recipe is there
+\`\`\`
+
+(Document-mode section recipes are not yet authorable via save_as_template — the
+built-in 11 print recipes plus the 14 section \`kind\`s cover the current surface.)
 `;
 
 /* ------------------------------------------------------------------ */

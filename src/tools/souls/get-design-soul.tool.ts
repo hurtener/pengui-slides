@@ -28,17 +28,13 @@ export function registerGetDesignSoulTool(
         soul_id: SoulIdSchema,
         include_recipes: BooleanParamSchema
           .describe('Whether to include layout recipes in the response. Defaults to false.'),
-        /** @deprecated Use include_recipes instead */
-        include_skeletons: BooleanParamSchema
-          .describe('[Deprecated] Alias for include_recipes.'),
         include_style_guide: BooleanParamSchema
           .describe('Whether to include the style guide in the response. Defaults to true.'),
       }),
     },
-    async ({ soul_id, include_recipes, include_skeletons, include_style_guide }) => {
+    async ({ soul_id, include_recipes, include_style_guide }) => {
       try {
-        // include_skeletons is a deprecated alias for include_recipes
-        const shouldIncludeRecipes = include_recipes ?? include_skeletons ?? false;
+        const shouldIncludeRecipes = include_recipes ?? false;
 
         const { soul, recipes } = await container.soulService.get(
           soulId(soul_id),

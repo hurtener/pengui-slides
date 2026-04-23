@@ -268,7 +268,7 @@ export class ValidationService {
    * later via validateDocument at export time or on explicit request.
    */
   async validateSection(
-    section: Section,
+    section: Pick<Section, 'id' | 'kind' | 'html'>,
     soulId: SoulId,
     format?: FormatKind,
   ): Promise<ValidationResult> {

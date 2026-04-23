@@ -217,12 +217,12 @@ async function main() {
     `Soul approved! ${approveData.skeleton_count} skeletons generated: ${approveData.skeleton_types.join(', ')}`,
   );
 
-  // ── Step 3: Get Soul (with skeletons) to get CSS tokens ───────
+  // ── Step 3: Get Soul (with recipes) to get CSS tokens ─────────
 
   log('📝', 'Step 3: Getting Design Soul with CSS tokens...');
   const getSoulResult = await client.callTool({
     name: 'get_design_soul',
-    arguments: { soul_id: soulId, include_skeletons: true },
+    arguments: { soul_id: soulId, include_recipes: true },
   });
   const getSoulData = JSON.parse(
     (getSoulResult as { content: Array<{ text: string }> }).content[0].text,

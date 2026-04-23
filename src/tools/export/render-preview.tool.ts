@@ -12,6 +12,7 @@ import type { ServiceContainer } from '../../container.js';
 import { getFormat } from '../../domain/formats/format-registry.js';
 import { textResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
+import { FormatNotExportableError } from '../../types/errors.js';
 
 /** Target thumbnail short-edge in pixels. Width for landscape, height for portrait. */
 const THUMBNAIL_SHORT_EDGE = 270;
@@ -21,7 +22,11 @@ export function registerRenderPreviewTool(server: McpServer, container: ServiceC
     'render_preview',
     {
       title: 'Render Preview',
-      description: 'Render preview thumbnails for slides in a deck. Returns base64-encoded images.',
+      description:
+        'Render preview thumbnails for slides in a slide-model deck. Returns base64-encoded images. ' +
+        'ONLY applies to decks with authoringModel="slides" — document-model decks have no per-slide ' +
+        'frame (sections compose into a flowing document), so this tool raises FormatNotExportableError ' +
+        'naming export_pdf instead. For document decks, use export_pdf to render the full document.',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to render previews for.'),
         slides: z.array(z.string()).nullish().describe('Specific slide IDs to render. If omitted, renders all slides.'),
@@ -31,6 +36,13 @@ export function registerRenderPreviewTool(server: McpServer, container: ServiceC
     async ({ deck_id, slides: slideIds, thumbnail_width }) => {
       try {
         const summary = await container.deckService.getDeckSummary(deck_id);
+        if (summary.authoringModel === 'document') {
+          throw new FormatNotExportableError(
+            summary.format,
+            'render_preview',
+            'export_pdf',
+          );
+        }
         const format = getFormat(summary.format);
         const { widthPx, heightPx, thumbnailAspect } = format.geometry;
 

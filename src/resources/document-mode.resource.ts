@@ -152,8 +152,8 @@ Add a section with \`kind: "toc"\` and an **empty fragment body** (just the wrap
 
 ## Validation
 
-- **Section Stage 1** runs on every \`add_section\` / \`update_section\`. Fragment contract, wrapper-class presence, figure/table shape, token/font compliance, network isolation. Fast (<100ms).
-- **Document Stage 2** runs at export (or on demand). Composes the full document, renders in Playwright, measures each keep-together block against page boundaries, flags splits. Reports page count.
+- **Section Stage 1** runs on every \`add_section\` / \`update_section\`. Fragment contract, wrapper-class presence, figure/table shape, token/font compliance, network isolation. Fast (<100ms). Callable standalone via \`validate_section\` — pass \`html\`, \`kind\`, \`soul_id\`, and optionally \`deck_id\` (so the checks use the deck's format geometry).
+- **Document Stage 2** runs at export. Composes the full document, renders in Playwright, measures each keep-together block against page boundaries, flags splits. Reports page count. Not callable directly — it always runs as part of \`export_pdf\`.
 
 Disabled for document mode: \`safe-area-check\`, \`overflow-detector\`, slide-shaped \`structural-check\` — they assume a fixed-size \`.slide\` container.
 

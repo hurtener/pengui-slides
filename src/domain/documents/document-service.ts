@@ -429,9 +429,17 @@ export class DocumentService {
     const current: DocumentMeta = deck.documentMeta ?? {};
     const next: DocumentMeta = { ...current };
 
-    if (meta.chrome !== undefined) next.chrome = meta.chrome;
+    // Deep-merge chrome and toc sub-fields so a caller passing a partial
+    // object (e.g. { chrome: { pageNumber: true } }) keeps previously-set
+    // siblings (e.g. runningTitle, footerAlign). pageMargin is atomic —
+    // the four sides come as a tuple and all four are required.
+    if (meta.chrome !== undefined) {
+      next.chrome = { ...(current.chrome ?? {}), ...meta.chrome };
+    }
     if (meta.pageMargin !== undefined) next.pageMargin = meta.pageMargin;
-    if (meta.toc !== undefined) next.toc = meta.toc;
+    if (meta.toc !== undefined) {
+      next.toc = { ...(current.toc ?? {}), ...meta.toc };
+    }
 
     deck.documentMeta = next;
     deck.updatedAt = now;

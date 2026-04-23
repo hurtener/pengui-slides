@@ -172,4 +172,29 @@ describe('v3 continuous-document pipeline', () => {
     expect(deck?.documentMeta?.chrome?.runningTitle).toBe('Handbook Running Title');
     expect(deck?.documentMeta?.toc?.includeKinds).toContain('chapter_header');
   });
+
+  it('deep-merges chrome and toc sub-fields on updateDocumentMeta', async () => {
+    // First write: seed chrome + toc.
+    await container.documentService.updateDocumentMeta(deckIdStr, {
+      chrome: { runningTitle: 'Original Title', pageNumber: true, footerAlign: 'right' },
+      toc: { maxDepth: 3, includeKinds: ['chapter_header'] },
+    });
+
+    // Second write: touch ONLY one sub-field of each. Sibling sub-fields
+    // must survive — this is the contract the update_document_meta tool
+    // advertises and the fix for the pre-Wave-3 replace-behavior.
+    await container.documentService.updateDocumentMeta(deckIdStr, {
+      chrome: { pageNumber: false },
+      toc: { maxDepth: 2 },
+    });
+
+    const deck = await container.deckStore.get(
+      (await container.deckService.getDeckSummary(deckIdStr)).id,
+    );
+    expect(deck?.documentMeta?.chrome?.runningTitle).toBe('Original Title');
+    expect(deck?.documentMeta?.chrome?.pageNumber).toBe(false);
+    expect(deck?.documentMeta?.chrome?.footerAlign).toBe('right');
+    expect(deck?.documentMeta?.toc?.maxDepth).toBe(2);
+    expect(deck?.documentMeta?.toc?.includeKinds).toEqual(['chapter_header']);
+  });
 });

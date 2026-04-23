@@ -50,7 +50,7 @@ export function registerUpdateDocumentMetaTool(
     {
       title: 'Update Document Meta',
       description:
-        'Set deck-level chrome (running title, page numbers), page margins, and TOC config on a document-mode deck. Shallow-merges into existing documentMeta — fields you omit keep their previous values.',
+        'Set deck-level chrome (running title, page numbers), page margins, and TOC config on a document-mode deck. Merges into existing documentMeta. Top-level fields (chrome, page_margin, toc) you OMIT keep their previous values. Inside chrome and toc the merge goes one level deeper — omitted sub-fields (e.g. runningTitle, footerAlign) also keep their previous values. page_margin is ATOMIC: providing it replaces all four sides at once (the schema requires top/right/bottom/left together).',
       inputSchema: z.object({
         deck_id: z.string().describe('The document-mode deck to configure.'),
         meta: z
