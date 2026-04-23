@@ -10,7 +10,7 @@
  */
 
 import type { DeckId, SectionId } from '../../types/common.js';
-import { deckId, sectionId } from '../../types/common.js';
+import { sectionId } from '../../types/common.js';
 import type { Deck, DocumentMeta } from '../../types/deck.js';
 import type {
   Section,
@@ -36,6 +36,7 @@ import { RevisionTracker } from '../decks/revision-tracker.js';
 export class DocumentService {
   private readonly deckStore: IDeckStore;
   private readonly sectionStore: ISectionStore;
+  private readonly deckService: DeckService;
   private readonly clock: Clock;
   private readonly logger: Logger;
   private readonly revisionTracker: RevisionTracker;
@@ -43,15 +44,22 @@ export class DocumentService {
   constructor(
     deckStore: IDeckStore,
     sectionStore: ISectionStore,
+    deckService: DeckService,
     clock: Clock,
     logger: Logger,
     revisionTracker?: RevisionTracker,
   ) {
     this.deckStore = deckStore;
     this.sectionStore = sectionStore;
+    this.deckService = deckService;
     this.clock = clock;
     this.logger = logger;
     this.revisionTracker = revisionTracker ?? new RevisionTracker(clock);
+  }
+
+  /** Resolve a UUID or slug to a DeckId. Delegates to DeckService. */
+  private async resolveDeckRef(ref: string): Promise<DeckId> {
+    return this.deckService.resolveRefOrThrow(ref);
   }
 
   // ── Authoring-model guard ────────────────────────────────────────
@@ -86,7 +94,7 @@ export class DocumentService {
    * @throws WrongAuthoringModelError if the deck is slides-mode.
    */
   async addSection(input: AddSectionInput): Promise<Section> {
-    const did = deckId(input.deckId);
+    const did = await this.resolveDeckRef(input.deckId);
     const deck = await this.deckStore.get(did);
     if (!deck) {
       throw new DeckNotFoundError(input.deckId);
@@ -185,7 +193,7 @@ export class DocumentService {
    * @throws WrongAuthoringModelError if the deck is slides-mode.
    */
   async updateSection(input: UpdateSectionInput): Promise<Section> {
-    const did = deckId(input.deckId);
+    const did = await this.resolveDeckRef(input.deckId);
     const sid = sectionId(input.sectionId);
 
     const deck = await this.deckStore.get(did);
@@ -292,7 +300,7 @@ export class DocumentService {
    * @throws WrongAuthoringModelError if the deck is slides-mode.
    */
   async removeSection(deckIdStr: string, sectionIdStr: string): Promise<void> {
-    const did = deckId(deckIdStr);
+    const did = await this.resolveDeckRef(deckIdStr);
     const sid = sectionId(sectionIdStr);
 
     const deck = await this.deckStore.get(did);
@@ -354,7 +362,7 @@ export class DocumentService {
    * @throws WrongAuthoringModelError if the deck is slides-mode.
    */
   async reorderSections(deckIdStr: string, newOrder: string[]): Promise<Deck> {
-    const did = deckId(deckIdStr);
+    const did = await this.resolveDeckRef(deckIdStr);
     const deck = await this.deckStore.get(did);
     if (!deck) {
       throw new DeckNotFoundError(deckIdStr);
@@ -395,7 +403,7 @@ export class DocumentService {
    * @throws DeckNotFoundError if the deck does not exist.
    */
   async listSections(deckIdStr: string): Promise<Section[]> {
-    const did = deckId(deckIdStr);
+    const did = await this.resolveDeckRef(deckIdStr);
     const deck = await this.deckStore.get(did);
     if (!deck) {
       throw new DeckNotFoundError(deckIdStr);
@@ -418,7 +426,7 @@ export class DocumentService {
     deckIdStr: string,
     meta: Partial<DocumentMeta>,
   ): Promise<Deck> {
-    const did = deckId(deckIdStr);
+    const did = await this.resolveDeckRef(deckIdStr);
     const deck = await this.deckStore.get(did);
     if (!deck) {
       throw new DeckNotFoundError(deckIdStr);

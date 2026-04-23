@@ -36,7 +36,7 @@ describe('DeckService', () => {
     logger = new Logger('test', 'error');
 
     soulService = new SoulService(soulStore, slideStore, clock, logger);
-    deckService = new DeckService(deckStore, slideStore, sectionStore, soulStore, clock, logger);
+    deckService = new DeckService(deckStore, slideStore, sectionStore, soulStore, soulService, clock, logger);
 
     // Create and approve a soul for deck creation
     const soul = await soulService.register(sampleSoulInput);

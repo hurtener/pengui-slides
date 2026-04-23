@@ -21,16 +21,55 @@ import { generateTokens } from './token-generator.js';
 import { generateUtilityCss } from './utility-css-generator.js';
 import { generateStyleGuide } from './style-guide-generator.js';
 import { RecipeGenerator } from './recipe-generator.js';
+import { SlugIndex } from '../_shared/slug-index.js';
 
 export class SoulService {
   private readonly recipeGenerator = new RecipeGenerator();
+  private readonly slugIndex: SlugIndex<SoulId>;
 
   constructor(
     private readonly store: ISoulStore,
     private readonly slideStore: ISlideStore,
     private readonly clock: Clock,
     private readonly logger: Logger,
-  ) {}
+  ) {
+    this.slugIndex = new SlugIndex<SoulId>(
+      async () => {
+        const all = await this.store.list('all');
+        return all.map((s) => ({ id: s.id, slug: s.slug, slugSource: s.name }));
+      },
+      async (id, slug) => {
+        const soul = await this.store.get(id);
+        if (soul && !soul.slug) {
+          soul.slug = slug;
+          await this.store.save(soul);
+        }
+      },
+    );
+  }
+
+  /** Resolve a UUID or slug to a SoulId, or undefined if unknown. */
+  async resolveRef(ref: string): Promise<SoulId | undefined> {
+    const resolved = await this.slugIndex.resolve(ref);
+    if (resolved) return resolved;
+    // Fall back to direct store lookup — supports newly created ids that aren't
+    // in the slug index yet (the index caches post-build registrations but a
+    // caller might pass an id that pre-exists the most recent ensure()).
+    const soul = await this.store.get(ref as SoulId);
+    return soul ? soul.id : undefined;
+  }
+
+  /** Resolve a UUID or slug to a SoulId, throwing if unknown. */
+  async resolveRefOrThrow(ref: string): Promise<SoulId> {
+    const id = await this.resolveRef(ref);
+    if (!id) throw new SoulNotFoundError(ref);
+    return id;
+  }
+
+  /** Slug for a known soul id (may trigger backfill on first access). */
+  async slugFor(id: SoulId): Promise<string | undefined> {
+    return this.slugIndex.slugFor(id);
+  }
 
   /**
    * Register a new Design Soul.
@@ -46,8 +85,11 @@ export class SoulService {
     const styleGuide = generateStyleGuide(input.layers, tokenNames);
 
     const now = this.clock.now();
+    const id = generateSoulId();
+    const slug = await this.slugIndex.pickForNew(input.name);
     const soul: DesignSoul = {
-      id: generateSoulId(),
+      id,
+      slug,
       name: input.name,
       description: input.description,
       status: 'draft',
@@ -62,8 +104,9 @@ export class SoulService {
     };
 
     await this.store.save(soul);
+    this.slugIndex.register(slug, id);
 
-    this.logger.info('Design Soul registered', { soulId: soul.id, tokenCount: tokenNames.length });
+    this.logger.info('Design Soul registered', { soulId: soul.id, slug, tokenCount: tokenNames.length });
 
     return soul;
   }

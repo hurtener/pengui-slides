@@ -163,6 +163,12 @@ export interface SoulLayers {
 
 export interface DesignSoul {
   id: SoulId;
+  /**
+   * Human-readable handle derived from `name`. Stable once assigned
+   * (renaming the soul does not change the slug). Absent on pre-v4 records;
+   * services backfill lazily on first access. Writes always include it.
+   */
+  slug?: string;
   name: string;
   description: string;
   status: SoulStatus;

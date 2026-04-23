@@ -7,7 +7,7 @@
  */
 
 import type { DeckId, SlideId } from '../../types/common.js';
-import { deckId, slideId, soulId } from '../../types/common.js';
+import { slideId } from '../../types/common.js';
 import type {
   Deck,
   Slide,
@@ -46,21 +46,26 @@ import {
 } from '../../infrastructure/index.js';
 import type { Logger } from '../../infrastructure/index.js';
 import { RevisionTracker } from './revision-tracker.js';
+import { SlugIndex } from '../_shared/slug-index.js';
+import type { SoulService } from '../souls/soul-service.js';
 
 export class DeckService {
   private readonly deckStore: IDeckStore;
   private readonly slideStore: ISlideStore;
   private readonly sectionStore: ISectionStore;
   private readonly soulStore: ISoulStore;
+  private readonly soulService: SoulService;
   private readonly clock: Clock;
   private readonly logger: Logger;
   private readonly revisionTracker: RevisionTracker;
+  private readonly slugIndex: SlugIndex<DeckId>;
 
   constructor(
     deckStore: IDeckStore,
     slideStore: ISlideStore,
     sectionStore: ISectionStore,
     soulStore: ISoulStore,
+    soulService: SoulService,
     clock: Clock,
     logger: Logger,
   ) {
@@ -68,9 +73,43 @@ export class DeckService {
     this.slideStore = slideStore;
     this.sectionStore = sectionStore;
     this.soulStore = soulStore;
+    this.soulService = soulService;
     this.clock = clock;
     this.logger = logger;
     this.revisionTracker = new RevisionTracker(clock);
+    this.slugIndex = new SlugIndex<DeckId>(
+      async () => {
+        const all = await this.deckStore.list();
+        return all.map((d) => ({ id: d.id, slug: d.slug, slugSource: d.title }));
+      },
+      async (id, slug) => {
+        const deck = await this.deckStore.get(id);
+        if (deck && !deck.slug) {
+          deck.slug = slug;
+          await this.deckStore.save(deck);
+        }
+      },
+    );
+  }
+
+  /** Resolve a UUID or slug to a DeckId, or undefined if unknown. */
+  async resolveRef(ref: string): Promise<DeckId | undefined> {
+    const resolved = await this.slugIndex.resolve(ref);
+    if (resolved) return resolved;
+    const deck = await this.deckStore.get(ref as DeckId);
+    return deck ? deck.id : undefined;
+  }
+
+  /** Resolve a UUID or slug to a DeckId, throwing if unknown. */
+  async resolveRefOrThrow(ref: string): Promise<DeckId> {
+    const id = await this.resolveRef(ref);
+    if (!id) throw new DeckNotFoundError(ref);
+    return id;
+  }
+
+  /** Slug for a known deck id (may trigger backfill on first access). */
+  async slugFor(id: DeckId): Promise<string | undefined> {
+    return this.slugIndex.slugFor(id);
   }
 
   // ── Authoring model helpers ──────────────────────────────────────
@@ -128,7 +167,7 @@ export class DeckService {
    * @throws SoulNotFoundError if the referenced soul does not exist.
    */
   async createDeck(input: CreateDeckInput): Promise<Deck> {
-    const sid = soulId(input.soulId);
+    const sid = await this.soulService.resolveRefOrThrow(input.soulId);
     const soul = await this.soulStore.get(sid);
     if (!soul) {
       throw new SoulNotFoundError(input.soulId);
@@ -139,10 +178,14 @@ export class DeckService {
     assertKnownFormat(format);
     const authoringModel: AuthoringModel =
       input.authoringModel ?? defaultAuthoringModelFor(format);
+    const id = generateDeckId();
+    const title = input.title ?? 'Untitled Deck';
+    const slug = await this.slugIndex.pickForNew(title);
     const deck: Deck = {
-      id: generateDeckId(),
+      id,
+      slug,
       soulId: sid,
-      title: input.title ?? 'Untitled Deck',
+      title,
       author: input.author ?? '',
       slideIds: [],
       sectionIds: [],
@@ -153,6 +196,7 @@ export class DeckService {
     };
 
     await this.deckStore.save(deck);
+    this.slugIndex.register(slug, id);
 
     // Record creation revision
     const revision = this.revisionTracker.createRevision({
@@ -179,7 +223,7 @@ export class DeckService {
    * @throws DeckNotFoundError if the deck does not exist.
    */
   async addSlide(input: AddSlideInput): Promise<Slide> {
-    const did = deckId(input.deckId);
+    const did = await this.resolveRefOrThrow(input.deckId);
     const deck = await this.deckStore.get(did);
     if (!deck) {
       throw new DeckNotFoundError(input.deckId);
@@ -280,7 +324,7 @@ export class DeckService {
    * @throws SlideNotFoundError if the slide does not exist.
    */
   async updateSlide(input: UpdateSlideInput): Promise<Slide> {
-    const did = deckId(input.deckId);
+    const did = await this.resolveRefOrThrow(input.deckId);
     const sid = slideId(input.slideId);
 
     const deck = await this.deckStore.get(did);
@@ -402,7 +446,7 @@ export class DeckService {
    * @throws SlideNotFoundError if the slide does not exist in the deck.
    */
   async removeSlide(deckIdStr: string, slideIdStr: string): Promise<void> {
-    const did = deckId(deckIdStr);
+    const did = await this.resolveRefOrThrow(deckIdStr);
     const sid = slideId(slideIdStr);
 
     const deck = await this.deckStore.get(did);
@@ -458,7 +502,7 @@ export class DeckService {
    * @throws DeckNotFoundError if the deck does not exist.
    */
   async reorderSlides(deckIdStr: string, newOrder: string[]): Promise<Deck> {
-    const did = deckId(deckIdStr);
+    const did = await this.resolveRefOrThrow(deckIdStr);
     const deck = await this.deckStore.get(did);
     if (!deck) {
       throw new DeckNotFoundError(deckIdStr);
@@ -499,7 +543,7 @@ export class DeckService {
    * @throws DeckNotFoundError if the deck does not exist.
    */
   async getDeckSummary(deckIdStr: string): Promise<DeckSummary> {
-    const did = deckId(deckIdStr);
+    const did = await this.resolveRefOrThrow(deckIdStr);
     const deck = await this.deckStore.get(did);
     if (!deck) {
       throw new DeckNotFoundError(deckIdStr);
@@ -535,9 +579,14 @@ export class DeckService {
         : {}),
     }));
 
+    const deckSlug = deck.slug ?? (await this.slugFor(deck.id)) ?? '';
+    const soulSlug = (await this.soulService.slugFor(deck.soulId)) ?? '';
+
     return {
       id: deck.id,
+      slug: deckSlug,
       soulId: deck.soulId,
+      soulSlug,
       title: deck.title,
       author: deck.author,
       format: deck.format ?? DEFAULT_FORMAT,
@@ -558,7 +607,7 @@ export class DeckService {
    * pre-v3 deck that lacks the field.
    */
   async getAuthoringModel(deckIdStr: string): Promise<AuthoringModel> {
-    const did = deckId(deckIdStr);
+    const did = await this.resolveRefOrThrow(deckIdStr);
     const deck = await this.deckStore.get(did);
     if (!deck) {
       throw new DeckNotFoundError(deckIdStr);
@@ -573,7 +622,7 @@ export class DeckService {
    * @throws DeckNotFoundError if the deck does not exist.
    */
   async getDeckFormat(deckIdStr: string): Promise<FormatKind> {
-    const did = deckId(deckIdStr);
+    const did = await this.resolveRefOrThrow(deckIdStr);
     const deck = await this.deckStore.get(did);
     if (!deck) {
       throw new DeckNotFoundError(deckIdStr);

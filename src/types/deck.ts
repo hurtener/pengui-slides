@@ -86,6 +86,12 @@ export interface DocumentMeta {
 
 export interface Deck {
   id: DeckId;
+  /**
+   * Human-readable handle derived from `title`. Stable once assigned
+   * (renaming the title does not change the slug). Absent on pre-v4 records;
+   * services backfill lazily on first access. Writes always include it.
+   */
+  slug?: string;
   soulId: SoulId;
   title: string;
   author: string;
@@ -153,7 +159,9 @@ export interface SlideSummary {
 
 export interface DeckSummary {
   id: DeckId;
+  slug: string;
   soulId: SoulId;
+  soulSlug: string;
   title: string;
   author: string;
   format: FormatKind;

@@ -43,10 +43,11 @@ describe('DocumentService', () => {
       slideStore,
       sectionStore,
       soulStore,
+      soulService,
       clock,
       logger,
     );
-    documentService = new DocumentService(deckStore, sectionStore, clock, logger);
+    documentService = new DocumentService(deckStore, sectionStore, deckService, clock, logger);
 
     const soul = await soulService.register(sampleSoulInput);
     await soulService.approve(soul.id);

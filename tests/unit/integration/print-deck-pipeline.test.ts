@@ -80,6 +80,7 @@ describe('print deck pipeline', () => {
       slideStore,
       sectionStore,
       soulStore,
+      soulService,
       clock,
       logger,
     );
