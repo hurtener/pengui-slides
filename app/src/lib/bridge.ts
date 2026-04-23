@@ -8,6 +8,130 @@ import {
 import { buildRevisionPrompt } from './revise';
 import type { DeckEditorBridge, RevisionPayload, ToolCallResult } from './types';
 
+// ── v4 Wave 2 typed responses ───────────────────────────────────────────────
+
+export interface DeckListItem {
+  id: string;
+  slug: string;
+  soul_id: string;
+  soul_slug: string;
+  title: string;
+  author: string;
+  format: string;
+  authoring_model: string;
+  slide_count: number;
+  section_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListDecksResponse {
+  deck_count: number;
+  decks: DeckListItem[];
+}
+
+export interface SoulListItem {
+  soul_id: string;
+  slug: string;
+  name: string;
+  status: string;
+  token_count: number;
+  recipe_count: number;
+}
+
+export interface ListDesignSoulsResponse {
+  souls: SoulListItem[];
+}
+
+export interface SoulLayer {
+  name: string;
+  tokens: Record<string, string>;
+}
+
+export interface LayoutRecipe {
+  id: string;
+  name: string;
+  description?: string;
+  html: string;
+}
+
+export interface DesignSoul {
+  soul_id: string;
+  slug: string;
+  name: string;
+  status: string;
+  layers: SoulLayer[];
+  cssTokens: Record<string, string>;
+  recipes: LayoutRecipe[];
+  styleGuide?: string;
+}
+
+export interface GetDesignSoulResponse {
+  soul: DesignSoul;
+}
+
+export interface CommentItem {
+  id: string;
+  target: string;
+  author: string;
+  kind: string;
+  body: string;
+  created_at: string;
+  resolved_at?: string;
+  resolved_by?: string;
+  resolution_note?: string;
+}
+
+export interface ListCommentsResponse {
+  deck_id: string;
+  comment_count: number;
+  comments: CommentItem[];
+}
+
+export interface AddCommentResponse {
+  comment: CommentItem;
+}
+
+export interface ResolveCommentResponse {
+  comment: CommentItem;
+}
+
+export interface AssetItem {
+  asset_id: string;
+  scope: string;
+  role: string;
+  label?: string;
+  mime_type: string;
+  size_bytes: number;
+  created_at: string;
+  data_base64?: string;
+}
+
+export interface ListAssetsResponse {
+  assets: AssetItem[];
+}
+
+export interface GetAssetResponse {
+  asset: AssetItem;
+}
+
+export interface UploadAssetResponse {
+  asset: AssetItem;
+}
+
+export interface SessionResponse {
+  active_deck?: { id: string; slug: string; title: string };
+  active_soul?: { soul_id: string; slug: string; name: string };
+  active_workflow?: string;
+  open_panels: string[];
+  updated_at?: string;
+}
+
+export interface GetThumbnailResponse {
+  png_base64: string;
+  revision_hash: string;
+}
+
 type ToolHandler = (payload: Record<string, unknown>) => void;
 type ToolResultHandler = (result: ToolCallResult<Record<string, unknown>>) => void;
 
@@ -82,6 +206,143 @@ export class McpDeckEditorBridge implements DeckEditorBridge {
         text: buildRevisionPrompt(payload),
       }],
     });
+  }
+
+  // ── v4 Wave 2 typed tool methods ─────────────────────────────────────────
+
+  /** List all decks in the workspace (newest first). */
+  async listDecks(): Promise<ListDecksResponse> {
+    const r = await this.callTool<ListDecksResponse>('list_decks', {});
+    return r.structuredContent ?? { deck_count: 0, decks: [] };
+  }
+
+  /** List all design souls. */
+  async listDesignSouls(): Promise<ListDesignSoulsResponse> {
+    const r = await this.callTool<ListDesignSoulsResponse>('list_design_souls', {});
+    return r.structuredContent ?? { souls: [] };
+  }
+
+  /** Get full detail for one design soul. */
+  async getDesignSoul(soulRef: string): Promise<GetDesignSoulResponse> {
+    const r = await this.callTool<GetDesignSoulResponse>('get_design_soul', { soul_ref: soulRef });
+    if (!r.structuredContent?.soul) throw new Error('No soul returned');
+    return r.structuredContent;
+  }
+
+  /** List comments for a deck. */
+  async listComments(deckId: string): Promise<ListCommentsResponse> {
+    const r = await this.callTool<ListCommentsResponse>('list_comments', { deck_id: deckId });
+    return r.structuredContent ?? { deck_id: deckId, comment_count: 0, comments: [] };
+  }
+
+  /** Add a comment from the model side. */
+  async addComment(args: {
+    deck_id: string;
+    target: string;
+    author: string;
+    kind: string;
+    body: string;
+  }): Promise<AddCommentResponse> {
+    const r = await this.callTool<AddCommentResponse>('add_comment', args);
+    if (!r.structuredContent?.comment) throw new Error('add_comment returned no comment');
+    return r.structuredContent;
+  }
+
+  /** Resolve a comment. */
+  async resolveComment(args: {
+    deck_id: string;
+    comment_id: string;
+    resolved_by: string;
+    resolution_note?: string;
+  }): Promise<ResolveCommentResponse> {
+    const r = await this.callTool<ResolveCommentResponse>('resolve_comment', args);
+    if (!r.structuredContent?.comment) throw new Error('resolve_comment returned no comment');
+    return r.structuredContent;
+  }
+
+  /** List assets (optionally filtered). */
+  async listAssets(args: { scope?: string; role?: string } = {}): Promise<ListAssetsResponse> {
+    const r = await this.callTool<ListAssetsResponse>('list_assets', args);
+    return r.structuredContent ?? { assets: [] };
+  }
+
+  /** Get a single asset (with data). */
+  async getAsset(assetId: string): Promise<GetAssetResponse> {
+    const r = await this.callTool<GetAssetResponse>('get_asset', { asset_id: assetId });
+    if (!r.structuredContent?.asset) throw new Error('get_asset returned no asset');
+    return r.structuredContent;
+  }
+
+  /** Get the current session state. */
+  async getSession(): Promise<SessionResponse> {
+    const r = await this.callTool<SessionResponse>('get_session', {});
+    return r.structuredContent ?? { open_panels: [] };
+  }
+
+  // ── Planned app-only tools (agents A+C write their server side concurrently) ──
+
+  /** Set the active workspace context (deck, soul, workflow, open panels). */
+  async setActiveWorkspace(args: {
+    deck_ref?: string;
+    soul_ref?: string;
+    workflow?: string;
+    open_panels?: string[];
+  }): Promise<void> {
+    await this.callTool('set_active_workspace', args);
+  }
+
+  /** Upload an asset directly from the app (base64 encoded). */
+  async uploadAssetFromApp(args: {
+    data_base64: string;
+    mime_type: string;
+    scope: string;
+    role: string;
+    label?: string;
+  }): Promise<UploadAssetResponse> {
+    const r = await this.callTool<UploadAssetResponse>('upload_asset_from_app', args);
+    if (!r.structuredContent?.asset) throw new Error('upload_asset_from_app returned no asset');
+    return r.structuredContent;
+  }
+
+  /** Apply a token override to a soul layer. */
+  async applyTokenOverride(args: {
+    soul_ref: string;
+    layer: string;
+    token_name: string;
+    value: string;
+  }): Promise<void> {
+    await this.callTool('apply_token_override', args);
+  }
+
+  /** Apply a block edit (section_kind, break_hints, chrome_config). */
+  async applyBlockEdit(args: Record<string, unknown>): Promise<void> {
+    await this.callTool('apply_block_edit', args);
+  }
+
+  /** Get a PNG thumbnail for a deck, slide, or section. */
+  async getThumbnail(args: {
+    deck_ref: string;
+    slide_id?: string;
+    section_id?: string;
+  }): Promise<GetThumbnailResponse> {
+    const r = await this.callTool<GetThumbnailResponse>('get_thumbnail', args);
+    if (!r.structuredContent?.png_base64) throw new Error('get_thumbnail returned no image');
+    return r.structuredContent;
+  }
+
+  /** Add a comment authored by the user (from the app, not the model). */
+  async addCommentFromApp(args: {
+    deck_id: string;
+    target: string;
+    kind: string;
+    body: string;
+  }): Promise<AddCommentResponse> {
+    const r = await this.callTool<AddCommentResponse>('add_comment_from_app', {
+      ...args,
+      author: 'user',
+    });
+    if (!r.structuredContent?.comment) throw new Error('add_comment_from_app returned no comment');
+    return r.structuredContent;
   }
 
   private applyHostContext(context: ReturnType<App['getHostContext']>): void {
