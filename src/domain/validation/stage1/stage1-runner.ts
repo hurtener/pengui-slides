@@ -17,6 +17,7 @@ import { StructuralCheck } from './structural-check.js';
 import { NetworkIsolationCheck } from './network-isolation.js';
 import { SafeAreaCheck } from './safe-area-check.js';
 import { DiagramLegibilityCheck } from './diagram-legibility.js';
+import { UndefinedVariablesCheck } from './undefined-variables.js';
 
 export interface Stage1Result {
   issues: ValidationIssue[];
@@ -34,6 +35,7 @@ export class Stage1Runner {
       new StructuralCheck(),
       new NetworkIsolationCheck(),
       new SafeAreaCheck(),
+      new UndefinedVariablesCheck(),
       new DiagramLegibilityCheck(),
     ];
   }
