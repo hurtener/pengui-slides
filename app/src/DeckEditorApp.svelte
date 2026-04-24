@@ -123,6 +123,16 @@
     void announceSession();
   }
 
+  /** Swap the targeted deck without changing the current route. Used by
+   *  the Export page's "Switch deck" dropdown so users can retarget the
+   *  export without losing their place. */
+  function handleRetargetDeck(deckId: string): void {
+    activeDeckRef = deckId;
+    void resolveAuthoringModelFor(deckId);
+    void deck.loadEditor(deckId);
+    void announceSession();
+  }
+
   async function resolveAuthoringModelFor(deckRef: string): Promise<void> {
     const mcp = bridge as unknown as McpDeckEditorBridge;
     if (typeof mcp.callTool !== 'function') return;
@@ -215,7 +225,7 @@
           />
         {/if}
       {:else if route === 'export'}
-        <Export {deck} {bridge} />
+        <Export {deck} {bridge} onSwitchDeck={handleRetargetDeck} />
       {:else if route === 'souls'}
         <Souls bridge={mcpBridge} onOpenSoul={handleOpenSoul} />
       {:else if route === 'assets'}
@@ -234,7 +244,7 @@
 <style>
   /* ── Full-page loading / error ─────────────────────────────── */
   .screen-state {
-    min-height: 100vh;
+    min-height: max(100vh, 720px);
     display: grid;
     place-items: center;
     padding: var(--s-5);
@@ -273,7 +283,10 @@
   /* ── App shell ─────────────────────────────────────────────── */
   .app-shell {
     display: flex;
-    height: 100vh;
+    /* 100vh alone collapses when Claude Desktop opens the iframe at a
+       short initial height; floor prevents the editor from rendering in
+       ~200 px of space before autoResize catches up. */
+    height: max(100vh, 720px);
     overflow: hidden;
     width: 100%;
   }

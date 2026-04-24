@@ -36,6 +36,11 @@
   let loadingComments = $state(false);
   let error = $state('');
 
+  // Deck id → base64 PNG thumbnail. Populated lazily after the deck list
+  // loads so we don't block the Workspace render on N thumbnail calls.
+  // Empty decks stay absent and fall back to the generic icon.
+  let deckThumbnails = $state<Record<string, string>>({});
+
   // ── Derived ─────────────────────────────────────────────────────────────
 
   const unresolvedComments = $derived(comments.filter((c) => !c.resolved_at));
@@ -61,10 +66,64 @@
       decks = [...result.decks].sort(
         (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
+      // Kick off thumbnail loads in the background. Fire-and-forget so
+      // the workspace renders immediately; thumbnails stream in as they
+      // finish.
+      void loadDeckThumbnails(decks);
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
     } finally {
       loadingDecks = false;
+    }
+  }
+
+  // Each thumbnail requires 2 server calls (get_deck_summary to find the
+  // first slide/section id, then get_thumbnail). Throttle to 2 concurrent
+  // decks so a large workspace doesn't stampede the server.
+  async function loadDeckThumbnails(list: DeckListItem[]): Promise<void> {
+    const eligible = list.filter(
+      (d) =>
+        (d.authoring_model === 'slides' && d.slide_count > 0) ||
+        (d.authoring_model === 'document' && d.section_count > 0),
+    );
+    const concurrency = 2;
+    let cursor = 0;
+    const workers = Array.from({ length: Math.min(concurrency, eligible.length) }, async () => {
+      while (cursor < eligible.length) {
+        const deck = eligible[cursor++];
+        await loadOneDeckThumbnail(deck);
+      }
+    });
+    await Promise.all(workers);
+  }
+
+  async function loadOneDeckThumbnail(deck: DeckListItem): Promise<void> {
+    try {
+      const summary = await bridge.callTool<{
+        slides?: Array<{ id: string }>;
+        sections?: Array<{ id: string }>;
+      }>('get_deck_summary', { deck_id: deck.id });
+      const firstSlideId =
+        deck.authoring_model === 'slides'
+          ? summary.structuredContent?.slides?.[0]?.id
+          : undefined;
+      const firstSectionId =
+        deck.authoring_model === 'document'
+          ? summary.structuredContent?.sections?.[0]?.id
+          : undefined;
+      if (!firstSlideId && !firstSectionId) return;
+
+      const args: { deck_ref: string; slide_id?: string; section_id?: string } = {
+        deck_ref: deck.id,
+      };
+      if (firstSlideId) args.slide_id = firstSlideId;
+      if (firstSectionId) args.section_id = firstSectionId;
+      const r = await bridge.getThumbnail(args);
+      if (r.png_base64) {
+        deckThumbnails = { ...deckThumbnails, [deck.id]: r.png_base64 };
+      }
+    } catch {
+      // Thumbnail errors are non-fatal — keep the generic icon.
     }
   }
 
@@ -175,10 +234,20 @@
               aria-label="Open deck: {deck.title}"
             >
               <div class="deck-thumb-mini">
-                <svg viewBox="0 0 24 18" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">
-                  <rect x="1" y="1" width="22" height="16" rx="2"/>
-                  <path d="M4 5h16M4 9h10" stroke-linecap="round"/>
-                </svg>
+                {#if deckThumbnails[deck.id]}
+                  <img
+                    class="deck-thumb-img"
+                    src={`data:image/png;base64,${deckThumbnails[deck.id]}`}
+                    alt=""
+                    aria-hidden="true"
+                    loading="lazy"
+                  />
+                {:else}
+                  <svg viewBox="0 0 24 18" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">
+                    <rect x="1" y="1" width="22" height="16" rx="2"/>
+                    <path d="M4 5h16M4 9h10" stroke-linecap="round"/>
+                  </svg>
+                {/if}
               </div>
               <div class="deck-info">
                 <div class="deck-info-top">
@@ -554,11 +623,19 @@
     align-items: center;
     justify-content: center;
     color: var(--ink-3);
+    overflow: hidden;
   }
 
   .deck-thumb-mini svg {
     width: 28px;
     height: 20px;
+  }
+
+  .deck-thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
   }
 
   .deck-info {

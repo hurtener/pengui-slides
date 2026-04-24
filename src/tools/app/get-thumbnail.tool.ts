@@ -21,7 +21,11 @@ import { structuredResponse } from '../_shared/responses.js';
 import { PenguiError, ErrorCode } from '../../types/errors.js';
 import { getFormat } from '../../domain/formats/format-registry.js';
 
-const THUMB_SHORT_EDGE = 270;
+// Raster height for slides / short-edge for portrait pages. Sized so
+// the multi-page preview (PagePreview renders A4 at ~32 % scale → ~397
+// px wide) does not need to upscale by more than ~1.2×, which keeps the
+// image crisp at 1× DPI and tolerable at 2×.
+const THUMB_SHORT_EDGE = 480;
 
 export function registerGetThumbnailTool(server: McpServer, container: ServiceContainer): void {
   registerAppTool(

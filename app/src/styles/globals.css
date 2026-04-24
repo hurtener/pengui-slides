@@ -32,12 +32,18 @@ body {
      vertical height is driven by content so Claude Desktop's autoResize
      sizes the iframe correctly. */
   overflow-x: hidden;
+  /* Host iframes (notably Claude Desktop) can open at a very short height.
+     autoResize reports body scrollHeight to the host, so enforcing a floor
+     here makes the iframe grow to at least a usable editor size before
+     any content has rendered. */
+  min-height: 720px;
 }
 
 #app {
   width: 100%;
   min-width: 0;
   display: flex;
+  min-height: 720px;
 }
 
 button {

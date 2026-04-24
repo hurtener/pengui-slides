@@ -1,21 +1,17 @@
 <!--
   Pengui Slides — Sidebar primitive (Cozy Premium).
 
-  Ported from study-audio-mcp/frontend/src/components/primitives/Sidebar.svelte.
-  The sibling imported `library` from '$stores/library.svelte' to show a file
-  count badge. That store is sibling-specific and has been removed.
+  Collapsible: expanded it shows brand + nav labels + footer hint;
+  collapsed it renders as a 56 px icon rail with title tooltips.
 
-  Changes from source:
-  - Removed `import { library } from '$stores/library.svelte'`.
-  - `libraryCount` is now an optional prop (defaults to 0) so callers can
-    pass their own count without coupling to a specific store.
-  - The `wordmark` and `sub` texts are now props so Wave 2B can brand the
-    sidebar for Pengui without editing this file.
-  - Navigation items remain hardcoded to the same three keys the sibling
-    used; Wave 2B will likely pass them as a prop — for now the generic
-    default matches the structure Wave 2B expects.
+  The collapse state is owned here (localStorage-backed) so the parent
+  doesn't have to thread it everywhere. The default on first open is
+  auto-collapsed below `AUTO_COLLAPSE_WIDTH` so the app stays usable
+  inside Claude Desktop's narrow iframe.
 -->
 <script lang="ts">
+  import { onMount } from 'svelte';
+
   interface NavItem {
     key: string;
     label: string;
@@ -43,9 +39,36 @@
       { key: 'export', label: 'Export',   icon: 'cog' }
     ]
   }: Props = $props();
+
+  const STORAGE_KEY = 'pengui-sidebar-collapsed';
+  const AUTO_COLLAPSE_WIDTH = 900;
+
+  let collapsed = $state(false);
+  let mounted = $state(false);
+
+  onMount(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored === '1') collapsed = true;
+      else if (stored === '0') collapsed = false;
+      else collapsed = window.innerWidth < AUTO_COLLAPSE_WIDTH;
+    } catch {
+      collapsed = window.innerWidth < AUTO_COLLAPSE_WIDTH;
+    }
+    mounted = true;
+  });
+
+  function toggle(): void {
+    collapsed = !collapsed;
+    try {
+      localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0');
+    } catch {
+      // storage unavailable — ignore
+    }
+  }
 </script>
 
-<aside class="sidebar">
+<aside class={`sidebar ${collapsed ? 'collapsed' : ''} ${mounted ? '' : 'pre-hydrate'}`}>
   <div class="brand">
     <div class="mark" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
@@ -57,6 +80,22 @@
       <span class="wordmark">{wordmark}</span>
       <span class="sub">{sub}</span>
     </div>
+    <button
+      type="button"
+      class="collapse-btn"
+      onclick={toggle}
+      aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      aria-pressed={collapsed}
+      title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+    >
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        {#if collapsed}
+          <path d="M6 4l4 4-4 4" stroke-linecap="round" stroke-linejoin="round" />
+        {:else}
+          <path d="M10 4l-4 4 4 4" stroke-linecap="round" stroke-linejoin="round" />
+        {/if}
+      </svg>
+    </button>
   </div>
 
   <nav>
@@ -64,6 +103,8 @@
       <button
         class={`nav ${active === item.key ? 'active' : ''}`}
         onclick={() => onNavigate(item.key)}
+        title={collapsed ? item.label : undefined}
+        aria-label={item.label}
       >
         <span class="icon" aria-hidden="true">
           {#if item.icon === 'library'}
@@ -102,44 +143,63 @@
     flex-shrink: 0;
     background: var(--surface-3);
     border-right: 1px solid var(--border-subtle);
-    padding: var(--s-6) var(--s-4);
+    padding: var(--s-5) var(--s-4);
     display: flex;
     flex-direction: column;
-    gap: var(--s-6);
+    gap: var(--s-5);
     min-height: 100vh;
-    transition: width var(--dur-micro) var(--ease);
+    transition: width var(--dur-base) var(--ease);
   }
 
-  /* Narrow viewport: slim sidebar but keep labels. */
-  @media (max-width: 780px) {
-    .sidebar {
-      width: 180px;
-      padding: var(--s-5) var(--s-3);
-      gap: var(--s-5);
-    }
+  /* Avoid a single expand→collapse flash on first paint while the
+     stored preference is being read. */
+  .sidebar.pre-hydrate {
+    transition: none;
   }
 
-  /* Very narrow (Claude Desktop's compact iframe): icon-only rail. */
+  .sidebar.collapsed {
+    width: 56px;
+    padding: var(--s-4) var(--s-2);
+    gap: var(--s-4);
+    align-items: center;
+  }
+
+  .sidebar.collapsed .label,
+  .sidebar.collapsed .count,
+  .sidebar.collapsed .title,
+  .sidebar.collapsed .hint {
+    display: none;
+  }
+
+  .sidebar.collapsed .brand {
+    padding: 0;
+    justify-content: center;
+  }
+
+  .sidebar.collapsed .nav {
+    justify-content: center;
+    padding: var(--s-2);
+    width: 40px;
+  }
+
+  /* Emergency fallback for pathological iframe widths — force collapsed
+     look even if JS has not hydrated yet. */
   @media (max-width: 560px) {
-    .sidebar {
-      width: 64px;
+    .sidebar:not(.collapsed) {
+      width: 56px;
       padding: var(--s-4) var(--s-2);
       gap: var(--s-4);
+      align-items: center;
     }
-    .sidebar .label,
-    .sidebar .count,
-    .sidebar .sub,
-    .sidebar .wordmark,
-    .sidebar .hint {
+    .sidebar:not(.collapsed) .label,
+    .sidebar:not(.collapsed) .count,
+    .sidebar:not(.collapsed) .title,
+    .sidebar:not(.collapsed) .hint {
       display: none;
     }
-    .sidebar .brand {
-      padding: 0;
+    .sidebar:not(.collapsed) .nav {
       justify-content: center;
-    }
-    .sidebar .nav {
-      justify-content: center;
-      padding: var(--s-3);
+      padding: var(--s-2);
     }
   }
 
@@ -147,7 +207,8 @@
     display: flex;
     align-items: center;
     gap: var(--s-3);
-    padding: 0 var(--s-3);
+    padding: 0 var(--s-2);
+    position: relative;
   }
 
   .mark {
@@ -159,6 +220,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
   }
 
   .mark :global(svg) {
@@ -170,6 +232,8 @@
     display: flex;
     flex-direction: column;
     line-height: 1.2;
+    flex: 1;
+    min-width: 0;
   }
 
   .wordmark {
@@ -183,10 +247,50 @@
     color: var(--ink-3);
   }
 
+  .collapse-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--r-pill);
+    color: var(--ink-3);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      background-color var(--dur-micro) var(--ease),
+      color var(--dur-micro) var(--ease);
+    flex-shrink: 0;
+  }
+
+  .collapse-btn:hover {
+    background: rgba(255, 255, 255, 0.5);
+    color: var(--ink-1);
+  }
+
+  .collapse-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--mint-tint);
+  }
+
+  .collapse-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .sidebar.collapsed .collapse-btn {
+    position: absolute;
+    top: 38px;
+    right: -12px;
+    background: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--e1);
+    z-index: 2;
+  }
+
   nav {
     display: flex;
     flex-direction: column;
     gap: var(--s-1);
+    width: 100%;
   }
 
   .nav {
@@ -222,6 +326,7 @@
   .icon {
     display: inline-flex;
     color: inherit;
+    flex-shrink: 0;
   }
 
   .icon :global(svg) {

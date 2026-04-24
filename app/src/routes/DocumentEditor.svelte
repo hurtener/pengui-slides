@@ -17,6 +17,7 @@
     CommentTarget,
     SectionListItem,
     SectionDetail,
+    DesignSoul,
   } from '../lib/bridge';
 
   interface Props {
@@ -25,6 +26,12 @@
   }
 
   let { bridge, deckRef }: Props = $props();
+
+  // Soul whose tokens we inject into the preview iframe so the
+  // section fragment renders with real typography/colour instead of
+  // a neutral CSS shell. Resolved once on mount via get_deck_summary
+  // → get_design_soul.
+  let soul = $state<DesignSoul | null>(null);
 
   // ── All SectionKinds from the spec. Mirrors src/types/section.ts. ───────
   const SECTION_KINDS = [
@@ -75,7 +82,24 @@
   onMount(() => {
     void loadSections();
     void loadChromeFromDeck();
+    void loadSoul();
   });
+
+  async function loadSoul(): Promise<void> {
+    try {
+      const summary = await bridge.callTool<{ soul_id?: string; soul_slug?: string }>(
+        'get_deck_summary',
+        { deck_id: deckRef },
+      );
+      const soulRef = summary.structuredContent?.soul_id ?? summary.structuredContent?.soul_slug;
+      if (!soulRef) return;
+      const r = await bridge.getDesignSoul(soulRef);
+      soul = r.soul;
+    } catch {
+      // Soul is optional — preview gracefully degrades to neutral shell.
+      soul = null;
+    }
+  }
 
   // ── Loaders ─────────────────────────────────────────────────────────────
   async function loadSections(): Promise<void> {
@@ -221,19 +245,69 @@
   }
 
   // ── Derived ─────────────────────────────────────────────────────────────
+
+  // Build the iframe preview document. When a soul is loaded, inject its
+  // cssTokens block verbatim so the section fragment renders with the real
+  // design tokens (fonts, palette, spacing scale). Falls back to a neutral
+  // shell when the soul hasn't resolved yet or the call failed.
   const previewSrcDoc = $derived(
-    detail
-      ? `<!doctype html><html><head><meta charset="utf-8"><style>
-          body { margin: 0; padding: 32px; font-family: system-ui, -apple-system, sans-serif; color: #1f2328; background: #fafafa; }
-          .pengui-section { background: white; padding: 24px 32px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.06); max-width: 720px; margin: 0 auto; }
-          h1,h2,h3,h4 { line-height: 1.25; }
-          table { border-collapse: collapse; }
-          th,td { padding: 6px 10px; border: 1px solid #e2e2e2; }
-          figure { margin: 0; }
-          figcaption { color: #666; font-size: 12px; margin-top: 8px; }
-         </style></head><body>${detail.html}</body></html>`
-      : '',
+    detail ? buildPreviewDoc(detail.html, soul) : '',
   );
+
+  function buildPreviewDoc(html: string, s: DesignSoul | null): string {
+    const soulTokens = s?.cssTokensString ?? '';
+    // Neutral fallback values so typography still looks sensible before the
+    // soul resolves or when a soul declines to expose specific tokens.
+    const fallback = `
+      :root {
+        --color-canvas: #fafafa;
+        --color-text-primary: #1f2328;
+        --color-text-secondary: #5a5f66;
+        --color-surface: #ffffff;
+        --color-border: #e2e2e2;
+        --font-body: system-ui, -apple-system, sans-serif;
+        --font-display: system-ui, -apple-system, sans-serif;
+        --text-body: 15px;
+        --leading-body: 1.55;
+      }
+    `;
+    // Shell styles mirror document-composer's universal rules so the
+    // preview is visually representative of the final rendered document.
+    const shell = `
+      html, body {
+        background: var(--color-canvas);
+        color: var(--color-text-primary);
+      }
+      body {
+        margin: 0;
+        padding: 32px;
+        font-family: var(--font-body);
+        font-size: var(--text-body);
+        line-height: var(--leading-body);
+      }
+      .pengui-section {
+        background: var(--color-surface, #fff);
+        padding: 24px 32px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, .06);
+        max-width: 720px;
+        margin: 0 auto;
+      }
+      h1, h2, h3, h4 {
+        font-family: var(--font-display, var(--font-body));
+        line-height: 1.25;
+      }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { padding: 6px 10px; border: 1px solid var(--color-border, #e2e2e2); }
+      figure { margin: 0; }
+      figcaption { color: var(--color-text-secondary, #666); font-size: 12px; margin-top: 8px; }
+    `;
+    return `<!doctype html><html><head><meta charset="utf-8">
+      <style>${fallback}</style>
+      <style id="pengui-soul-tokens">${soulTokens}</style>
+      <style>${shell}</style>
+    </head><body>${html}</body></html>`;
+  }
 </script>
 
 <div class="doc-editor">

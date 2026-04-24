@@ -22,8 +22,40 @@
   let error = $state('');
   let scopeFilter = $state<'all' | 'soul' | 'deck' | 'global'>('all');
   let roleFilter = $state<'all' | 'logo' | 'content'>('all');
-  let uploadScope = $state<'global' | 'deck' | 'soul'>('global');
-  let uploadRole = $state<'logo' | 'content'>('content');
+
+  // Context titles so the uploader's scope chips can show "This deck ·
+  // <title>" instead of a meaningless "deck". Best-effort — falls back
+  // to the raw label when the lookup fails.
+  let activeDeckTitle = $state<string | undefined>(undefined);
+  let activeSoulName = $state<string | undefined>(undefined);
+
+  $effect(() => {
+    if (activeDeckRef) void resolveDeckTitle(activeDeckRef);
+    else activeDeckTitle = undefined;
+  });
+
+  $effect(() => {
+    if (activeSoulRef) void resolveSoulName(activeSoulRef);
+    else activeSoulName = undefined;
+  });
+
+  async function resolveDeckTitle(ref: string): Promise<void> {
+    try {
+      const r = await bridge.callTool<{ title?: string }>('get_deck_summary', { deck_id: ref });
+      activeDeckTitle = r.structuredContent?.title;
+    } catch {
+      activeDeckTitle = undefined;
+    }
+  }
+
+  async function resolveSoulName(ref: string): Promise<void> {
+    try {
+      const r = await bridge.getDesignSoul(ref);
+      activeSoulName = r.soul.name;
+    } catch {
+      activeSoulName = undefined;
+    }
+  }
 
   function scopeKey(s: AssetScopeWire): 'soul' | 'deck' | 'global' {
     return s.type;
@@ -96,48 +128,27 @@
       <h1>Asset Library</h1>
       <p class="subtitle">Images, logos, and files used by your decks and souls.</p>
     </div>
-    <div class="header-actions">
-      <AssetUploader
-        {bridge}
-        scope={uploadScope}
-        role={uploadRole}
-        activeDeckRef={activeDeckRef ?? undefined}
-        activeSoulRef={activeSoulRef ?? undefined}
-        onUploaded={handleUploaded}
-      />
-    </div>
   </div>
 
   {#if error}
     <div class="error-bar" role="alert">{error}</div>
   {/if}
 
-  <!-- Upload controls row -->
-  <div class="upload-context">
-    <label class="ctx-label">
-      <span>Upload scope</span>
-      <select bind:value={uploadScope} class="ctx-select">
-        <option value="global">global</option>
-        <option value="deck">deck</option>
-        <option value="soul">soul</option>
-      </select>
-    </label>
-    <label class="ctx-label">
-      <span>Upload role</span>
-      <select bind:value={uploadRole} class="ctx-select">
-        <option value="content">content</option>
-        <option value="logo">logo</option>
-        <option value="background">background</option>
-        <option value="icon">icon</option>
-      </select>
-    </label>
-  </div>
+  <!-- Uploader (scope + role live inside the component) -->
+  <AssetUploader
+    {bridge}
+    activeDeckRef={activeDeckRef ?? undefined}
+    activeSoulRef={activeSoulRef ?? undefined}
+    activeDeckTitle={activeDeckTitle}
+    activeSoulName={activeSoulName}
+    onUploaded={handleUploaded}
+  />
 
-  <!-- Filter bar -->
+  <!-- Filter bar (applies to the existing library below, not the uploader) -->
   {#if !loading && assets.length > 0}
-    <div class="filter-bar">
+    <div class="filter-bar" aria-label="Filter library">
       <div class="filter-group">
-        <span class="filter-label">Scope</span>
+        <span class="filter-label">Filter scope</span>
         <button
           type="button"
           class={`filter-btn ${scopeFilter === 'all' ? 'active' : ''}`}
@@ -152,7 +163,7 @@
         {/each}
       </div>
       <div class="filter-group">
-        <span class="filter-label">Role</span>
+        <span class="filter-label">Filter role</span>
         <button
           type="button"
           class={`filter-btn ${roleFilter === 'all' ? 'active' : ''}`}
@@ -260,35 +271,6 @@
     padding: var(--s-3) var(--s-4);
     font-size: 13px;
     color: var(--error);
-  }
-
-  /* ── Upload context ──────────────────────────────────────────── */
-  .upload-context {
-    display: flex;
-    gap: var(--s-3);
-    flex-wrap: wrap;
-    align-items: center;
-    background: var(--surface-1);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--r-lg);
-    padding: var(--s-3) var(--s-4);
-  }
-
-  .ctx-label {
-    display: flex;
-    align-items: center;
-    gap: var(--s-2);
-    font-size: 12px;
-    color: var(--ink-2);
-  }
-
-  .ctx-select {
-    font-size: 12px;
-    color: var(--ink-1);
-    background: var(--surface-2);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--r-sm);
-    padding: 2px 8px;
   }
 
   /* ── Filter bar ──────────────────────────────────────────────── */

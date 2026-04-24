@@ -25,6 +25,10 @@
     onOpenSoul?.(ref);
   }
 
+  function clearSelection(): void {
+    selectedSoulRef = null;
+  }
+
   onMount(() => {
     void load();
   });
@@ -81,7 +85,7 @@
   {:else if souls.length === 0}
     <p class="muted">No design souls found. Create one via the agent.</p>
   {:else}
-    <div class="souls-layout">
+    <div class={`souls-layout ${selectedSoul ? 'has-selection' : ''}`}>
 
       <!-- Soul list -->
       <aside class="soul-list">
@@ -108,6 +112,19 @@
       <!-- Soul detail panel -->
       <div class="soul-detail">
         {#if selectedSoul}
+          <div class="detail-head">
+            <button
+              type="button"
+              class="back-btn"
+              onclick={clearSelection}
+              aria-label="Back to soul list"
+            >
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                <path d="M10 4l-4 4 4 4" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <span>All souls</span>
+            </button>
+          </div>
           <SoulPanel {bridge} soulRef={selectedSoul.soul_id} soulName={selectedSoul.name} />
         {:else}
           <div class="no-selection">
@@ -200,8 +217,51 @@
     min-height: 0;
   }
 
+  .detail-head {
+    display: none;
+    margin-bottom: var(--s-3);
+  }
+
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-1);
+    padding: var(--s-1) var(--s-3);
+    border-radius: var(--r-pill);
+    font-size: 12px;
+    color: var(--ink-2);
+    background: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    cursor: pointer;
+    transition:
+      background-color var(--dur-micro) var(--ease),
+      color var(--dur-micro) var(--ease);
+  }
+
+  .back-btn:hover {
+    background: var(--mint-tint);
+    color: var(--mint-hover);
+    border-color: var(--mint);
+  }
+
+  .back-btn svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  /* Narrow viewport — stack, and when a soul is selected hide the
+     list to avoid the "detail overlays list" confusion from earlier.
+     The back button in detail-head returns to the list. */
   @media (max-width: 860px) {
     .souls-layout { grid-template-columns: 1fr; }
+
+    .souls-layout.has-selection .soul-list {
+      display: none;
+    }
+
+    .souls-layout.has-selection .detail-head {
+      display: flex;
+    }
   }
 
   /* ── Soul list ──────────────────────────────────────────────── */

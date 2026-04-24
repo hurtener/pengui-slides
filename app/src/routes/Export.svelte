@@ -7,6 +7,7 @@
   One-click download with toast feedback.
 -->
 <script lang="ts">
+  import { onMount } from 'svelte';
   import Button from '../lib/primitives/Button.svelte';
   import Card from '../lib/primitives/Card.svelte';
   import Pill from '../lib/primitives/Pill.svelte';
@@ -14,13 +15,15 @@
   import { toast } from '../stores/toast.svelte';
   import type { DeckStore } from '../stores/deck.svelte';
   import type { DeckEditorBridge, ExportResult, FormatKind } from '../lib/types';
+  import type { McpDeckEditorBridge, DeckListItem } from '../lib/bridge';
 
   interface Props {
     deck: DeckStore;
     bridge: DeckEditorBridge;
+    onSwitchDeck?: (deckId: string) => void;
   }
 
-  let { deck, bridge }: Props = $props();
+  let { deck, bridge, onSwitchDeck }: Props = $props();
 
   const state = $derived(deck.editorState);
   const deckFormat = $derived<FormatKind>(state?.deck.format ?? 'slides_16_9');
@@ -30,7 +33,53 @@
   let exporting = $state(false);
   let previewHtml = $state('');
   let previewLoading = $state(false);
+  let previewError = $state<PreviewError | null>(null);
   let pdfMode = $state<'direct' | 'image'>('direct');
+
+  // Deck picker — populated from list_decks so the user can retarget
+  // export from this route without going back to Workspace.
+  let availableDecks = $state<DeckListItem[]>([]);
+  let loadingDecks = $state(false);
+  let showDeckPicker = $state(false);
+
+  onMount(() => {
+    void loadAvailableDecks();
+  });
+
+  async function loadAvailableDecks(): Promise<void> {
+    loadingDecks = true;
+    try {
+      const mcp = bridge as unknown as McpDeckEditorBridge;
+      if (typeof mcp.listDecks !== 'function') return;
+      const r = await mcp.listDecks();
+      availableDecks = [...r.decks].sort(
+        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+      );
+    } catch {
+      availableDecks = [];
+    } finally {
+      loadingDecks = false;
+    }
+  }
+
+  function switchDeck(deckId: string): void {
+    showDeckPicker = false;
+    if (onSwitchDeck) onSwitchDeck(deckId);
+    else void deck.loadEditor(deckId);
+  }
+
+  interface FailedSlide {
+    slide_id: string;
+    title: string;
+    error_count: number;
+    warning_count: number;
+  }
+
+  interface PreviewError {
+    message: string;
+    code?: string;
+    failed_slides?: FailedSlide[];
+  }
 
   // Load preview HTML when the route is first mounted or deck changes.
   $effect(() => {
@@ -41,20 +90,50 @@
 
   async function loadPreview(deckId: string): Promise<void> {
     previewLoading = true;
+    previewError = null;
+    previewHtml = '';
     try {
-      const result = await bridge.callTool<{ html?: string; structuredContent?: { html?: string } }>(
+      const result = await bridge.callTool<{ html?: string }>(
         'export_html',
         { deck_id: deckId },
       );
-      const html =
-        (result.structuredContent as Record<string, unknown> | undefined)?.html as string
-        ?? result.content?.find((b) => b.type === 'text')?.text
-        ?? '';
-      previewHtml = html;
-    } catch {
-      previewHtml = '';
+
+      // export_html returns {html} in structuredContent on success.
+      const structured = result.structuredContent as Record<string, unknown> | undefined;
+      if (typeof structured?.html === 'string' && structured.html.length > 0) {
+        previewHtml = structured.html;
+        return;
+      }
+
+      // On error the server surfaces a JSON error object in the text
+      // content block. Parse it so we can render a friendly message
+      // instead of dumping raw JSON into the preview iframe.
+      const textBlock = result.content?.find((b) => b.type === 'text')?.text ?? '';
+      previewError = parsePreviewError(textBlock);
+    } catch (err) {
+      previewError = {
+        message: err instanceof Error ? err.message : String(err),
+      };
     } finally {
       previewLoading = false;
+    }
+  }
+
+  function parsePreviewError(raw: string): PreviewError {
+    if (!raw) return { message: 'Preview unavailable.' };
+    try {
+      const parsed = JSON.parse(raw) as {
+        message?: string;
+        code?: string;
+        details?: { failed_slides?: FailedSlide[] };
+      };
+      return {
+        message: parsed.message ?? 'Preview unavailable.',
+        code: parsed.code,
+        failed_slides: parsed.details?.failed_slides,
+      };
+    } catch {
+      return { message: raw };
     }
   }
 
@@ -155,8 +234,48 @@
       <div class="export-title">
         <h1>{state.deck.title}</h1>
         <FormatBadge format={deckFormat} size="md" />
+        {#if availableDecks.length > 1}
+          <button
+            type="button"
+            class="switch-deck-btn"
+            onclick={() => { showDeckPicker = !showDeckPicker; }}
+            aria-expanded={showDeckPicker}
+            aria-haspopup="listbox"
+          >
+            Switch deck
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+              <path d="M3 5l3 3 3-3" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+        {/if}
       </div>
       <p class="subtitle">{state.deck.slideCount} {isPrint ? 'pages' : 'slides'}</p>
+
+      {#if showDeckPicker}
+        <div class="deck-picker" role="listbox" aria-label="Choose a different deck">
+          {#if loadingDecks}
+            <p class="picker-hint">Loading decks…</p>
+          {:else if availableDecks.length === 0}
+            <p class="picker-hint">No other decks available.</p>
+          {:else}
+            {#each availableDecks as d (d.id)}
+              <button
+                type="button"
+                class={`picker-row ${d.id === state.deck.id ? 'current' : ''}`}
+                onclick={() => switchDeck(d.id)}
+                role="option"
+                aria-selected={d.id === state.deck.id}
+              >
+                <span class="picker-title">{d.title}</span>
+                <span class="picker-meta">
+                  {d.authoring_model === 'slides' ? `${d.slide_count} slides` : `${d.section_count} sections`}
+                  · {d.format.replace('_', ' ')}
+                </span>
+              </button>
+            {/each}
+          {/if}
+        </div>
+      {/if}
     </div>
 
     <div class="export-body">
@@ -274,6 +393,38 @@
             sandbox="allow-same-origin"
             title="Export preview"
           ></iframe>
+        {:else if previewError}
+          <div class="preview-error" role="alert">
+            <div class="err-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 8v5" stroke-linecap="round" />
+                <circle cx="12" cy="16" r="0.9" fill="currentColor" />
+              </svg>
+            </div>
+            <div class="err-body">
+              <p class="err-title">{previewError.message}</p>
+              {#if previewError.code}
+                <p class="err-code">{previewError.code}</p>
+              {/if}
+              {#if previewError.failed_slides && previewError.failed_slides.length > 0}
+                <ul class="err-slides">
+                  {#each previewError.failed_slides as fs (fs.slide_id)}
+                    <li>
+                      <span class="fs-title">{fs.title || fs.slide_id}</span>
+                      <span class="fs-meta">
+                        {fs.error_count} error{fs.error_count === 1 ? '' : 's'}
+                        {#if fs.warning_count > 0} · {fs.warning_count} warn{/if}
+                      </span>
+                    </li>
+                  {/each}
+                </ul>
+                <p class="err-hint">
+                  Open the Editor, resolve the issues, then return here to export.
+                </p>
+              {/if}
+            </div>
+          </div>
         {:else}
           <div class="preview-empty">
             <p class="muted">Preview not available.</p>
@@ -289,7 +440,36 @@
     </div>
   {:else}
     <div class="empty-state">
-      <p class="muted">No deck loaded. Open a deck in the Editor first.</p>
+      <div class="empty-icon" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.3">
+          <path d="M12 8h18l6 6v26H12z"/>
+          <path d="M30 8v6h6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <p class="muted">Pick a deck to export.</p>
+      {#if loadingDecks}
+        <div class="spinner"></div>
+      {:else if availableDecks.length === 0}
+        <p class="muted small">No decks yet — ask the agent to create one.</p>
+      {:else}
+        <div class="empty-picker" role="listbox" aria-label="Choose deck to export">
+          {#each availableDecks.slice(0, 6) as d (d.id)}
+            <button
+              type="button"
+              class="picker-row"
+              onclick={() => switchDeck(d.id)}
+              role="option"
+              aria-selected="false"
+            >
+              <span class="picker-title">{d.title}</span>
+              <span class="picker-meta">
+                {d.authoring_model === 'slides' ? `${d.slide_count} slides` : `${d.section_count} sections`}
+                · {d.format.replace('_', ' ')}
+              </span>
+            </button>
+          {/each}
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
@@ -308,6 +488,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--s-2);
+    position: relative;
   }
 
   .export-title {
@@ -315,6 +496,89 @@
     align-items: center;
     gap: var(--s-3);
     flex-wrap: wrap;
+  }
+
+  .switch-deck-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-1);
+    padding: 4px var(--s-3);
+    border-radius: var(--r-pill);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-2);
+    background: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    cursor: pointer;
+    transition:
+      background-color var(--dur-micro) var(--ease),
+      color var(--dur-micro) var(--ease);
+  }
+
+  .switch-deck-btn:hover {
+    background: var(--mint-tint);
+    border-color: var(--mint);
+    color: var(--mint-hover);
+  }
+
+  .switch-deck-btn svg {
+    width: 10px;
+    height: 10px;
+  }
+
+  .deck-picker {
+    position: absolute;
+    top: calc(100% + var(--s-2));
+    left: 0;
+    right: 0;
+    background: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-lg);
+    box-shadow: var(--e2);
+    max-height: 280px;
+    overflow-y: auto;
+    z-index: 5;
+    padding: var(--s-1);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .picker-row {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: var(--s-2) var(--s-3);
+    border-radius: var(--r-md);
+    text-align: left;
+    transition: background-color var(--dur-micro) var(--ease);
+  }
+
+  .picker-row:hover {
+    background: var(--surface-2);
+  }
+
+  .picker-row.current {
+    background: var(--mint-tint);
+  }
+
+  .picker-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-1);
+  }
+
+  .picker-meta {
+    font-size: 11px;
+    color: var(--ink-3);
+  }
+
+  .picker-hint {
+    padding: var(--s-3);
+    font-size: 12px;
+    color: var(--ink-3);
+    margin: 0;
   }
 
   h1 {
@@ -490,6 +754,88 @@
     font-size: 13px;
   }
 
+  /* ── Friendly preview error ─────────────────────────────────── */
+  .preview-error {
+    display: flex;
+    gap: var(--s-4);
+    padding: var(--s-6) var(--s-5);
+    align-items: flex-start;
+    background: var(--error-tint, var(--surface-1));
+    min-height: 240px;
+  }
+
+  .err-icon {
+    flex-shrink: 0;
+    color: var(--error);
+  }
+
+  .err-icon svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  .err-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    min-width: 0;
+    flex: 1;
+  }
+
+  .err-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-1);
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .err-code {
+    font-size: 11px;
+    color: var(--ink-3);
+    font-family: var(--font-mono);
+    margin: 0;
+  }
+
+  .err-slides {
+    list-style: none;
+    margin: var(--s-2) 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-1);
+    border-top: 1px solid var(--border-subtle);
+    padding-top: var(--s-3);
+  }
+
+  .err-slides li {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--s-3);
+    font-size: 12px;
+  }
+
+  .fs-title {
+    color: var(--ink-1);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .fs-meta {
+    color: var(--error);
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .err-hint {
+    font-size: 12px;
+    color: var(--ink-3);
+    margin: var(--s-2) 0 0;
+  }
+
   .spinner {
     width: 32px;
     height: 32px;
@@ -515,6 +861,32 @@
     gap: var(--s-4);
     padding: var(--s-9) var(--s-5);
     text-align: center;
+  }
+
+  .empty-icon {
+    color: var(--border-subtle);
+  }
+
+  .empty-icon svg {
+    width: 56px;
+    height: 56px;
+  }
+
+  .muted.small {
+    font-size: 12px;
+  }
+
+  .empty-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-lg);
+    padding: var(--s-1);
+    width: 100%;
+    max-width: 420px;
+    text-align: left;
   }
 
   @media (max-width: 860px) {

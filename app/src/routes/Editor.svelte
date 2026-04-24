@@ -7,7 +7,6 @@
 <script lang="ts">
   import SlideCanvas from '../lib/SlideCanvas.svelte';
   import IssueList from '../lib/IssueList.svelte';
-  import PagePreview from '../lib/PagePreview.svelte';
   import FormatBadge from '../lib/FormatBadge.svelte';
   import CommentDrawer from '../lib/CommentDrawer.svelte';
   import { Button, Card, Pill, Tabs, Textarea } from '../lib/primitives/index';
@@ -297,18 +296,6 @@
           />
         </div>
 
-        <!-- Print: multi-page preview below the active canvas -->
-        {#if isPrint && thumbnails.length > 1}
-          <div class="page-preview-section">
-            <p class="eyebrow section-label">All Pages</p>
-            <PagePreview
-              {thumbnails}
-              activeSlideId={state.selectedSlide.slideId}
-              format={deckFormat}
-              onSelect={(id) => deck.selectSlide(id)}
-            />
-          </div>
-        {/if}
       </Card>
 
       <!-- v4: Drop a comment on the selected slide -->
@@ -677,7 +664,7 @@
   /* Force Card children to participate in grid */
   :global(.canvas-card) {
     display: grid !important;
-    grid-template-rows: auto minmax(0, 1fr) auto !important;
+    grid-template-rows: auto minmax(0, 1fr) !important;
     min-height: 0;
     overflow: hidden;
   }
@@ -722,18 +709,6 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
-  }
-
-  .page-preview-section {
-    border-top: 1px solid var(--border-hairline);
-    max-height: 340px;
-    overflow: hidden;
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .section-label {
-    padding: var(--s-3) var(--s-5) 0;
   }
 
   /* ── Comment composer (v4) ────────────────────────────────── */
@@ -1054,13 +1029,82 @@
   }
 
   @media (max-width: 860px) {
+    /* In narrow mode we let the whole layout flow vertically. The
+       original `height: 100%` + `overflow: hidden` on editor-layout
+       traps every row inside a fixed viewport and collapses the
+       canvas card to 0 px (because `minmax(0, 1fr)` inside a
+       `grid-auto-rows: auto` parent resolves to 0). Using natural
+       row heights + internal vertical scroll lets main-col's flex
+       children use their own min-heights while still fitting inside
+       main-area's fixed-height shell. */
+    .editor-layout {
+      height: 100%;
+      min-height: 0;
+      overflow-y: auto;
+      grid-auto-rows: min-content;
+    }
+
     .slide-mode,
     .print-mode {
       grid-template-columns: 1fr;
     }
 
+    /* Horizontal scrolling page strip so the rail doesn't eat half
+       the viewport with a single full-width portrait thumbnail. */
     .thumb-rail {
-      max-height: 260px;
+      max-height: none;
+      grid-template-rows: auto auto;
+    }
+
+    .rail-track {
+      flex-direction: row;
+      overflow-x: auto;
+      overflow-y: hidden;
+      gap: var(--s-3);
+      padding: var(--s-3);
+      scroll-snap-type: x proximity;
+    }
+
+    .thumb-card {
+      flex: 0 0 auto;
+      width: 140px;
+      scroll-snap-align: start;
+    }
+
+    /* In the horizontal strip we want the thumbnail at its natural
+       aspect (not cropped to 16:9 or portrait-tall). */
+    .thumb-img-landscape,
+    .thumb-img-portrait {
+      width: 100%;
+      object-fit: contain;
+      background: var(--surface-2);
+    }
+
+    .thumb-img-portrait {
+      aspect-ratio: 1240 / 1754;
+      max-height: 180px;
+      width: auto;
+    }
+
+    /* Let main-col grow to its content so the canvas-card can use
+       the SlideCanvas's intrinsic min-height instead of collapsing.
+       `overflow: visible` lets editor-layout (the scrolling parent)
+       handle the scrollbar. */
+    .main-col {
+      display: flex;
+      flex-direction: column;
+      gap: var(--s-3);
+      overflow: visible;
+      min-height: 0;
+    }
+
+    :global(.canvas-card) {
+      min-height: 360px;
+      overflow: visible;
+    }
+
+    .canvas-stage {
+      min-height: 300px;
     }
 
     .inspector-scrim {

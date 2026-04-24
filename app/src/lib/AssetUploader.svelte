@@ -1,8 +1,16 @@
 <!--
-  AssetUploader — file picker that reads the chosen file, encodes to base64,
-  and calls upload_asset_from_app via the bridge. Enforces a 5 MB client-side cap.
+  AssetUploader — inline form for selecting scope + role, reading the
+  chosen file, encoding to base64, and calling upload_asset_from_app.
+
+  Scope options are context-aware: deck/soul only appear when an
+  active deck/soul is known, so the user never picks a scope that
+  the uploader can't satisfy. Role is a simple logo / content toggle
+  matching the server's `UploadRole`.
+
+  Enforces a 5 MB client-side cap mirroring the server validation.
 -->
 <script lang="ts">
+  import { onMount, untrack } from 'svelte';
   import type { McpDeckEditorBridge } from './bridge';
 
   type UploadScope = 'soul' | 'deck' | 'global';
@@ -11,19 +19,19 @@
 
   interface Props {
     bridge: McpDeckEditorBridge;
-    scope?: UploadScope;
-    role?: UploadRole;
     activeDeckRef?: string;
     activeSoulRef?: string;
+    activeDeckTitle?: string;
+    activeSoulName?: string;
     onUploaded?: (assetId: string) => void;
   }
 
   let {
     bridge,
-    scope = 'global',
-    role = 'content',
     activeDeckRef,
     activeSoulRef,
+    activeDeckTitle,
+    activeSoulName,
     onUploaded,
   }: Props = $props();
 
@@ -35,9 +43,28 @@
     'image/webp',
   ];
 
+  // Default scope preference: deck > soul > global, based on context.
+  // Starts at 'global' until onMount picks a better default — avoids
+  // capturing prop values outside a reactive scope.
+  let scope = $state<UploadScope>('global');
+  let role = $state<UploadRole>('content');
   let uploading = $state(false);
   let error = $state('');
   let inputEl = $state<HTMLInputElement | null>(null);
+
+  onMount(() => {
+    untrack(() => {
+      if (activeDeckRef) scope = 'deck';
+      else if (activeSoulRef) scope = 'soul';
+    });
+  });
+
+  // If the active context changes and the current scope becomes
+  // unavailable (e.g. user switched away from the deck), fall back.
+  $effect(() => {
+    if (scope === 'deck' && !activeDeckRef) scope = activeSoulRef ? 'soul' : 'global';
+    if (scope === 'soul' && !activeSoulRef) scope = activeDeckRef ? 'deck' : 'global';
+  });
 
   function normaliseMime(t: string): UploadMime | null {
     const lower = t.toLowerCase();
@@ -70,14 +97,14 @@
       | { type: 'global' };
     if (scope === 'soul') {
       if (!activeSoulRef) {
-        error = 'No active soul — switch to Souls and select one before uploading soul-scoped assets.';
+        error = 'Pick a soul first — the Souls route lets you select one.';
         if (inputEl) inputEl.value = '';
         return;
       }
       resolvedScope = { type: 'soul', soul_ref: activeSoulRef };
     } else if (scope === 'deck') {
       if (!activeDeckRef) {
-        error = 'No active deck — open a deck before uploading deck-scoped assets.';
+        error = 'Open a deck first — the Workspace lists your decks.';
         if (inputEl) inputEl.value = '';
         return;
       }
@@ -123,9 +150,66 @@
   function triggerPicker(): void {
     inputEl?.click();
   }
+
+  function scopeLabel(s: UploadScope): string {
+    if (s === 'deck') return activeDeckTitle ? `This deck · ${activeDeckTitle}` : 'This deck';
+    if (s === 'soul') return activeSoulName ? `This soul · ${activeSoulName}` : 'This soul';
+    return 'Global (any deck)';
+  }
 </script>
 
 <div class="uploader">
+  <div class="row" role="group" aria-label="Upload destination">
+    <fieldset class="seg">
+      <legend class="seg-label">Save to</legend>
+      <div class="seg-options">
+        <label class={`seg-opt ${scope === 'deck' ? 'active' : ''} ${!activeDeckRef ? 'disabled' : ''}`}>
+          <input
+            type="radio"
+            name="upload-scope"
+            value="deck"
+            bind:group={scope}
+            disabled={!activeDeckRef}
+          />
+          <span>{scopeLabel('deck')}</span>
+        </label>
+        <label class={`seg-opt ${scope === 'soul' ? 'active' : ''} ${!activeSoulRef ? 'disabled' : ''}`}>
+          <input
+            type="radio"
+            name="upload-scope"
+            value="soul"
+            bind:group={scope}
+            disabled={!activeSoulRef}
+          />
+          <span>{scopeLabel('soul')}</span>
+        </label>
+        <label class={`seg-opt ${scope === 'global' ? 'active' : ''}`}>
+          <input
+            type="radio"
+            name="upload-scope"
+            value="global"
+            bind:group={scope}
+          />
+          <span>{scopeLabel('global')}</span>
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset class="seg">
+      <legend class="seg-label">Use as</legend>
+      <div class="seg-options">
+        <label class={`seg-opt ${role === 'content' ? 'active' : ''}`}>
+          <input type="radio" name="upload-role" value="content" bind:group={role} />
+          <span>Content</span>
+        </label>
+        <label class={`seg-opt ${role === 'logo' ? 'active' : ''}`}>
+          <input type="radio" name="upload-role" value="logo" bind:group={role} />
+          <span>Logo</span>
+        </label>
+      </div>
+    </fieldset>
+  </div>
+
   <input
     bind:this={inputEl}
     type="file"
@@ -150,9 +234,12 @@
         <path d="M10 13V4M6 8l4-4 4 4" stroke-linecap="round" stroke-linejoin="round" />
         <path d="M3 14v1a2 2 0 002 2h10a2 2 0 002-2v-1" stroke-linecap="round" />
       </svg>
-      Upload asset
+      Choose file…
     {/if}
   </button>
+
+  <p class="hint">PNG, JPEG, SVG, or WebP — up to 5 MB.</p>
+
   {#if error}
     <p class="error-msg" role="alert">{error}</p>
   {/if}
@@ -162,8 +249,81 @@
   .uploader {
     display: flex;
     flex-direction: column;
+    gap: var(--s-3);
+    background: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-lg);
+    padding: var(--s-3) var(--s-4);
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-4);
     align-items: flex-start;
-    gap: var(--s-2);
+  }
+
+  .seg {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-1);
+    min-width: 0;
+  }
+
+  .seg-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0;
+  }
+
+  .seg-options {
+    display: inline-flex;
+    background: var(--surface-2);
+    border-radius: var(--r-pill);
+    padding: 2px;
+    gap: 2px;
+    flex-wrap: wrap;
+  }
+
+  .seg-opt {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px var(--s-3);
+    font-size: 12px;
+    color: var(--ink-2);
+    border-radius: var(--r-pill);
+    cursor: pointer;
+    transition:
+      background-color var(--dur-micro) var(--ease),
+      color var(--dur-micro) var(--ease);
+  }
+
+  .seg-opt input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .seg-opt:hover:not(.disabled) {
+    color: var(--ink-1);
+  }
+
+  .seg-opt.active {
+    background: var(--surface-1);
+    color: var(--mint-hover);
+    box-shadow: var(--e1);
+  }
+
+  .seg-opt.disabled {
+    color: var(--ink-3);
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 
   .file-input {
@@ -171,6 +331,7 @@
   }
 
   .upload-btn {
+    align-self: flex-start;
     display: inline-flex;
     align-items: center;
     gap: var(--s-2);
@@ -220,6 +381,12 @@
 
   @keyframes spin {
     to { transform: rotate(360deg); }
+  }
+
+  .hint {
+    font-size: 11px;
+    color: var(--ink-3);
+    margin: 0;
   }
 
   .error-msg {
