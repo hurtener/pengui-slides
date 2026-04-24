@@ -34,6 +34,7 @@
   // reference ("edit-id=title-node") instead of pixel coordinates.
   let pinMode = $state(false);
   let pinnedEditId = $state<string | null>(null);
+  let pinnedPreview = $state<string>('');
   // editIds of elements that already have (unresolved) comments — drives the
   // dashed mint outline decoration on the canvas.
   let commentedEditIds = $state<string[]>([]);
@@ -44,13 +45,19 @@
 
   function togglePinMode(): void {
     pinMode = !pinMode;
-    if (!pinMode) pinnedEditId = null;
+    if (!pinMode) {
+      pinnedEditId = null;
+      pinnedPreview = '';
+    }
   }
 
-  function handlePinTarget(detail: { editId: string }): void {
+  function handlePinTarget(detail: { editId: string; preview?: string }): void {
     pinnedEditId = detail.editId;
+    pinnedPreview = detail.preview?.trim() ?? '';
     pinMode = false;
-    commentStatus = `Pinning to element: ${detail.editId}`;
+    commentStatus = pinnedPreview
+      ? `Pinning to: “${pinnedPreview}”`
+      : `Pinning to element: ${detail.editId}`;
   }
 
   async function submitComment(): Promise<void> {
@@ -62,15 +69,47 @@
       const target: CommentTarget = pinnedEditId
         ? { kind: 'element', container_id: slideId, edit_id: pinnedEditId }
         : { kind: 'slide', slide_id: slideId };
+      const body = commentDraft.trim();
+      const savedPreview = pinnedPreview;
+      const savedEditId = pinnedEditId;
+      const savedKind = commentKind;
       await bridge.addCommentFromApp({
         deck_id: deck.editorState.deck.id,
         target,
-        kind: commentKind,
-        body: commentDraft.trim(),
+        kind: savedKind,
+        body,
       });
+
+      // Fire-and-forget nudge to the chat so the agent knows about the
+      // comment on its current turn instead of waiting for the next
+      // one. Host may not support sendMessage — returns false in that
+      // case and we fall back to a "agent will see on next turn" hint.
+      const mcp = bridge as unknown as McpDeckEditorBridge;
+      let notified = false;
+      if (typeof mcp.notifyAgentOfComment === 'function') {
+        const targetLabel = savedEditId
+          ? (savedPreview ? `"${savedPreview}" (element ${savedEditId})` : `element ${savedEditId}`)
+          : (isPrint ? 'the whole page' : 'the whole slide');
+        try {
+          notified = await mcp.notifyAgentOfComment({
+            deck_title: deck.editorState.deck.title,
+            slide_title: deck.editorState.selectedSlide.metadata.title,
+            page_hint: isPrint ? `page ${deck.editorState.selectedSlide.position + 1}` : undefined,
+            target_label: targetLabel,
+            kind: savedKind,
+            body,
+          });
+        } catch {
+          notified = false;
+        }
+      }
+
       commentDraft = '';
       pinnedEditId = null;
-      commentStatus = 'Pinned.';
+      pinnedPreview = '';
+      commentStatus = notified
+        ? 'Saved and sent to the agent in chat.'
+        : 'Saved. The agent will pick it up on its next turn — or ask it in chat now.';
       commentDrawerOpen = true;
       await refreshCommentedEditIds();
     } catch (err) {
@@ -286,10 +325,11 @@
             html={selectedSlide?.html ?? ''}
             revisionHash={selectedSlide?.revisionHash ?? ''}
             renderNonce={canvasNonce}
-            disabled={deck.saving || pinMode}
+            disabled={deck.saving}
             format={deckFormat}
             pinMode={pinMode}
             pinnedEditIds={commentedEditIds}
+            draftPinnedEditId={pinnedEditId}
             oncommit={handleTextCommit}
             onpintarget={handlePinTarget}
             onerror={(d) => console.error(d.message)}
@@ -320,11 +360,13 @@
             <div class="cc-target-row">
               <span class="cc-target-label">Target:</span>
               {#if pinnedEditId}
-                <span class="cc-pin-chip">
+                <span class="cc-pin-chip" title={pinnedPreview ? `${pinnedEditId} — ${pinnedPreview}` : pinnedEditId}>
                   <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" width="10" height="10"><circle cx="6" cy="6" r="4"/></svg>
-                  {pinnedEditId}
+                  <span class="cc-pin-text">
+                    {pinnedPreview || pinnedEditId}
+                  </span>
                 </span>
-                <button type="button" class="cc-clear" onclick={() => { pinnedEditId = null; commentStatus = ''; }}>clear</button>
+                <button type="button" class="cc-clear" onclick={() => { pinnedEditId = null; pinnedPreview = ''; commentStatus = ''; }}>clear</button>
               {:else if pinMode}
                 <span class="cc-pin-active">Click an element in the slide…</span>
                 <button type="button" class="cc-clear" onclick={togglePinMode}>cancel</button>
@@ -343,8 +385,10 @@
               bind:value={commentDraft}
               rows={2}
               placeholder={pinnedEditId
-                ? `Your note will pin to element "${pinnedEditId}". The agent sees this editId, not pixels.`
-                : 'Note something to discuss with the agent (pins to the whole slide).'}
+                ? (pinnedPreview
+                    ? `Write a note about “${pinnedPreview}”.`
+                    : 'Write a note about the selected element.')
+                : 'Write a note about this page for the agent to address.'}
             />
             <div class="cc-actions">
               <Button
@@ -353,7 +397,7 @@
                 onclick={submitComment}
                 disabled={!commentDraft.trim() || commentPending}
               >
-                {commentPending ? 'Pinning…' : 'Pin comment'}
+                {commentPending ? 'Sending…' : 'Pin & send to agent'}
               </Button>
               <Button variant="ghost" size="sm" onclick={toggleCommentDrawer}>
                 See all comments
@@ -798,12 +842,20 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 2px 8px;
+    padding: 2px 10px;
     border-radius: var(--r-pill);
     background: var(--mint-tint);
     color: var(--mint-hover);
-    font-family: var(--font-mono);
     font-size: 11px;
+    max-width: 320px;
+    min-width: 0;
+  }
+
+  .cc-pin-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 280px;
   }
 
   .cc-pin-active {

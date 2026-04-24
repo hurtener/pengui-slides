@@ -298,6 +298,46 @@ export class McpDeckEditorBridge implements DeckEditorBridge {
     });
   }
 
+  /**
+   * Nudge the host agent in chat after a user pins a comment. The agent
+   * has `list_comments` and can fetch details itself — we just post a
+   * concise user-authored message so the current turn has the context
+   * it needs to act immediately instead of waiting for the next turn.
+   *
+   * No-op (silently) when the host doesn't support sendMessage, so
+   * pinning still works on minimal hosts.
+   */
+  async notifyAgentOfComment(args: {
+    deck_title: string;
+    slide_title?: string;
+    page_hint?: string;
+    target_label: string;
+    kind: string;
+    body: string;
+  }): Promise<boolean> {
+    const caps = this.app.getHostCapabilities();
+    if (!caps?.message) return false;
+
+    const locationParts: string[] = [];
+    if (args.slide_title) locationParts.push(`"${args.slide_title}"`);
+    if (args.page_hint) locationParts.push(args.page_hint);
+    const where = locationParts.length > 0 ? ` on ${locationParts.join(' ')}` : '';
+
+    const text = [
+      `I left a ${args.kind} comment${where} in "${args.deck_title}":`,
+      `Target: ${args.target_label}`,
+      `Note: ${args.body}`,
+      '',
+      'Please call list_comments to pick it up and address it.',
+    ].join('\n');
+
+    await this.app.sendMessage({
+      role: 'user',
+      content: [{ type: 'text', text }],
+    });
+    return true;
+  }
+
   // ── v4 Wave 2 typed tool methods ─────────────────────────────────────────
 
   /** List all decks in the workspace (newest first). */
