@@ -67,11 +67,13 @@ export function registerAddSectionTool(server: McpServer, container: ServiceCont
         'AUTO-FIX BEHAVIOUR — the server always injects a canonical `<!-- @section-meta {...} -->` ' +
         'comment above the wrapper from the metadata you provide, so you never emit that comment yourself. ' +
         'It also auto-substitutes literal CSS values for the matching soul-declared CSS custom ' +
-        'property before storage, across three categories: color hex (e.g. `background: #228be6` → ' +
+        'property before storage, across four categories: color hex (e.g. `background: #228be6` → ' +
         '`var(--color-accent-primary)`), spacing px on margin/padding/gap/inset/top/right/bottom/left ' +
-        '(e.g. `padding: 16px` → `var(--space-md)`), and radius dimensions on border-radius ' +
-        '(e.g. `border-radius: 8px` → `var(--radius-md)`). Each `auto_substitutions[]` entry carries ' +
-        'a `category: "color" | "spacing" | "radius"` field so you can group / display by layer. ' +
+        '(e.g. `padding: 16px` → `var(--space-md)`), radius dimensions on border-radius ' +
+        '(e.g. `border-radius: 8px` → `var(--radius-md)`), and font-family stacks ' +
+        '(e.g. `font-family: \'Inter\', sans-serif` → `var(--font-display)`; canonicalized so quote ' +
+        'and whitespace variants match). Each `auto_substitutions[]` entry carries a ' +
+        '`category: "color" | "spacing" | "radius" | "font"` field so you can group / display by layer. ' +
         'Values inside calc()/var()/min()/max() are left alone. Use the substitution log to emit ' +
         '`var(--token)` directly on the next turn. ' +
         '\n\n' +

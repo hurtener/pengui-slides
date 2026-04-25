@@ -88,6 +88,42 @@ async function main() {
 
   await client.callTool({ name: 'approve_design_soul', arguments: { soul_id: soulId } });
 
+  // 1b. v4.4: get_design_tokens — lightweight token catalogue, ~5x smaller
+  // payload than get_design_soul. Returns flat list with layer annotations.
+  const tokensRes = await client.callTool({
+    name: 'get_design_tokens',
+    arguments: { soul_id: soulId },
+  });
+  const tokensP = payload(tokensRes);
+  check(
+    'get_design_tokens returns a flat token list with layer annotations',
+    Array.isArray(tokensP?.tokens) && tokensP.tokens.length > 20 &&
+      tokensP.tokens.every((t) => typeof t.name === 'string' && t.name.startsWith('--') &&
+        typeof t.value === 'string' && typeof t.layer === 'string'),
+    `token_count=${tokensP?.token_count}`,
+  );
+  check(
+    'get_design_tokens classifies layers (color/typography/spacing/shape/depth/components/motion/category)',
+    tokensP?.tokens.some((t) => t.layer === 'color' && t.name === '--color-accent-primary' && t.value === '#228be6') &&
+      tokensP.tokens.some((t) => t.layer === 'spacing' && t.name === '--space-md' && t.value === '16px') &&
+      tokensP.tokens.some((t) => t.layer === 'shape' && t.name === '--radius-md') &&
+      tokensP.tokens.some((t) => t.layer === 'category' && t.name.startsWith('--color-category-')),
+    `layers seen=${[...new Set(tokensP?.tokens?.map((t) => t.layer) ?? [])].join(',')}`,
+  );
+  // Payload-size sanity: get_design_tokens should be much smaller than
+  // get_design_soul. Compare structuredContent JSON sizes.
+  const fullSoulRes = await client.callTool({
+    name: 'get_design_soul',
+    arguments: { soul_id: soulId, include_recipes: true, include_style_guide: true },
+  });
+  const tokensSize = JSON.stringify(payload(tokensRes)).length;
+  const fullSize = JSON.stringify(payload(fullSoulRes)).length;
+  check(
+    'get_design_tokens payload is at least 3x smaller than get_design_soul',
+    tokensSize * 3 < fullSize,
+    `tokens=${tokensSize}B  soul=${fullSize}B  ratio=${(fullSize / tokensSize).toFixed(1)}x`,
+  );
+
   // 2. Create deck
   const deck = await client.callTool({
     name: 'create_deck',
@@ -414,6 +450,37 @@ async function main() {
     `head=${dimsHtml.slice(0, 240)}…`,
   );
 
+  // 12c. v4.4: font-family stacks matching the soul are auto-substituted to
+  //      var(--font-*). Canonicalization makes quote/whitespace differences
+  //      transparent: 'Inter', sans-serif and "Inter",sans-serif both match.
+  const fontLiteral = await client.callTool({
+    name: 'add_section',
+    arguments: {
+      deck_id: deckId,
+      kind: 'prose',
+      html:
+        '<section class="pengui-section pengui-prose" ' +
+        `style="font-family: 'Inter', sans-serif">` +
+        '<p>x</p></section>',
+      metadata: { title: 'FontLiteral', narrative: 'font stack substitution' },
+    },
+  });
+  const fontP = payload(fontLiteral);
+  const fontSubs = (fontP?.auto_substitutions ?? []).filter((s) => s.category === 'font');
+  check(
+    'add_section auto_substitutes font-family stacks (Inter,sans-serif → --font-*)',
+    fontSubs.length === 1 && fontSubs[0].token.startsWith('--font-') && fontSubs[0].property === 'font-family',
+    `font subs: ${JSON.stringify(fontSubs)}`,
+  );
+  const fontSid = fontP?.section_id;
+  const fontStored = await client.callTool({ name: 'get_section', arguments: { section_id: fontSid } });
+  const fontHtml = payload(fontStored)?.section?.html ?? '';
+  check(
+    'stored HTML uses var(--font-*) and no longer contains the literal Inter stack',
+    fontHtml.includes('var(--font-') && !fontHtml.includes("'Inter', sans-serif"),
+    `head=${fontHtml.slice(0, 220)}…`,
+  );
+
   // 12b. A literal that the soul does NOT declare passes through untouched
   //      and the validator still emits the helpful fallback fix-suggestion.
   const unknownHex = await client.callTool({
@@ -458,6 +525,47 @@ async function main() {
     'open_deck_editor on empty slides deck returns DECK_EMPTY (typed)',
     openEmpty.isError && openEmptyP?.code === 'DECK_EMPTY',
     `code=${openEmptyP?.code}`,
+  );
+
+  // 13b. v4.4: render_preview now returns per-slide validation alongside
+  //      the thumbnail. Add a slide first so we have something to render.
+  const slideAdd = await client.callTool({
+    name: 'add_slide',
+    arguments: {
+      deck_id: slidesDeckId,
+      html:
+        '<style>html, body { margin: 0 } .slide { position: relative; padding: var(--space-safe-area); ' +
+        'width: 1920px; height: 1080px; background: var(--color-canvas); }</style>' +
+        '<div class="slide"><h1 style="color: var(--color-accent-primary)">Hello</h1></div>',
+      metadata: { title: 'Hello', type: 'content', narrative: 'a hello slide' },
+    },
+  });
+  const slideAddP = payload(slideAdd);
+  const slideOneId = slideAddP?.slide_id;
+  check('add_slide on slides deck succeeds', !!slideOneId, `slide_id=${slideOneId}`);
+  const slidesPreview = await client.callTool({
+    name: 'render_preview',
+    arguments: { deck_id: slidesDeckId },
+  });
+  const slidesPreviewP = payload(slidesPreview);
+  check(
+    'render_preview returns previews array',
+    Array.isArray(slidesPreviewP?.previews) && slidesPreviewP.previews.length === 1,
+    `previews count=${slidesPreviewP?.previews?.length}`,
+  );
+  const firstPreview = slidesPreviewP?.previews?.[0];
+  check(
+    'render_preview includes a per-slide validation block (v4.4)',
+    typeof firstPreview?.validation === 'object' &&
+      typeof firstPreview.validation.passed === 'boolean' &&
+      typeof firstPreview.validation.error_count === 'number' &&
+      Array.isArray(firstPreview.validation.issues),
+    `passed=${firstPreview?.validation?.passed} errors=${firstPreview?.validation?.error_count}`,
+  );
+  check(
+    'render_preview returns a non-empty thumbnail',
+    typeof firstPreview?.image_base64 === 'string' && firstPreview.image_base64.length > 1000,
+    `bytes=${firstPreview?.image_base64?.length ?? 0}`,
   );
   check(
     'DECK_EMPTY error names suggestedTool: "add_slide"',

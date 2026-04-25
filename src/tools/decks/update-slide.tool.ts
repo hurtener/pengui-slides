@@ -55,7 +55,7 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
     {
       title: 'Update Slide',
       description:
-        "Update a slide's HTML and/or metadata. Re-validates if HTML changed. When replacing HTML, keep the .slide dimensions aligned with the DECK FORMAT: 1920×1080 (slides_16_9), 1240×1754 (print_a4_portrait), or 1275×1650 (print_letter_portrait). Also preserve \"position: relative\" and \"padding: var(--space-safe-area)\" on .slide, and \"html, body { margin: 0 }\" explicitly in the reset — these are load-bearing. Soul-known literals are auto-substituted for the matching token before storage across three categories: color hex (`#228be6` → `var(--color-accent-primary)`), spacing px on margin/padding/gap/inset (`16px` → `var(--space-md)`), and radius dimensions on border-radius (`8px` → `var(--radius-md)`). Each `auto_substitutions[]` entry carries a `category: \"color\" | \"spacing\" | \"radius\"` field. Values inside calc()/var()/min()/max() are left alone. See pengui://docs/slide-format (especially the Common Pitfalls section).",
+        "Update a slide's HTML and/or metadata. Re-validates if HTML changed. When replacing HTML, keep the .slide dimensions aligned with the DECK FORMAT: 1920×1080 (slides_16_9), 1240×1754 (print_a4_portrait), or 1275×1650 (print_letter_portrait). Also preserve \"position: relative\" and \"padding: var(--space-safe-area)\" on .slide, and \"html, body { margin: 0 }\" explicitly in the reset — these are load-bearing. Soul-known literals are auto-substituted for the matching token before storage across four categories: color hex (`#228be6` → `var(--color-accent-primary)`), spacing px on margin/padding/gap/inset (`16px` → `var(--space-md)`), radius dimensions on border-radius (`8px` → `var(--radius-md)`), and font-family stacks (`\'Inter\', sans-serif` → `var(--font-display)`; canonicalized for quote/whitespace match). Each `auto_substitutions[]` entry carries a `category: \"color\" | \"spacing\" | \"radius\" | \"font\"` field. Values inside calc()/var()/min()/max() are left alone. See pengui://docs/slide-format (especially the Common Pitfalls section).",
       inputSchema: z.object({
         deck_id: z.string().describe('The deck containing the slide.'),
         slide_id: z.string().describe('The slide to update.'),
@@ -88,7 +88,7 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
           const soulPre = await container.soulStore.get(deckPre.soulId);
           const lookups = soulPre
             ? buildSoulTokenLookups(soulPre.layers)
-            : { color: new Map(), spacing: new Map(), radius: new Map() };
+            : { color: new Map(), spacing: new Map(), radius: new Map(), font: new Map() };
           const sub = substituteSoulTokens(html, lookups);
           substitutions = sub.substitutions;
           substitutedHtml = sub.html;

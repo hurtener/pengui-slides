@@ -13,6 +13,7 @@
 
 import type { SectionMetadata } from '../../types/section.js';
 import { commentSafeStringify } from '../metadata/comment-safe-json.js';
+import { insertMetaComment } from '../metadata/insert-meta-comment.js';
 
 const SECTION_META_REGEX = /<!--\s*@section-meta\s+[\s\S]*?-->\s*\r?\n?/;
 const SECTION_ROOT_REGEX = /(<section\b[^>]*>)/i;
@@ -24,33 +25,18 @@ const ANY_TAG_REGEX = /(<[a-z][^>]*>)/i;
  * duplicated. Comment lives at the top of the fragment (outside the
  * section wrapper) so the validator's `<section>` root-element check still
  * sees a single top-level element.
+ *
+ * Placement falls back from `<section>` → first element tag → bare prepend,
+ * so the structural validator can still locate the comment even when the
+ * agent emitted a malformed root.
  */
 export function embedSectionMeta(html: string, metadata: SectionMetadata): string {
-  const comment = formatSectionMetaComment(metadata);
-  const withoutExisting = html.replace(SECTION_META_REGEX, '');
-
-  const sectionMatch = withoutExisting.match(SECTION_ROOT_REGEX);
-  if (sectionMatch && sectionMatch.index !== undefined) {
-    return (
-      withoutExisting.slice(0, sectionMatch.index) +
-      comment + '\n' +
-      withoutExisting.slice(sectionMatch.index)
-    );
-  }
-
-  // No `<section>` root — place the comment above the first element tag so
-  // the structural validator can still locate and parse it when it reports
-  // the (separate) root-not-section error.
-  const anyTagMatch = withoutExisting.match(ANY_TAG_REGEX);
-  if (anyTagMatch && anyTagMatch.index !== undefined) {
-    return (
-      withoutExisting.slice(0, anyTagMatch.index) +
-      comment + '\n' +
-      withoutExisting.slice(anyTagMatch.index)
-    );
-  }
-
-  return comment + '\n' + withoutExisting;
+  return insertMetaComment(
+    html,
+    formatSectionMetaComment(metadata),
+    SECTION_META_REGEX,
+    [SECTION_ROOT_REGEX, ANY_TAG_REGEX],
+  );
 }
 
 function formatSectionMetaComment(metadata: SectionMetadata): string {

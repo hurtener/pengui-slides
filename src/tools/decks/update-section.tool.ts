@@ -62,10 +62,12 @@ export function registerUpdateSectionTool(server: McpServer, container: ServiceC
         'no `:root { }`, no fixed page dimensions. Do NOT emit `<!-- @section-meta -->` — the server ' +
         'always re-injects it from the current metadata struct, including when you change `metadata` ' +
         'without touching `html`. Soul-known literals are auto-substituted for the matching ' +
-        '`var(--token)` across three categories: color hex (`#228be6` → `var(--color-accent-primary)`), ' +
-        'spacing px on margin/padding/gap/inset (`16px` → `var(--space-md)`), and radius dimensions ' +
-        'on border-radius (`8px` → `var(--radius-md)`). Each `auto_substitutions[]` entry carries a ' +
-        '`category` field. Values inside calc()/var()/min()/max() are left alone. ' +
+        '`var(--token)` across four categories: color hex (`#228be6` → `var(--color-accent-primary)`), ' +
+        'spacing px on margin/padding/gap/inset (`16px` → `var(--space-md)`), radius dimensions ' +
+        'on border-radius (`8px` → `var(--radius-md)`), and font-family stacks ' +
+        '(`\'Inter\', sans-serif` → `var(--font-display)`; canonicalized for quote/whitespace match). ' +
+        'Each `auto_substitutions[]` entry carries a `category` field. Values inside ' +
+        'calc()/var()/min()/max() are left alone. ' +
         '\n\n' +
         'KIND CHANGES — if you only pass `kind` (without `html`), the stored HTML keeps its old ' +
         '`pengui-{old-kind}` class. Call `promote_section_root` afterwards to normalize the class ' +

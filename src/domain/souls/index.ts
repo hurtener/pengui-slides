@@ -9,6 +9,10 @@ export {
   buildRadiusTokenLookup,
 } from './dimension-token-lookup.js';
 export {
+  buildFontTokenLookup,
+  canonicalizeFontStack,
+} from './font-token-lookup.js';
+export {
   substituteSoulTokens,
   type SoulTokenLookups,
   type TokenCategory,

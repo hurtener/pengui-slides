@@ -81,7 +81,7 @@ export class DocumentService {
    */
   private async tokenLookupsForDeck(deck: Deck): Promise<SoulTokenLookups> {
     const soul = await this.soulStore.get(deck.soulId);
-    if (!soul) return { color: new Map(), spacing: new Map(), radius: new Map() };
+    if (!soul) return { color: new Map(), spacing: new Map(), radius: new Map(), font: new Map() };
     return buildSoulTokenLookups(soul.layers);
   }
 

@@ -14,6 +14,7 @@ import { registerRegisterDesignSoulTool } from './souls/register-design-soul.too
 import { registerApproveDesignSoulTool } from './souls/approve-design-soul.tool.js';
 import { registerListDesignSoulsTool } from './souls/list-design-souls.tool.js';
 import { registerGetDesignSoulTool } from './souls/get-design-soul.tool.js';
+import { registerGetDesignTokensTool } from './souls/get-design-tokens.tool.js';
 import { registerSaveAsTemplateTool } from './souls/save-as-template.tool.js';
 
 // Deck tools
@@ -78,6 +79,7 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerApproveDesignSoulTool(server, container);
   registerListDesignSoulsTool(server, container);
   registerGetDesignSoulTool(server, container);
+  registerGetDesignTokensTool(server, container);
   registerSaveAsTemplateTool(server, container);
 
   // Deck tools

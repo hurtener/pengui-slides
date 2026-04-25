@@ -27,16 +27,23 @@ const radiusLookup = new Map<string, string>([
   ['50%', '--radius-circle'],
 ]);
 
+const fontLookup = new Map<string, string>([
+  ['inter,sans-serif', '--font-display'],
+  ['jetbrains mono,monospace', '--font-mono'],
+]);
+
 const allLookups: SoulTokenLookups = {
   color: colorLookup,
   spacing: spacingLookup,
   radius: radiusLookup,
+  font: fontLookup,
 };
 
 const colorOnly: SoulTokenLookups = {
   color: colorLookup,
   spacing: new Map(),
   radius: new Map(),
+  font: new Map(),
 };
 
 describe('substituteSoulTokens — color', () => {
@@ -107,6 +114,7 @@ describe('substituteSoulTokens — color', () => {
       color: new Map(),
       spacing: new Map(),
       radius: new Map(),
+      font: new Map(),
     });
     expect(result.html).toBe(html);
     expect(result.substitutions).toHaveLength(0);
@@ -244,11 +252,74 @@ describe('substituteSoulTokens — radius', () => {
   });
 });
 
+describe('substituteSoulTokens — font', () => {
+  it('substitutes a font-family stack matching the soul', () => {
+    const html = `<div style="font-family: 'Inter', sans-serif">y</div>`;
+    const result = substituteSoulTokens(html, allLookups);
+    expect(result.html).toContain('font-family: var(--font-display)');
+    expect(result.substitutions[0]).toMatchObject({
+      token: '--font-display',
+      property: 'font-family',
+      category: 'font',
+      inline: true,
+    });
+  });
+
+  it('canonicalizes quote and whitespace differences before matching', () => {
+    const variants = [
+      `<div style='font-family: "Inter", sans-serif'>y</div>`,
+      `<div style="font-family: Inter, sans-serif">y</div>`,
+      `<div style="font-family: Inter,sans-serif">y</div>`,
+    ];
+    for (const html of variants) {
+      const result = substituteSoulTokens(html, allLookups);
+      expect(result.html).toContain('font-family: var(--font-display)');
+      expect(result.substitutions[0]).toMatchObject({ token: '--font-display', category: 'font' });
+    }
+  });
+
+  it('matches multi-word family names', () => {
+    const html = `<div style="font-family: 'JetBrains Mono', monospace">y</div>`;
+    const result = substituteSoulTokens(html, allLookups);
+    expect(result.html).toContain('font-family: var(--font-mono)');
+  });
+
+  it('does not substitute when the stack does not match a soul token', () => {
+    const html = `<div style="font-family: Roboto, sans-serif">y</div>`;
+    const result = substituteSoulTokens(html, allLookups);
+    expect(result.html).toContain('font-family: Roboto, sans-serif');
+    expect(result.substitutions).toHaveLength(0);
+  });
+
+  it('is idempotent on already-tokenized var() values', () => {
+    const html = `<div style="font-family: var(--font-display)">y</div>`;
+    const result = substituteSoulTokens(html, allLookups);
+    expect(result.html).toContain('font-family: var(--font-display)');
+    expect(result.substitutions).toHaveLength(0);
+  });
+
+  it('substitutes inside <style> block (not just inline)', () => {
+    const html = `<style>.x { font-family: 'Inter', sans-serif; }</style><div class="x">y</div>`;
+    const result = substituteSoulTokens(html, allLookups);
+    expect(result.html).toContain('font-family: var(--font-display)');
+  });
+
+  it('does not substitute on non-font properties carrying a font-like literal', () => {
+    // Defensive: 'font' shorthand is intentionally not in FONT_PROPERTIES,
+    // because shorthand carries size + weight + family in one declaration
+    // and partial substitution is risky.
+    const html = `<div style="font: italic 12px 'Inter', sans-serif">y</div>`;
+    const result = substituteSoulTokens(html, allLookups);
+    expect(result.html).toContain("font: italic 12px 'Inter', sans-serif");
+    expect(result.substitutions).toHaveLength(0);
+  });
+});
+
 describe('substituteSoulTokens — mixed categories', () => {
-  it('handles color + spacing + radius in one pass, accumulating substitutions with categories', () => {
+  it('handles color + spacing + radius + font in one pass, accumulating substitutions with categories', () => {
     const html =
-      '<style>.x { color: #228be6; padding: 16px; border-radius: 8px; }</style>' +
-      '<div class="x" style="background: #cce0f0; margin-top: 24px">y</div>';
+      `<style>.x { color: #228be6; padding: 16px; border-radius: 8px; font-family: 'Inter', sans-serif; }</style>` +
+      `<div class="x" style="background: #cce0f0; margin-top: 24px">y</div>`;
     const result = substituteSoulTokens(html, allLookups);
 
     const byCategory = result.substitutions.reduce<Record<string, number>>((acc, s) => {
@@ -258,5 +329,6 @@ describe('substituteSoulTokens — mixed categories', () => {
     expect(byCategory.color).toBe(2);
     expect(byCategory.spacing).toBe(2);
     expect(byCategory.radius).toBe(1);
+    expect(byCategory.font).toBe(1);
   });
 });

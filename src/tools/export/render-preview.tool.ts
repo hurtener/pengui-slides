@@ -10,9 +10,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServiceContainer } from '../../container.js';
 import { getFormat } from '../../domain/formats/format-registry.js';
-import { textResponse } from '../_shared/responses.js';
+import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 import { FormatNotExportableError } from '../../types/errors.js';
+import { soulId as toSoulId } from '../../types/common.js';
 
 /** Target thumbnail short-edge in pixels. Width for landscape, height for portrait. */
 const THUMBNAIL_SHORT_EDGE = 270;
@@ -23,10 +24,18 @@ export function registerRenderPreviewTool(server: McpServer, container: ServiceC
     {
       title: 'Render Preview',
       description:
-        'Render preview thumbnails for slides in a slide-model deck. Returns base64-encoded images. ' +
+        'Render preview thumbnails for slides in a slide-model deck. Returns base64-encoded images ' +
+        'plus a per-slide `validation` block (Stage 1 lint, v4.4) so you do not need a separate ' +
+        'validate_slide round-trip when checking how a slide currently renders. ' +
+        '\n\n' +
         'ONLY applies to decks with authoringModel="slides" — document-model decks have no per-slide ' +
         'frame (sections compose into a flowing document), so this tool raises FormatNotExportableError ' +
-        'naming export_pdf instead. For document decks, use export_pdf to render the full document.',
+        'naming export_pdf instead. For document decks, use export_pdf to render the full document or ' +
+        '`render_section_preview` for a single section. ' +
+        '\n\n' +
+        'OUTPUT — `{ previews: [{ slide_id, position, image_base64, validation: { passed, error_count, ' +
+        'warning_count, issues[] } }] }`. Each preview is independent; one bad slide does not block the ' +
+        'others (mirrors the v4.3 render_section_preview contract).',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to render previews for.'),
         slides: z.array(z.string()).nullish().describe('Specific slide IDs to render. If omitted, renders all slides.'),
@@ -73,11 +82,36 @@ export function registerRenderPreviewTool(server: McpServer, container: ServiceC
           nativeHeight: heightPx,
         });
 
-        return textResponse({
-          previews: previews.map((p) => ({
+        // v4.4: validate each slide alongside its preview so the agent
+        // gets validation status without a separate round-trip. Mirrors
+        // the v4.3 render_section_preview contract.
+        const sId = toSoulId(summary.soulId as string);
+        const slideById = new Map(slideObjects.map((s) => [s.id as string, s]));
+        const validations = await Promise.all(
+          previews.map(async (p) => {
+            const slide = slideById.get(p.slideId);
+            if (!slide) return null;
+            const v = await container.validationService.validateSlide(
+              slide.html,
+              sId,
+              'lint',
+              summary.format,
+            );
+            return {
+              passed: v.passed,
+              error_count: v.errorCount,
+              warning_count: v.warningCount,
+              issues: v.issues,
+            };
+          }),
+        );
+
+        return structuredResponse({
+          previews: previews.map((p, i) => ({
             slide_id: p.slideId,
             image_base64: p.imageBase64,
             position: p.position,
+            ...(validations[i] ? { validation: validations[i] } : {}),
           })),
         });
       } catch (error) {

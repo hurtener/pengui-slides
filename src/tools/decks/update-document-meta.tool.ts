@@ -8,7 +8,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServiceContainer } from '../../container.js';
-import { textResponse } from '../_shared/responses.js';
+import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 import { ALL_SECTION_KINDS, type SectionKind } from '../../types/section.js';
 import type { DocumentMeta } from '../../types/deck.js';
@@ -101,9 +101,9 @@ export function registerUpdateDocumentMetaTool(
 
         const deck = await container.documentService.updateDocumentMeta(deck_id, partial);
 
-        return textResponse({
-          deck_id: deck.id,
-          document_meta: deck.documentMeta,
+        return structuredResponse({
+          deck_id: deck.id as string,
+          document_meta: deck.documentMeta ?? {},
         });
       } catch (error) {
         return handleToolError(error);

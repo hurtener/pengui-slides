@@ -31,13 +31,15 @@ import * as cheerio from 'cheerio';
 import postcss from 'postcss';
 import valueParser from 'postcss-value-parser';
 import { normalizeHex } from './color-token-lookup.js';
+import { canonicalizeFontStack } from './font-token-lookup.js';
 
-export type TokenCategory = 'color' | 'spacing' | 'radius';
+export type TokenCategory = 'color' | 'spacing' | 'radius' | 'font';
 
 export interface SoulTokenLookups {
   color: ReadonlyMap<string, string>;
   spacing: ReadonlyMap<string, string>;
   radius: ReadonlyMap<string, string>;
+  font: ReadonlyMap<string, string>;
 }
 
 export interface TokenSubstitution {
@@ -110,6 +112,10 @@ const SPACING_PROPERTIES = new Set([
   'inset-inline-end',
 ]);
 
+const FONT_PROPERTIES = new Set([
+  'font-family',
+]);
+
 const RADIUS_PROPERTIES = new Set([
   'border-radius',
   'border-top-left-radius',
@@ -128,6 +134,7 @@ function categoryFor(property: string): TokenCategory | null {
   if (COLOR_PROPERTIES.has(property)) return 'color';
   if (SPACING_PROPERTIES.has(property)) return 'spacing';
   if (RADIUS_PROPERTIES.has(property)) return 'radius';
+  if (FONT_PROPERTIES.has(property)) return 'font';
   return null;
 }
 
@@ -135,7 +142,12 @@ export function substituteSoulTokens(
   html: string,
   lookups: SoulTokenLookups,
 ): TokenSubstitutionResult {
-  if (lookups.color.size === 0 && lookups.spacing.size === 0 && lookups.radius.size === 0) {
+  if (
+    lookups.color.size === 0 &&
+    lookups.spacing.size === 0 &&
+    lookups.radius.size === 0 &&
+    lookups.font.size === 0
+  ) {
     return { html, substitutions: [] };
   }
 
@@ -240,6 +252,9 @@ function rewriteValue(
   if (category === 'color') {
     return rewriteColorValue(value, lookups.color, onSubstitute);
   }
+  if (category === 'font') {
+    return rewriteFontValue(value, lookups.font, onSubstitute);
+  }
   const lookup = category === 'spacing' ? lookups.spacing : lookups.radius;
   if (lookup.size === 0) return value;
   return rewriteDimensionValue(value, lookup, onSubstitute);
@@ -293,4 +308,34 @@ function rewriteDimensionValue(
   });
 
   return mutated ? valueParser.stringify(parsed.nodes) : value;
+}
+
+/**
+ * Whole-value substitution for font-family declarations.
+ *
+ * Unlike spacing/radius (per-segment substitution), font stacks are
+ * substituted whole: the var() expansion already includes the full
+ * comma-separated stack. We canonicalize the agent's value (lowercase,
+ * quote-stripped, whitespace-normalized) and look up the entire stack;
+ * a hit replaces the whole declaration value with `var(--font-x)`.
+ *
+ * Already-tokenized values (`var(--font-display)`) are skipped because
+ * canonicalization keeps the parens balanced and won't match any
+ * registered key.
+ */
+function rewriteFontValue(
+  value: string,
+  lookup: ReadonlyMap<string, string>,
+  onSubstitute: (sub: Pick<TokenSubstitution, 'literal' | 'token'>) => void,
+): string {
+  if (lookup.size === 0) return value;
+  // Skip values that are already a single var() reference.
+  const trimmed = value.trim();
+  if (/^var\s*\(/i.test(trimmed)) return value;
+  const canonical = canonicalizeFontStack(value);
+  if (canonical.length === 0) return value;
+  const token = lookup.get(canonical);
+  if (!token) return value;
+  onSubstitute({ literal: trimmed, token });
+  return `var(${token})`;
 }
