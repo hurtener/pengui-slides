@@ -112,6 +112,15 @@ export interface ValidationContext {
    * author to guess why the expected dimensions are what they are.
    */
   formatKind?: FormatKind;
+  /**
+   * Reverse-lookup map from a normalized color literal (lowercase 6-digit
+   * hex, e.g. "#cce0f0") to the soul token name that declares that exact
+   * value (e.g. "--color-cat-d"). Used by the token-compliance check to
+   * upgrade its fix suggestion from generic ("use a token") to specific
+   * ("use var(--color-cat-d)"). Built once per soul in the validation
+   * service and reused across every section/slide validated in the call.
+   */
+  colorTokenLookup?: ReadonlyMap<string, string>;
 }
 
 export interface Stage1Check {

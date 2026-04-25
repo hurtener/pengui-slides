@@ -66,6 +66,10 @@ export function registerAddSectionTool(server: McpServer, container: ServiceCont
         '\n\n' +
         'AUTO-FIX BEHAVIOUR — the server always injects a canonical `<!-- @section-meta {...} -->` ' +
         'comment above the wrapper from the metadata you provide, so you never emit that comment yourself. ' +
+        'It also auto-substitutes hex literals (e.g. `background: #228be6`) for the matching ' +
+        'soul-declared CSS custom property (`var(--color-accent-primary)`) before storage. The ' +
+        '`auto_substitutions` field of the response lists every change so you can emit `var(--token)` ' +
+        'directly on the next turn. ' +
         '\n\n' +
         'VALIDATION — the response includes a `validation` block with `error_count`, `warning_count`, and ' +
         '`issues[]`. Inspect it on every call. If a structural issue fires, prefer the surgical repair tools ' +
@@ -144,7 +148,7 @@ export function registerAddSectionTool(server: McpServer, container: ServiceCont
             }
           : undefined;
 
-        const section = await container.documentService.addSection({
+        const { section, substitutions } = await container.documentService.addSection({
           deckId: deck_id,
           kind: kind as Parameters<typeof container.documentService.addSection>[0]['kind'],
           html,
@@ -176,6 +180,7 @@ export function registerAddSectionTool(server: McpServer, container: ServiceCont
           position: section.position,
           kind: section.kind,
           section_count: deck.sectionCount,
+          auto_substitutions: substitutions,
           validation: {
             passed: validation.passed,
             error_count: validation.errorCount,

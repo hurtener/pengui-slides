@@ -2,7 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { createContainer } from '../../../../src/container.js';
 import { loadConfig } from '../../../../src/config.js';
 import { sampleSoulInput, makeValidSlideHtml } from '../../../helpers/fixtures.js';
-import { SlideNotFoundError, SlideRevisionConflictError } from '../../../../src/types/errors.js';
+import { DeckEmptyError, SlideNotFoundError, SlideRevisionConflictError } from '../../../../src/types/errors.js';
 
 describe('EditorService', () => {
   const containers: ReturnType<typeof createContainer>[] = [];
@@ -158,5 +158,25 @@ describe('EditorService', () => {
     await expect(
       container.editorService.getEditorState(deckOne.id as string, slide.id as string),
     ).rejects.toBeInstanceOf(SlideNotFoundError);
+  });
+
+  it('throws DECK_EMPTY (not DECK_NOT_FOUND) when opening an empty slides deck', async () => {
+    const container = createContainer(loadConfig({ logLevel: 'error' }));
+    containers.push(container);
+
+    const soul = await container.soulService.register(sampleSoulInput);
+    await container.soulService.approve(soul.id);
+    const deck = await container.deckService.createDeck({
+      soulId: soul.id as string,
+      title: 'Empty Deck',
+    });
+
+    // Regression for v4 → v4.1 confusion: an existing-but-empty deck used
+    // to throw DECK_NOT_FOUND, indistinguishable from a truly missing one.
+    // It now throws DECK_EMPTY with `suggestedTool: "add_slide"` so the
+    // agent can recover in one turn.
+    await expect(
+      container.editorService.getEditorState(deck.id as string),
+    ).rejects.toBeInstanceOf(DeckEmptyError);
   });
 });

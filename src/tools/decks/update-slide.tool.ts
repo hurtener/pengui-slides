@@ -14,6 +14,11 @@ import {
   buildValidationDelta,
   buildValidationPresentation,
 } from '../../domain/validation/validation-presentation.js';
+import {
+  buildColorTokenLookup,
+  substituteColorLiterals,
+  type ColorSubstitution,
+} from '../../domain/souls/index.js';
 
 const dataPointSchema = z.object({
   label: z.string().describe('Label for the data point.'),
@@ -50,7 +55,7 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
     {
       title: 'Update Slide',
       description:
-        "Update a slide's HTML and/or metadata. Re-validates if HTML changed. When replacing HTML, keep the .slide dimensions aligned with the DECK FORMAT: 1920×1080 (slides_16_9), 1240×1754 (print_a4_portrait), or 1275×1650 (print_letter_portrait). Also preserve \"position: relative\" and \"padding: var(--space-safe-area)\" on .slide, and \"html, body { margin: 0 }\" explicitly in the reset — these are load-bearing. See pengui://docs/slide-format (especially the Common Pitfalls section).",
+        "Update a slide's HTML and/or metadata. Re-validates if HTML changed. When replacing HTML, keep the .slide dimensions aligned with the DECK FORMAT: 1920×1080 (slides_16_9), 1240×1754 (print_a4_portrait), or 1275×1650 (print_letter_portrait). Also preserve \"position: relative\" and \"padding: var(--space-safe-area)\" on .slide, and \"html, body { margin: 0 }\" explicitly in the reset — these are load-bearing. Soul-known hex color literals are auto-substituted for the matching `var(--color-*)` token before storage; the change set is returned in `auto_substitutions`. See pengui://docs/slide-format (especially the Common Pitfalls section).",
       inputSchema: z.object({
         deck_id: z.string().describe('The deck containing the slide.'),
         slide_id: z.string().describe('The slide to update.'),
@@ -73,8 +78,21 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
           slideId: slide_id,
         };
 
+        // Auto-substitute soul-known color literals when the HTML is being
+        // replaced. Mirrors add_slide so the agent never has to translate
+        // hex → token by hand for values the soul already declares.
+        let substitutions: ColorSubstitution[] = [];
+        let substitutedHtml = html;
         if (html != null) {
-          updateInput.html = html;
+          const deckPre = await container.deckService.getDeckSummary(deck_id);
+          const soulPre = await container.soulStore.get(deckPre.soulId);
+          const colorLookup = soulPre
+            ? buildColorTokenLookup(soulPre.layers)
+            : new Map<string, string>();
+          const sub = substituteColorLiterals(html, colorLookup);
+          substitutions = sub.substitutions;
+          substitutedHtml = sub.html;
+          updateInput.html = substitutedHtml;
         }
 
         if (metadata != null) {
@@ -101,7 +119,7 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
         let sourceKind;
         let translationIssues;
         if (shouldSyncMetadata) {
-          const sourceHtml = html ?? slide.html;
+          const sourceHtml = substitutedHtml ?? slide.html;
           const embeddedHtml = container.metadataEmbedder.update(sourceHtml, slide.metadata);
 
           await container.deckService.updateSlide({
@@ -146,6 +164,7 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
           slide_id: slide.id,
           ...(sourceKind ? { source_kind: sourceKind } : {}),
           ...(translationIssues ? { translation_issues: translationIssues } : {}),
+          auto_substitutions: substitutions,
           ...(validation ? { validation } : {}),
           ...(validationDelta ? { validation_delta: validationDelta } : {}),
           ...(validationPresentation ? { validation_presentation: validationPresentation } : {}),

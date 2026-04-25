@@ -12,7 +12,7 @@ import type {
   SetActiveWorkspaceInput,
 } from '../../types/session.js';
 import { soulId } from '../../types/common.js';
-import { DeckNotFoundError, SlideNotFoundError, SlideRevisionConflictError } from '../../types/errors.js';
+import { DeckEmptyError, DeckNotFoundError, SlideNotFoundError, SlideRevisionConflictError } from '../../types/errors.js';
 import { TextEditableNormalizer } from './text-editable-normalizer.js';
 import {
   buildSnapshotValidationPresentation,
@@ -179,7 +179,11 @@ export class EditorService {
   ): Promise<EditorState> {
     let summary = await this.deckService.getDeckSummary(deckId);
     if (summary.slideCount === 0 || summary.slides.length === 0) {
-      throw new DeckNotFoundError(deckId);
+      // Distinct from DeckNotFoundError: the deck exists, it just has
+      // no slides yet. Surfacing the right code lets agents skip the
+      // "is this a stale build?" debugging detour the v4 → v4.1 cycle
+      // exposed.
+      throw new DeckEmptyError(deckId, 'slides', 'open the slide editor');
     }
 
     const selectedSlideId = slideId ?? (summary.slides[0].id as string);

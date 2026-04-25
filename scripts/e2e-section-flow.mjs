@@ -314,7 +314,171 @@ async function main() {
     `code=${boP?.code} msg=${boP?.message?.slice?.(0, 80) ?? ''}`,
   );
 
-  // 12. Tool descriptions surface enough context for an agent without repo access
+  // ── v4.2 additions ──────────────────────────────────────────────────────
+
+  // 12. Auto-substitution: the soul declares accentPrimary: #228be6, so an
+  //     incoming `background: #228be6` should be silently rewritten to
+  //     `var(--color-accent-primary)`. Validation now PASSES (no
+  //     token-compliance issue) and the response carries auto_substitutions
+  //     as feedback so the agent learns the mapping.
+  const tokenLiteral = await client.callTool({
+    name: 'add_section',
+    arguments: {
+      deck_id: deckId,
+      kind: 'prose',
+      html: '<section class="pengui-section pengui-prose" style="background: #228be6"><p>x</p></section>',
+      metadata: { title: 'TokenLiteral', narrative: 'literal hex collides with soul' },
+    },
+  });
+  const tokenLiteralP = payload(tokenLiteral);
+  const tokenSid = tokenLiteralP?.section_id;
+  check(
+    'add_section returns auto_substitutions for soul-known hex',
+    Array.isArray(tokenLiteralP?.auto_substitutions)
+      && tokenLiteralP.auto_substitutions.some(
+        (s) => s.literal === '#228be6' && s.token === '--color-accent-primary',
+      ),
+    `auto_substitutions=${JSON.stringify(tokenLiteralP?.auto_substitutions)}`,
+  );
+  const tokenIssues = tokenLiteralP?.validation?.issues ?? [];
+  const stillFlagged = tokenIssues.find((i) => i.rule === 'token-compliance' && i.actual === '#228be6');
+  check(
+    'token-compliance no longer flags the substituted literal (validation clean)',
+    !stillFlagged,
+    stillFlagged ? `unexpected issue: ${stillFlagged.message}` : 'no residual token-compliance issue',
+  );
+  // Verify storage actually has the var() form, not the original hex.
+  const tokenStored = await client.callTool({
+    name: 'get_section',
+    arguments: { section_id: tokenSid },
+  });
+  const tokenHtml = payload(tokenStored)?.section?.html ?? '';
+  check(
+    'stored HTML contains var(--color-accent-primary), not #228be6',
+    tokenHtml.includes('var(--color-accent-primary)') && !tokenHtml.includes('#228be6'),
+    `head=${tokenHtml.slice(0, 200)}…`,
+  );
+
+  // 12b. A literal that the soul does NOT declare passes through untouched
+  //      and the validator still emits the helpful fallback fix-suggestion.
+  const unknownHex = await client.callTool({
+    name: 'add_section',
+    arguments: {
+      deck_id: deckId,
+      kind: 'prose',
+      html: '<section class="pengui-section pengui-prose" style="background: #c0ffee"><p>x</p></section>',
+      metadata: { title: 'UnknownHex', narrative: 'not in soul' },
+    },
+  });
+  const unknownP = payload(unknownHex);
+  check(
+    'unknown hex is NOT auto-substituted (passes through untouched)',
+    (unknownP?.auto_substitutions ?? []).length === 0,
+    `auto_substitutions count=${(unknownP?.auto_substitutions ?? []).length}`,
+  );
+  const unknownIssues = unknownP?.validation?.issues ?? [];
+  const unknownLiteralIssue = unknownIssues.find(
+    (i) => i.rule === 'token-compliance' && i.actual === '#c0ffee',
+  );
+  check(
+    'unknown hex is flagged by token-compliance with the generic guidance',
+    unknownLiteralIssue?.fixSuggestion?.includes('get_design_soul'),
+    `suggestion=${unknownLiteralIssue?.fixSuggestion?.slice(0, 140)}`,
+  );
+
+  // 13. DECK_EMPTY: opening an empty SLIDES deck via open_deck_editor must
+  //     return DECK_EMPTY (not the misleading DECK_NOT_FOUND that bit
+  //     us in the v4 → v4.1 cycle).
+  const slidesDeck = await client.callTool({
+    name: 'create_deck',
+    arguments: { soul_id: soulId, format: 'slides_16_9', title: 'Empty Slides' },
+  });
+  const slidesDeckId = payload(slidesDeck)?.deck_id ?? payload(slidesDeck)?.id;
+  const openEmpty = await client.callTool({
+    name: 'open_deck_editor',
+    arguments: { deck_id: slidesDeckId },
+  });
+  const openEmptyP = payload(openEmpty);
+  check(
+    'open_deck_editor on empty slides deck returns DECK_EMPTY (typed)',
+    openEmpty.isError && openEmptyP?.code === 'DECK_EMPTY',
+    `code=${openEmptyP?.code}`,
+  );
+  check(
+    'DECK_EMPTY error names suggestedTool: "add_slide"',
+    openEmptyP?.details?.suggestedTool === 'add_slide',
+    `suggestedTool=${openEmptyP?.details?.suggestedTool}`,
+  );
+
+  // 14. Comment-safe metadata encoding: a title containing "-->" must
+  //     round-trip through storage without splitting the @section-meta
+  //     comment.
+  const dashSection = await client.callTool({
+    name: 'add_section',
+    arguments: {
+      deck_id: deckId,
+      kind: 'prose',
+      html: '<section class="pengui-section pengui-prose"><p>x</p></section>',
+      metadata: { title: 'Step 1 --> Step 2', narrative: 'has a -- run' },
+    },
+  });
+  const dashSid = payload(dashSection)?.section_id;
+  const dashGot = await client.callTool({
+    name: 'get_section',
+    arguments: { section_id: dashSid },
+  });
+  const dashHtml = payload(dashGot)?.section?.html ?? '';
+  const dashMeta = payload(dashGot)?.section?.metadata ?? {};
+  // Comment must be parseable: extract the @section-meta JSON and decode.
+  const metaMatch = dashHtml.match(/<!--\s*@section-meta\s+([\s\S]*?)-->/);
+  let decoded = null;
+  if (metaMatch) {
+    try { decoded = JSON.parse(metaMatch[1].trim()); } catch { /* fail below */ }
+  }
+  check(
+    'metadata containing "-->" round-trips through storage',
+    decoded?.title === 'Step 1 --> Step 2' && decoded?.narrative === 'has a -- run',
+    `decoded.title=${decoded?.title}`,
+  );
+  check(
+    'storage struct preserves the literal "-->" in metadata',
+    dashMeta.title === 'Step 1 --> Step 2',
+    `metadata.title=${dashMeta.title}`,
+  );
+
+  // 15. render_section_preview: produces a non-empty PNG for a document section.
+  //     This actually exercises the Playwright pool + DocumentComposer path.
+  const preview = await client.callTool({
+    name: 'render_section_preview',
+    arguments: { deck_id: deckId, section_id: singleSid, scale: 0.5 },
+  });
+  if (preview.isError) {
+    console.error('render_section_preview errored:', JSON.stringify(payload(preview), null, 2));
+  }
+  const previewP = payload(preview);
+  check(
+    'render_section_preview returns a base64 PNG',
+    typeof previewP?.image_base64 === 'string' && previewP.image_base64.length > 1000,
+    `bytes=${previewP?.image_base64?.length ?? 0} format=${previewP?.format}`,
+  );
+  check(
+    'render_section_preview reports image dimensions',
+    typeof previewP?.width === 'number' && typeof previewP?.height === 'number'
+      && previewP.width > 0 && previewP.height > 0,
+    `${previewP?.width}x${previewP?.height}`,
+  );
+  check(
+    'render_section_preview rejects on slides decks (FormatNotExportableError)',
+    await (async () => {
+      const wrong = await client.callTool({
+        name: 'render_section_preview',
+        arguments: { deck_id: slidesDeckId, section_id: singleSid },
+      });
+      return wrong.isError && payload(wrong)?.code === 'FORMAT_NOT_EXPORTABLE';
+    })(),
+  );
+
+  // 16. Tool descriptions surface enough context for an agent without repo access
   const tools = await client.listTools();
   const promote = tools.tools.find((t) => t.name === 'promote_section_root');
   check(
@@ -336,6 +500,16 @@ async function main() {
   check(
     'add_section html-field description warns to NOT emit @section-meta',
     addSec?.inputSchema?.properties?.html?.description?.includes('Do NOT emit'),
+  );
+  const previewTool = tools.tools.find((t) => t.name === 'render_section_preview');
+  check(
+    'render_section_preview is registered and described as document-only',
+    !!previewTool && previewTool.description.includes('document-mode'),
+  );
+  check(
+    'render_section_preview description names trigger conditions (after add/update/promote/wrap)',
+    previewTool?.description?.includes('add_section') &&
+      previewTool?.description?.includes('promote_section_root'),
   );
 
   await client.close();

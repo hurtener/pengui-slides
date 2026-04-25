@@ -73,7 +73,7 @@ export function registerApplyBlockEditTool(server: McpServer, container: Service
       try {
         switch (input.kind) {
           case 'section_kind': {
-            const section = await container.documentService.updateSection({
+            const { section } = await container.documentService.updateSection({
               deckId: input.deck_ref,
               sectionId: input.section_id,
               kind: input.new_kind as import('../../types/section.js').SectionKind,
@@ -87,7 +87,7 @@ export function registerApplyBlockEditTool(server: McpServer, container: Service
 
           case 'break_hints': {
             const { hints } = input;
-            const section = await container.documentService.updateSection({
+            const { section } = await container.documentService.updateSection({
               deckId: input.deck_ref,
               sectionId: input.section_id,
               breakHints: {

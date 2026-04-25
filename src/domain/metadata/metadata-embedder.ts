@@ -70,9 +70,14 @@ export class MetadataEmbedder {
 
   /**
    * Format a SlideMetadata object as an HTML comment string.
+   *
+   * Any `--` sequence in the JSON payload is rewritten as `--` so the
+   * payload cannot accidentally close the surrounding HTML comment when a
+   * metadata field contains `-->` (e.g. a title or narrative). `JSON.parse`
+   * decodes `-` back to `-` natively, so the read path is unchanged.
    */
   private formatComment(metadata: SlideMetadata): string {
-    const json = JSON.stringify(metadata, null, 2);
+    const json = JSON.stringify(metadata, null, 2).replace(/--/g, '-\\u002d');
     return `<!-- @slide-meta ${json} -->`;
   }
 }

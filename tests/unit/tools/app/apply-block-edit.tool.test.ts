@@ -39,7 +39,10 @@ describe('registerApplyBlockEditTool', () => {
 
     const container = {
       documentService: {
-        updateSection: vi.fn().mockResolvedValue({ ...STUB_SECTION, kind: 'callout', metadata: { ...STUB_SECTION.metadata, kind: 'callout' } }),
+        updateSection: vi.fn().mockResolvedValue({
+          section: { ...STUB_SECTION, kind: 'callout', metadata: { ...STUB_SECTION.metadata, kind: 'callout' } },
+          substitutions: [],
+        }),
       },
       deckService: {
         getDeckSummary: vi.fn().mockResolvedValue(STUB_SUMMARY),
@@ -75,8 +78,8 @@ describe('registerApplyBlockEditTool', () => {
     const container = {
       documentService: {
         updateSection: vi.fn().mockResolvedValue({
-          ...STUB_SECTION,
-          breakHints: { breakBefore: 'page', keepTogether: true },
+          section: { ...STUB_SECTION, breakHints: { breakBefore: 'page', keepTogether: true } },
+          substitutions: [],
         }),
       },
       deckService: {

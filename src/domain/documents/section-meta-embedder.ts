@@ -55,6 +55,11 @@ export function embedSectionMeta(html: string, metadata: SectionMetadata): strin
 function formatSectionMetaComment(metadata: SectionMetadata): string {
   // Match slide-meta formatting (pretty-printed JSON) for readability when
   // authors inspect the stored HTML.
-  const json = JSON.stringify(metadata, null, 2);
+  //
+  // Rewrite any `--` sequence as `--` so a metadata string containing
+  // `-->` (e.g. a title that ends with an arrow) cannot close the
+  // surrounding HTML comment early. JSON.parse decodes `-` back to
+  // `-` natively, so consumers don't need to reverse the escape.
+  const json = JSON.stringify(metadata, null, 2).replace(/--/g, '-\\u002d');
   return `<!-- @section-meta ${json} -->`;
 }

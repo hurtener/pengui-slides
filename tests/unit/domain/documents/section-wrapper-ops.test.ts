@@ -193,4 +193,21 @@ describe('embedSectionMeta', () => {
     expect(out.startsWith('<!-- @section-meta')).toBe(true);
     expect(out).toContain('<div>hi</div>');
   });
+
+  it('escapes "-->" inside metadata strings so the comment does not close early', () => {
+    const meta = { ...baseMeta, title: 'End of section --> next', narrative: 'a -- b' };
+    const out = embedSectionMeta('<section class="pengui-section pengui-prose"></section>', meta);
+    // Raw bytes must not contain a comment-terminating "-->" inside the
+    // payload — the only "-->" allowed is the closing one of the entire
+    // comment (right before \n<section).
+    const inner = out.slice(0, out.lastIndexOf('-->'));
+    expect(inner).not.toMatch(/-->/);
+    // Round-trip: the standard parser regex should still extract a
+    // payload that JSON.parse decodes back to the original strings.
+    const match = out.match(/<!--\s*@section-meta\s+([\s\S]*?)-->/);
+    expect(match).toBeTruthy();
+    const decoded = JSON.parse(match![1].trim()) as typeof meta;
+    expect(decoded.title).toBe('End of section --> next');
+    expect(decoded.narrative).toBe('a -- b');
+  });
 });

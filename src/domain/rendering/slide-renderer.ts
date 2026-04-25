@@ -95,7 +95,7 @@ export class SlideRenderer {
 
       const screenshotOptions: Record<string, unknown> = {
         type: opts.format,
-        fullPage: false,
+        fullPage: opts.fullPage === true,
       };
 
       if (opts.format === 'jpeg' && opts.quality !== undefined) {
@@ -103,6 +103,16 @@ export class SlideRenderer {
       }
 
       const imageData: Buffer = await page.screenshot(screenshotOptions);
+
+      // For fullPage screenshots the captured height equals
+      // documentElement.scrollHeight (× deviceScaleFactor), which can
+      // far exceed the viewport — query it back so the result reports
+      // accurate dimensions. Falls back to opts.height on the
+      // non-fullPage path.
+      let actualHeight = opts.height;
+      if (opts.fullPage === true) {
+        actualHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+      }
 
       const renderTimeMs = Math.round(performance.now() - start);
 
@@ -116,7 +126,7 @@ export class SlideRenderer {
         imageData: Buffer.from(imageData),
         format: opts.format as ImageFormat,
         width: opts.width,
-        height: opts.height,
+        height: actualHeight,
       });
       this.trimCache();
 
@@ -125,7 +135,7 @@ export class SlideRenderer {
         imageData,
         format: opts.format as ImageFormat,
         width: opts.width,
-        height: opts.height,
+        height: actualHeight,
         renderTimeMs,
       };
     } finally {
@@ -147,6 +157,7 @@ export class SlideRenderer {
       format: options.format,
       quality: options.quality ?? null,
       deviceScaleFactor: options.deviceScaleFactor,
+      fullPage: options.fullPage === true,
     }));
   }
 

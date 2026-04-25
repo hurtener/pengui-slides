@@ -83,6 +83,7 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
   const documentService = new DocumentService(
     deckStore,
     sectionStore,
+    soulStore,
     deckService,
     clock,
     logger.child('documents'),

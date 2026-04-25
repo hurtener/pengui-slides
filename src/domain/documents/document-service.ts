@@ -23,7 +23,7 @@ import {
   SectionNotFoundError,
   WrongAuthoringModelError,
 } from '../../types/errors.js';
-import type { IDeckStore, ISectionStore } from '../../storage/interfaces.js';
+import type { IDeckStore, ISectionStore, ISoulStore } from '../../storage/interfaces.js';
 import {
   generateSectionId,
   sha256,
@@ -39,10 +39,16 @@ import {
   wrapRootsInSection,
   type TopLevelElementSummary,
 } from './section-wrapper-ops.js';
+import {
+  buildColorTokenLookup,
+  substituteColorLiterals,
+  type ColorSubstitution,
+} from '../souls/index.js';
 
 export class DocumentService {
   private readonly deckStore: IDeckStore;
   private readonly sectionStore: ISectionStore;
+  private readonly soulStore: ISoulStore;
   private readonly deckService: DeckService;
   private readonly clock: Clock;
   private readonly logger: Logger;
@@ -51,6 +57,7 @@ export class DocumentService {
   constructor(
     deckStore: IDeckStore,
     sectionStore: ISectionStore,
+    soulStore: ISoulStore,
     deckService: DeckService,
     clock: Clock,
     logger: Logger,
@@ -58,10 +65,23 @@ export class DocumentService {
   ) {
     this.deckStore = deckStore;
     this.sectionStore = sectionStore;
+    this.soulStore = soulStore;
     this.deckService = deckService;
     this.clock = clock;
     this.logger = logger;
     this.revisionTracker = revisionTracker ?? new RevisionTracker(clock);
+  }
+
+  /**
+   * Build the soul's hex→token lookup for auto-substitution. Returns an
+   * empty map (which makes substituteColorLiterals a no-op) when the soul
+   * is missing — defensive, since add/update would have failed earlier in
+   * normal flow if the soul were genuinely gone.
+   */
+  private async colorLookupForDeck(deck: Deck): Promise<ReadonlyMap<string, string>> {
+    const soul = await this.soulStore.get(deck.soulId);
+    if (!soul) return new Map();
+    return buildColorTokenLookup(soul.layers);
   }
 
   /** Resolve a UUID or slug to a DeckId. Delegates to DeckService. */
@@ -97,10 +117,18 @@ export class DocumentService {
    * Auto-fills provenance metadata (generatedAt, soulId, deckId, position,
    * metaVersion='3.0', revisionHash) mirroring DeckService.addSlide.
    *
+   * Also runs `substituteColorLiterals` against the active soul's color
+   * tokens before persisting: any literal hex that exactly matches a soul
+   * token is rewritten to `var(--token)`, and the change set is returned
+   * so callers can echo it to the agent. The agent learns the substitution
+   * from the response and emits the var() form on the next turn.
+   *
    * @throws DeckNotFoundError if the deck does not exist.
    * @throws WrongAuthoringModelError if the deck is slides-mode.
    */
-  async addSection(input: AddSectionInput): Promise<Section> {
+  async addSection(
+    input: AddSectionInput,
+  ): Promise<{ section: Section; substitutions: ColorSubstitution[] }> {
     const did = await this.resolveDeckRef(input.deckId);
     const deck = await this.deckStore.get(did);
     if (!deck) {
@@ -111,6 +139,14 @@ export class DocumentService {
     const now = this.clock.now();
     const currentSectionIds = deck.sectionIds ?? [];
     const position = input.position ?? currentSectionIds.length;
+
+    // Auto-substitute soul-known color literals BEFORE building the meta
+    // hash, so the hash reflects what is actually stored. Any literal the
+    // soul does not declare passes through untouched and falls to the
+    // token-compliance check at validation time.
+    const colorLookup = await this.colorLookupForDeck(deck);
+    const sub = substituteColorLiterals(input.html, colorLookup);
+    const sourceHtml = sub.html;
 
     const metadata: SectionMetadata = {
       title: input.metadata.title,
@@ -139,14 +175,15 @@ export class DocumentService {
       deckId: deck.id as string,
       position,
       metaVersion: '3.0',
-      revisionHash: sha256(input.html),
+      revisionHash: sha256(sourceHtml),
     };
 
-    // `metadata.revisionHash` hashes the author-supplied HTML, mirroring the
-    // slides side. The stored HTML additionally carries the embedded
-    // `@section-meta` comment so round-trip consumers (exports, MCP App
-    // previews) see valid provenance without the agent having to emit it.
-    const embeddedHtml = embedSectionMeta(input.html, metadata);
+    // `metadata.revisionHash` hashes the post-substitution HTML so the
+    // hash matches what is stored. The stored HTML additionally carries
+    // the embedded `@section-meta` comment so round-trip consumers
+    // (exports, MCP App previews) see valid provenance without the agent
+    // having to emit it.
+    const embeddedHtml = embedSectionMeta(sourceHtml, metadata);
 
     const section: Section = {
       id: generateSectionId(),
@@ -192,8 +229,9 @@ export class DocumentService {
       deckId: deck.id,
       sectionId: section.id,
       position,
+      autoSubstitutions: sub.substitutions.length,
     });
-    return section;
+    return { section, substitutions: sub.substitutions };
   }
 
   // ── Update Section ───────────────────────────────────────────────
@@ -201,11 +239,17 @@ export class DocumentService {
   /**
    * Update a section's HTML / kind / break hints / metadata.
    *
+   * When `input.html` is supplied, soul-known color literals are
+   * auto-substituted before persisting (same logic as `addSection`).
+   * The substitution log is returned alongside the updated section.
+   *
    * @throws DeckNotFoundError if the deck does not exist.
    * @throws SectionNotFoundError if the section does not exist.
    * @throws WrongAuthoringModelError if the deck is slides-mode.
    */
-  async updateSection(input: UpdateSectionInput): Promise<Section> {
+  async updateSection(
+    input: UpdateSectionInput,
+  ): Promise<{ section: Section; substitutions: ColorSubstitution[] }> {
     const did = await this.resolveDeckRef(input.deckId);
     const sid = sectionId(input.sectionId);
 
@@ -223,10 +267,14 @@ export class DocumentService {
     const now = this.clock.now();
     let htmlDirty = false;
     let metaDirty = false;
+    let substitutions: ColorSubstitution[] = [];
 
     if (input.html !== undefined) {
-      section.html = input.html;
-      section.metadata.revisionHash = sha256(input.html);
+      const colorLookup = await this.colorLookupForDeck(deck);
+      const sub = substituteColorLiterals(input.html, colorLookup);
+      substitutions = sub.substitutions;
+      section.html = sub.html;
+      section.metadata.revisionHash = sha256(sub.html);
       htmlDirty = true;
     }
 
@@ -295,8 +343,9 @@ export class DocumentService {
     this.logger.info('Section updated', {
       deckId: deck.id,
       sectionId: section.id,
+      autoSubstitutions: substitutions.length,
     });
-    return section;
+    return { section, substitutions };
   }
 
   // ── Surgical wrapper repair (promote / wrap) ────────────────────

@@ -15,6 +15,13 @@ export interface RenderOptions {
   deviceScaleFactor: number;
   format: ImageFormat;
   quality?: number;
+  /**
+   * When true, capture the full scrollable page rather than the viewport
+   * window. Used by `render_section_preview` for document-mode sections
+   * whose content may exceed one viewport height (e.g. a long bibliography).
+   * Default: false (preserves existing slide-rendering behaviour).
+   */
+  fullPage?: boolean;
 }
 
 export const DEFAULT_RENDER_OPTIONS: RenderOptions = {

@@ -15,6 +15,10 @@ import {
   buildValidationDelta,
   buildValidationPresentation,
 } from '../../domain/validation/validation-presentation.js';
+import {
+  buildColorTokenLookup,
+  substituteColorLiterals,
+} from '../../domain/souls/index.js';
 
 const dataPointSchema = z.object({
   label: z.string().describe('Label for the data point.'),
@@ -51,7 +55,7 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
     {
       title: 'Add Slide',
       description:
-        'Add a new slide to a slide-model deck. ONLY applies to decks with authoringModel="slides" (slides_16_9, plus legacy print decks created with authoringModel="slides"). For document-model print decks (v3 default), use add_section instead — the tool returns a WRONG_AUTHORING_MODEL error naming add_section. The slide HTML must declare .slide dimensions that match the DECK FORMAT: 1920×1080 for slides_16_9, 1240×1754 for print_a4_portrait (legacy), 1275×1650 for print_letter_portrait (legacy). .slide MUST carry "position: relative" and "padding: var(--space-safe-area)"; declare "html, body { margin: 0 }" explicitly. See pengui://docs/slide-format for the canonical template. See pengui://docs/document-mode for the v3 continuous-document flow. Returns the slide ID, position, slide count, and validation results.',
+        'Add a new slide to a slide-model deck. ONLY applies to decks with authoringModel="slides" (slides_16_9, plus legacy print decks created with authoringModel="slides"). For document-model print decks (v3 default), use add_section instead — the tool returns a WRONG_AUTHORING_MODEL error naming add_section. The slide HTML must declare .slide dimensions that match the DECK FORMAT: 1920×1080 for slides_16_9, 1240×1754 for print_a4_portrait (legacy), 1275×1650 for print_letter_portrait (legacy). .slide MUST carry "position: relative" and "padding: var(--space-safe-area)"; declare "html, body { margin: 0 }" explicitly. The server auto-injects @slide-meta from `metadata` and auto-substitutes hex color literals (e.g. `#228be6`) for the matching soul-declared `var(--color-*)` before storage; the change set is returned in `auto_substitutions` so you can emit var() form directly on the next turn. See pengui://docs/slide-format for the canonical template. See pengui://docs/document-mode for the v3 continuous-document flow. Returns the slide ID, position, slide count, auto-substitutions, and validation results.',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to add the slide to.'),
         html: z.string().describe('The slide HTML content.'),
@@ -61,10 +65,23 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
     },
     async ({ deck_id, html, metadata, position }) => {
       try {
-        // 1. Add slide (stores with raw HTML)
+        // Load the deck's soul up-front so we can run color-literal
+        // substitution before storage. Any soul-known hex literal in the
+        // slide HTML is rewritten to var(--token); the change set is
+        // returned in the response so the agent learns and emits the
+        // var() form on the next turn.
+        const deckPre = await container.deckService.getDeckSummary(deck_id);
+        const soulPre = await container.soulStore.get(deckPre.soulId);
+        const colorLookup = soulPre
+          ? buildColorTokenLookup(soulPre.layers)
+          : new Map<string, string>();
+        const sub = substituteColorLiterals(html, colorLookup);
+        const sourceHtml = sub.html;
+
+        // 1. Add slide (stores with substituted HTML)
         const slide = await container.deckService.addSlide({
           deckId: deck_id,
-          html,
+          html: sourceHtml,
           metadata: {
             title: metadata.title,
             type: metadata.type,
@@ -79,8 +96,8 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
           position: position ?? undefined,
         });
 
-        // 2. Embed metadata into HTML
-        const embeddedHtml = container.metadataEmbedder.embed(html, slide.metadata);
+        // 2. Embed metadata into the (substituted) HTML
+        const embeddedHtml = container.metadataEmbedder.embed(sourceHtml, slide.metadata);
 
         // 3. Update the slide with embedded HTML
         await container.deckService.updateSlide({
@@ -127,6 +144,7 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
           slide_count: deck.slideCount,
           source_kind: translationState.sourceKind,
           translation_issues: translationState.translationIssues,
+          auto_substitutions: sub.substitutions,
           validation,
           validation_delta: validationDelta,
           validation_presentation: validationPresentation,

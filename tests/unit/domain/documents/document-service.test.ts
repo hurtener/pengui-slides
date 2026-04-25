@@ -47,7 +47,7 @@ describe('DocumentService', () => {
       clock,
       logger,
     );
-    documentService = new DocumentService(deckStore, sectionStore, deckService, clock, logger);
+    documentService = new DocumentService(deckStore, sectionStore, soulStore, deckService, clock, logger);
 
     const soul = await soulService.register(sampleSoulInput);
     await soulService.approve(soul.id);
@@ -67,7 +67,7 @@ describe('DocumentService', () => {
 
   describe('addSection', () => {
     it('appends a section to a document-mode deck', async () => {
-      const section = await documentService.addSection({
+      const { section } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"><p>Hello</p></section>',
@@ -81,7 +81,7 @@ describe('DocumentService', () => {
     });
 
     it('auto-fills provenance metadata with metaVersion 3.0', async () => {
-      const section = await documentService.addSection({
+      const { section } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"></section>',
@@ -98,13 +98,13 @@ describe('DocumentService', () => {
     });
 
     it('increments position for subsequent sections', async () => {
-      const s1 = await documentService.addSection({
+      const { section: s1 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"></section>',
         metadata: { title: 'A', narrative: '' },
       });
-      const s2 = await documentService.addSection({
+      const { section: s2 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'figure',
         html: '<section class="pengui-section pengui-figure"></section>',
@@ -116,20 +116,20 @@ describe('DocumentService', () => {
     });
 
     it('inserts at requested position and reindexes following sections', async () => {
-      const s1 = await documentService.addSection({
+      const { section: s1 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"></section>',
         metadata: { title: 'A', narrative: '' },
       });
-      const s2 = await documentService.addSection({
+      const { section: s2 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"></section>',
         metadata: { title: 'B', narrative: '' },
       });
 
-      const inserted = await documentService.addSection({
+      const { section: inserted } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"></section>',
@@ -148,13 +148,13 @@ describe('DocumentService', () => {
     });
 
     it('updates the deck sectionIds in order', async () => {
-      const s1 = await documentService.addSection({
+      const { section: s1 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"></section>',
         metadata: { title: 'A', narrative: '' },
       });
-      const s2 = await documentService.addSection({
+      const { section: s2 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"></section>',
@@ -169,7 +169,7 @@ describe('DocumentService', () => {
     });
 
     it('records a section_added revision with sectionIdsSnapshot', async () => {
-      const s1 = await documentService.addSection({
+      const { section: s1 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"></section>',
@@ -226,7 +226,7 @@ describe('DocumentService', () => {
     let sectionId: string;
 
     beforeEach(async () => {
-      const s = await documentService.addSection({
+      const { section: s } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose">old</section>',
@@ -239,7 +239,7 @@ describe('DocumentService', () => {
       const before = await documentService.getSection(sectionId);
       const oldHash = before.metadata.revisionHash;
 
-      const updated = await documentService.updateSection({
+      const { section: updated } = await documentService.updateSection({
         deckId: documentDeckId,
         sectionId,
         html: '<section class="pengui-section pengui-prose">new</section>',
@@ -250,7 +250,7 @@ describe('DocumentService', () => {
     });
 
     it('updates kind on both section and metadata', async () => {
-      const updated = await documentService.updateSection({
+      const { section: updated } = await documentService.updateSection({
         deckId: documentDeckId,
         sectionId,
         kind: 'callout',
@@ -260,7 +260,7 @@ describe('DocumentService', () => {
     });
 
     it('merges break hints', async () => {
-      const updated = await documentService.updateSection({
+      const { section: updated } = await documentService.updateSection({
         deckId: documentDeckId,
         sectionId,
         breakHints: { keepTogether: true, fullPage: true },
@@ -270,7 +270,7 @@ describe('DocumentService', () => {
     });
 
     it('partial metadata updates preserve untouched fields', async () => {
-      const updated = await documentService.updateSection({
+      const { section: updated } = await documentService.updateSection({
         deckId: documentDeckId,
         sectionId,
         metadata: { title: 'New title' },
@@ -304,7 +304,7 @@ describe('DocumentService', () => {
 
   describe('getSection', () => {
     it('returns the stored section', async () => {
-      const created = await documentService.addSection({
+      const { section: created } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose">x</section>',
@@ -326,19 +326,19 @@ describe('DocumentService', () => {
 
   describe('removeSection', () => {
     it('removes the section and reindexes remaining sections', async () => {
-      const s1 = await documentService.addSection({
+      const { section: s1 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"></section>',
         metadata: { title: 'A', narrative: '' },
       });
-      const s2 = await documentService.addSection({
+      const { section: s2 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"></section>',
         metadata: { title: 'B', narrative: '' },
       });
-      const s3 = await documentService.addSection({
+      const { section: s3 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"></section>',
@@ -381,19 +381,19 @@ describe('DocumentService', () => {
 
   describe('reorderSections', () => {
     it('reorders and reindexes sections', async () => {
-      const s1 = await documentService.addSection({
+      const { section: s1 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"></section>',
         metadata: { title: 'A', narrative: '' },
       });
-      const s2 = await documentService.addSection({
+      const { section: s2 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"></section>',
         metadata: { title: 'B', narrative: '' },
       });
-      const s3 = await documentService.addSection({
+      const { section: s3 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"></section>',
@@ -431,13 +431,13 @@ describe('DocumentService', () => {
 
   describe('listSections', () => {
     it('returns sections ordered by position', async () => {
-      const s1 = await documentService.addSection({
+      const { section: s1 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"></section>',
         metadata: { title: 'A', narrative: '' },
       });
-      const s2 = await documentService.addSection({
+      const { section: s2 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"></section>',
@@ -507,7 +507,7 @@ describe('DocumentService', () => {
 
   describe('meta embedding + surgical wrapper repairs', () => {
     it('auto-embeds @section-meta from stored metadata on addSection', async () => {
-      const section = await documentService.addSection({
+      const { section } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"><p>x</p></section>',
@@ -523,13 +523,13 @@ describe('DocumentService', () => {
     });
 
     it('refreshes @section-meta when metadata changes via updateSection', async () => {
-      const created = await documentService.addSection({
+      const { section: created } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"><p>x</p></section>',
         metadata: { title: 'First', narrative: 'N' },
       });
-      const updated = await documentService.updateSection({
+      const { section: updated } = await documentService.updateSection({
         deckId: documentDeckId,
         sectionId: created.id as string,
         metadata: { title: 'Second' },
@@ -539,7 +539,7 @@ describe('DocumentService', () => {
     });
 
     it('promoteSectionRoot rewrites a <div> root into a conforming <section>', async () => {
-      const created = await documentService.addSection({
+      const { section: created } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'cover',
         html: '<div class="cover" style="background:red"><h1>Hi</h1></div>',
@@ -555,7 +555,7 @@ describe('DocumentService', () => {
     });
 
     it('wrapSectionRoot bundles multiple top-level elements into a single section', async () => {
-      const created = await documentService.addSection({
+      const { section: created } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'cover',
         html: '<div class="stripe"></div><div class="body">b</div><div class="foot">f</div>',
@@ -579,7 +579,7 @@ describe('DocumentService', () => {
     });
 
     it('re-embeds @section-meta when reindexPositions bumps the position (via insert at head)', async () => {
-      const first = await documentService.addSection({
+      const { section: first } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<section class="pengui-section pengui-prose"><p>first</p></section>',
@@ -603,7 +603,7 @@ describe('DocumentService', () => {
     });
 
     it('wrapSectionRoot honors child_order', async () => {
-      const created = await documentService.addSection({
+      const { section: created } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
         html: '<div>A</div><div>B</div><div>C</div>',

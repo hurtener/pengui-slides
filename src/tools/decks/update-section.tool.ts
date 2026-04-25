@@ -61,7 +61,8 @@ export function registerUpdateSectionTool(server: McpServer, container: ServiceC
         '`<section class="pengui-section pengui-{kind}">` root, no DOCTYPE/html/head/body/script/style, ' +
         'no `:root { }`, no fixed page dimensions. Do NOT emit `<!-- @section-meta -->` — the server ' +
         'always re-injects it from the current metadata struct, including when you change `metadata` ' +
-        'without touching `html`. ' +
+        'without touching `html`. Soul-known hex literals are auto-substituted for the matching ' +
+        '`var(--token)`; the change set is returned in `auto_substitutions`. ' +
         '\n\n' +
         'KIND CHANGES — if you only pass `kind` (without `html`), the stored HTML keeps its old ' +
         '`pengui-{old-kind}` class. Call `promote_section_root` afterwards to normalize the class ' +
@@ -143,7 +144,7 @@ export function registerUpdateSectionTool(server: McpServer, container: ServiceC
             }
           : undefined;
 
-        const section = await container.documentService.updateSection({
+        const { section, substitutions } = await container.documentService.updateSection({
           deckId: deck_id,
           sectionId: section_id,
           ...(html != null ? { html } : {}),
@@ -166,6 +167,7 @@ export function registerUpdateSectionTool(server: McpServer, container: ServiceC
           kind: section.kind,
           position: section.position,
           title: section.metadata.title,
+          auto_substitutions: substitutions,
           validation: {
             passed: validation.passed,
             error_count: validation.errorCount,

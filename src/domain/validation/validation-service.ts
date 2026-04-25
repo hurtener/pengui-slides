@@ -35,6 +35,7 @@ import { DocumentComposer } from '../rendering/document-composer.js';
 import type { Section } from '../../types/section.js';
 import type { Deck, DocumentMeta } from '../../types/deck.js';
 import type { AssetService } from '../assets/asset-service.js';
+import { buildColorTokenLookup } from '../souls/color-token-lookup.js';
 
 // ── Score Weights ──────────────────────────────────────────────────
 
@@ -151,7 +152,12 @@ export class ValidationService {
     const allowedFonts = soul.allowedFonts;
     const resolvedFormat = format ?? 'slides_16_9';
     const geometry: FormatGeometry = getFormat(resolvedFormat).geometry;
-    const validationContext: ValidationContext = { geometry, formatKind: resolvedFormat };
+    const colorTokenLookup = buildColorTokenLookup(soul.layers);
+    const validationContext: ValidationContext = {
+      geometry,
+      formatKind: resolvedFormat,
+      colorTokenLookup,
+    };
 
     // ── Stage 0: Defensive defaults (sensible-defaults injection) ───
     // Fills in hygiene defaults (html/body margin reset, * box-sizing,
@@ -288,7 +294,12 @@ export class ValidationService {
     const allowedFonts = soul.allowedFonts;
     const resolvedFormat = format ?? 'print_a4_portrait';
     const geometry: FormatGeometry = getFormat(resolvedFormat).geometry;
-    const validationContext: ValidationContext = { geometry, formatKind: resolvedFormat };
+    const colorTokenLookup = buildColorTokenLookup(soul.layers);
+    const validationContext: ValidationContext = {
+      geometry,
+      formatKind: resolvedFormat,
+      colorTokenLookup,
+    };
     const sectionCtx: SectionStage1Context = { kind: section.kind };
 
     const runner = new SectionStage1Runner();
@@ -353,7 +364,12 @@ export class ValidationService {
     const allowedFonts = soul.allowedFonts;
     const resolvedFormat: FormatKind = deck.format ?? 'print_a4_portrait';
     const geometry: FormatGeometry = getFormat(resolvedFormat).geometry;
-    const validationContext: ValidationContext = { geometry, formatKind: resolvedFormat };
+    const colorTokenLookup = buildColorTokenLookup(soul.layers);
+    const validationContext: ValidationContext = {
+      geometry,
+      formatKind: resolvedFormat,
+      colorTokenLookup,
+    };
 
     // Stage 1 — section lints on every fragment.
     const sectionRunner = new SectionStage1Runner();

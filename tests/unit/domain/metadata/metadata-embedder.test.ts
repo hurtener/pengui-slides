@@ -87,4 +87,25 @@ describe('MetadataEmbedder', () => {
       expect(result).toContain('<p>Keep this</p>');
     });
   });
+
+  describe('comment-safety escape', () => {
+    it('escapes "-->" inside metadata strings so the comment cannot close early', () => {
+      const html = '<div class="slide"><p>x</p></div>';
+      const result = embedder.embed(html, {
+        ...sampleMetadata,
+        title: 'Step 1 --> Step 2',
+        narrative: 'a -- b',
+      });
+      // Inside the metadata payload, "-->" must not appear — only the
+      // single closing "-->" at the end of the @slide-meta block.
+      const inner = result.slice(0, result.lastIndexOf('-->'));
+      expect(inner).not.toMatch(/-->/);
+      // Round-trip via the standard parser regex.
+      const match = result.match(/<!--\s*@slide-meta\s+([\s\S]*?)-->/);
+      expect(match).toBeTruthy();
+      const decoded = JSON.parse(match![1].trim()) as typeof sampleMetadata;
+      expect(decoded.title).toBe('Step 1 --> Step 2');
+      expect(decoded.narrative).toBe('a -- b');
+    });
+  });
 });

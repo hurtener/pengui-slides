@@ -117,4 +117,54 @@ describe('TokenComplianceCheck', () => {
     const issues = check.run(html, tokenNames, allowedFonts);
     expect(issues.length).toBeGreaterThan(0);
   });
+
+  it('upgrades the fix suggestion when colorTokenLookup names the literal', () => {
+    // Reverse map: hex -> token. The agent sees "use var(--color-cat-d)"
+    // instead of the generic "use a token from the soul".
+    const lookup = new Map<string, string>([
+      ['#cce0f0', '--color-cat-d'],
+    ]);
+    const html = '<div class="slide" style="background: #cce0f0;">x</div>';
+    const issues = check.run(
+      html,
+      tokenNames,
+      allowedFonts,
+      { geometry: { widthPx: 1240, heightPx: 1754 }, colorTokenLookup: lookup } as never,
+    );
+    const literalIssue = issues.find((i) => i.actual === '#cce0f0');
+    expect(literalIssue).toBeDefined();
+    expect(literalIssue?.fixSuggestion).toContain('var(--color-cat-d)');
+    expect(literalIssue?.fixSuggestion).toContain('declares this exact color');
+  });
+
+  it('expands 3-digit hex via the lookup so #fcc still finds #ffcccc', () => {
+    const lookup = new Map<string, string>([
+      ['#ffcccc', '--color-blush'],
+    ]);
+    const html = '<div style="color: #FCC;">x</div>';
+    const issues = check.run(
+      html,
+      tokenNames,
+      allowedFonts,
+      { geometry: { widthPx: 1240, heightPx: 1754 }, colorTokenLookup: lookup } as never,
+    );
+    const literalIssue = issues.find((i) => i.actual === '#FCC');
+    expect(literalIssue?.fixSuggestion).toContain('var(--color-blush)');
+  });
+
+  it('falls back to the generic suggestion when the literal is not in the soul', () => {
+    const lookup = new Map<string, string>([
+      ['#ffffff', '--color-canvas'],
+    ]);
+    const html = '<div style="background: #c0ffee;">x</div>';
+    const issues = check.run(
+      html,
+      tokenNames,
+      allowedFonts,
+      { geometry: { widthPx: 1240, heightPx: 1754 }, colorTokenLookup: lookup } as never,
+    );
+    const literalIssue = issues.find((i) => i.actual === '#c0ffee');
+    expect(literalIssue?.fixSuggestion).toContain('get_design_soul');
+    expect(literalIssue?.fixSuggestion).not.toContain('declares this exact color');
+  });
 });

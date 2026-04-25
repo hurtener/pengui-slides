@@ -105,6 +105,28 @@ export class DeckNotFoundError extends PenguiError {
   }
 }
 
+/**
+ * Thrown when a deck exists but has no content (slides for slide-model
+ * decks, sections for document-model decks) and the operation requires
+ * at least one item. Distinct from DECK_NOT_FOUND so callers can tell a
+ * truly missing deck from a freshly-created empty one.
+ */
+export class DeckEmptyError extends PenguiError {
+  constructor(
+    deckId: string,
+    authoringModel: 'slides' | 'document',
+    operation: string,
+  ) {
+    const item = authoringModel === 'slides' ? 'slides' : 'sections';
+    const verb = authoringModel === 'slides' ? 'add_slide' : 'add_section';
+    super(
+      ErrorCode.DECK_EMPTY,
+      `Cannot ${operation} on deck ${deckId} because it has no ${item} yet. Call ${verb} first.`,
+      { deckId, authoringModel, operation, suggestedTool: verb },
+    );
+  }
+}
+
 export class SlideNotFoundError extends PenguiError {
   constructor(slideId: string) {
     super(ErrorCode.SLIDE_NOT_FOUND, `Slide not found: ${slideId}`, { slideId });

@@ -79,7 +79,7 @@ describe('v3 continuous-document pipeline', () => {
   });
 
   it('appends sections via DocumentService.addSection', async () => {
-    const cover = await container.documentService.addSection({
+    const { section: cover } = await container.documentService.addSection({
       deckId: deckIdStr,
       kind: 'cover',
       html: coverHtml,
@@ -88,7 +88,7 @@ describe('v3 continuous-document pipeline', () => {
     expect(cover.kind).toBe('cover');
     expect(cover.position).toBe(0);
 
-    const prose = await container.documentService.addSection({
+    const { section: prose } = await container.documentService.addSection({
       deckId: deckIdStr,
       kind: 'prose',
       html: proseHtml,

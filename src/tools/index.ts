@@ -47,6 +47,7 @@ import { registerDeleteAssetTool } from './assets/delete-asset.tool.js';
 
 // Export tools
 import { registerRenderPreviewTool } from './export/render-preview.tool.js';
+import { registerRenderSectionPreviewTool } from './export/render-section-preview.tool.js';
 import { registerExportPptxTool } from './export/export-pptx.tool.js';
 import { registerExportPdfTool } from './export/export-pdf.tool.js';
 import { registerExportHtmlTool } from './export/export-html.tool.js';
@@ -112,6 +113,7 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
 
   // Export tools
   registerRenderPreviewTool(server, container);
+  registerRenderSectionPreviewTool(server, container);
   registerExportPptxTool(server, container);
   registerExportPdfTool(server, container);
   registerExportHtmlTool(server, container);

@@ -7,7 +7,36 @@
 
 import * as cheerio from 'cheerio';
 import postcss from 'postcss';
-import type { Stage1Check, ValidationIssue } from '../../../types/validation.js';
+import type { Stage1Check, ValidationContext, ValidationIssue } from '../../../types/validation.js';
+import { normalizeHex } from '../../souls/color-token-lookup.js';
+
+/**
+ * Build the fix suggestion for a literal-color violation. When the active
+ * soul declares the same hex value under a known token, we name the token
+ * directly so an agent can do a one-character substitution rather than
+ * grep through `get_design_soul`.
+ */
+function buildLiteralColorFixSuggestion(
+  literal: string,
+  prop: string,
+  context?: ValidationContext,
+): string {
+  const lookup = context?.colorTokenLookup;
+  const normalized = normalizeHex(literal);
+  if (lookup && normalized) {
+    const tokenName = lookup.get(normalized);
+    if (tokenName) {
+      return (
+        `Replace "${literal}" with var(${tokenName}) — the active soul declares this exact color as ${tokenName}. ` +
+        `Example: ${prop}: var(${tokenName});`
+      );
+    }
+  }
+  return (
+    `Replace "${literal}" with a var(--<token-name>) reference from the Design Soul. ` +
+    `Call get_design_soul to see the soul's token catalogue (closest matches by hue first).`
+  );
+}
 
 const COLOR_PROPERTIES = new Set([
   'color',
@@ -133,7 +162,12 @@ export class TokenComplianceCheck implements Stage1Check {
   readonly id = 'token-compliance';
   readonly name = 'Token Compliance';
 
-  run(html: string, soulTokenNames: string[], _allowedFonts: string[]): ValidationIssue[] {
+  run(
+    html: string,
+    soulTokenNames: string[],
+    _allowedFonts: string[],
+    context?: ValidationContext,
+  ): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
     const $ = cheerio.load(html);
     const allowedTokens = new Set(soulTokenNames);
@@ -176,7 +210,7 @@ export class TokenComplianceCheck implements Stage1Check {
             expected: 'var(--<token-name>)',
             actual: literal,
             line: decl.source?.start?.line,
-            fixSuggestion: `Replace "${literal}" with a var(--<token-name>) reference from the Design Soul.`,
+            fixSuggestion: buildLiteralColorFixSuggestion(literal, prop, context),
           });
         }
       });
@@ -212,7 +246,7 @@ export class TokenComplianceCheck implements Stage1Check {
             expected: 'var(--<token-name>)',
             actual: literal,
             line: decl.source?.start?.line,
-            fixSuggestion: `Replace "${literal}" with a var(--<token-name>) reference from the Design Soul.`,
+            fixSuggestion: buildLiteralColorFixSuggestion(literal, prop, context),
           });
         }
       });
