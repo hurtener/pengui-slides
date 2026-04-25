@@ -69,9 +69,11 @@ export class SectionStructuralCheck implements Stage1Check {
         severity: 'error',
         rule: this.id,
         message:
-          'Section fragment is missing the `<!-- @section-meta {...} -->` comment. Emit it directly above the `<section class="pengui-section ...">` root element. The metadata powers provenance, exports, and the MCP App sidebar.',
+          'Section fragment is missing the `<!-- @section-meta {...} -->` comment. `add_section` and `update_section` inject this comment automatically from the `metadata` input; if you see this error, either (a) you are calling `validate_section` with raw HTML that was never persisted, or (b) the fragment was mutated outside the normal MCP tool flow.',
         expected: '<!-- @section-meta {"title":"...","kind":"...","narrative":"..."} -->',
         actual: 'no @section-meta comment found',
+        fixSuggestion:
+          'Persist the section via add_section or update_section (the server auto-injects the comment). Do NOT hand-write the @section-meta comment — it is derived from the metadata struct.',
       });
     } else if (meta.parseError) {
       issues.push({
@@ -207,7 +209,7 @@ export class SectionStructuralCheck implements Stage1Check {
     } else {
       const firstNode = firstTag[0] as { tagName?: string };
       const tagName = firstNode.tagName?.toLowerCase();
-      if (tagName !== 'section') {
+      if (tagName !== 'section' && elementNodes.length === 1) {
         issues.push({
           id: `${this.id}-root-not-section`,
           stage: 'stage1_lint',
@@ -215,7 +217,19 @@ export class SectionStructuralCheck implements Stage1Check {
           rule: this.id,
           message: `Section fragment root is <${tagName}> but must be <section class="pengui-section pengui-${kind}">.`,
           fixSuggestion:
-            `Wrap your content in a single <section class="pengui-section pengui-${kind}">...</section> element.`,
+            `Call promote_section_root({ deck_id, section_id }) to rewrite the wrapper tag in-place — it preserves every attribute (style, id, data-*) and merges classes. Alternatively, resubmit the fragment with <section class="pengui-section pengui-${kind}"> as the root.`,
+        });
+      } else if (tagName !== 'section') {
+        // Multiple root elements: prefer the wrap hint (covered below). Still
+        // note the wrong first-element tag for completeness.
+        issues.push({
+          id: `${this.id}-root-not-section`,
+          stage: 'stage1_lint',
+          severity: 'error',
+          rule: this.id,
+          message: `Section fragment root is <${tagName}> but must be <section class="pengui-section pengui-${kind}">.`,
+          fixSuggestion:
+            `Call wrap_section_root({ deck_id, section_id }) to wrap all top-level elements into a single <section class="pengui-section pengui-${kind}">.`,
         });
       } else {
         const classAttr = firstTag.attr('class') ?? '';
@@ -245,13 +259,25 @@ export class SectionStructuralCheck implements Stage1Check {
 
       // Only one top-level tag node allowed.
       if (elementNodes.length > 1) {
+        const summary: string[] = [];
+        elementNodes.each((i, el) => {
+          const node = $(el);
+          const t = (el as { tagName?: string }).tagName?.toLowerCase() ?? '?';
+          const id = node.attr('id');
+          const cls = (node.attr('class') ?? '').split(/\s+/).filter(Boolean);
+          const label = `[${i}] <${t}${id ? `#${id}` : ''}${cls.length ? `.${cls.join('.')}` : ''}>`;
+          summary.push(label);
+        });
         issues.push({
           id: `${this.id}-multiple-root-elements`,
           stage: 'stage1_lint',
           severity: 'error',
           rule: this.id,
           message:
-            `Section fragment has ${elementNodes.length} top-level elements. Expected exactly one <section class="pengui-section ...">. Wrap sibling content inside the single section wrapper.`,
+            `Section fragment has ${elementNodes.length} top-level elements. Expected exactly one <section class="pengui-section ...">. Top-level nodes found: ${summary.join(', ')}.`,
+          fixSuggestion:
+            `Call wrap_section_root({ deck_id, section_id }) to wrap them in a single <section class="pengui-section pengui-${kind}">. Pass optional child_order to reorder them, e.g. [2, 0, 1].`,
+          actual: summary.join(', '),
         });
       }
     }

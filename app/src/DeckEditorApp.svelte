@@ -58,21 +58,29 @@
 
     const disposeResult = initialBridge.onToolResult((result) => {
       deck.applyIncomingState(result);
-      // Auto-navigate to editor when the host pushes editor state (e.g. via
-      // open_deck_editor). This preserves pre-v4 behaviour while keeping
-      // workspace as the default landing page for direct opens.
-      const payload = result.structuredContent;
-      if (payload && typeof payload === 'object' && 'editor_state' in payload && payload.editor_state) {
+      // Auto-navigate to editor when the host pushes an open_deck_editor
+      // payload. Two payload shapes trigger this: slides decks carry
+      // `editor_state`; document decks carry `authoring_model: 'document'`
+      // (and no editor_state — DocumentEditor loads its own sections).
+      const payload = result.structuredContent as
+        | { deck_id?: unknown; editor_state?: unknown; authoring_model?: unknown }
+        | null
+        | undefined;
+      if (!payload || typeof payload !== 'object') return;
+      const hasSlidesEditorState = 'editor_state' in payload && !!payload.editor_state;
+      const isDocumentOpen = payload.authoring_model === 'document';
+      if (hasSlidesEditorState || isDocumentOpen) {
         route = 'editor';
-        // Pick up the deck reference + authoring model from the pushed state
-        // so document-mode decks open in the DocumentEditor, not the slide one.
-        const deckId =
-          typeof (payload as { deck_id?: unknown }).deck_id === 'string'
-            ? ((payload as { deck_id: string }).deck_id)
-            : null;
+        const deckId = typeof payload.deck_id === 'string' ? payload.deck_id : null;
         if (deckId) {
           activeDeckRef = deckId;
-          void resolveAuthoringModelFor(deckId);
+          if (isDocumentOpen) {
+            // Skip the get_deck_summary round-trip — the server already
+            // told us this is a document deck.
+            activeAuthoringModel = 'document';
+          } else {
+            void resolveAuthoringModelFor(deckId);
+          }
         }
       }
     });

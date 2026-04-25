@@ -32,6 +32,8 @@ import { registerRemoveSectionTool } from './decks/remove-section.tool.js';
 import { registerReorderSectionsTool } from './decks/reorder-sections.tool.js';
 import { registerListSectionsTool } from './decks/list-sections.tool.js';
 import { registerUpdateDocumentMetaTool } from './decks/update-document-meta.tool.js';
+import { registerPromoteSectionRootTool } from './decks/promote-section-root.tool.js';
+import { registerWrapSectionRootTool } from './decks/wrap-section-root.tool.js';
 
 // Validation tools
 import { registerValidateSlideTool } from './validation/validate-slide.tool.js';
@@ -95,6 +97,8 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerReorderSectionsTool(server, container);
   registerListSectionsTool(server, container);
   registerUpdateDocumentMetaTool(server, container);
+  registerPromoteSectionRootTool(server, container);
+  registerWrapSectionRootTool(server, container);
 
   // Asset tools
   registerUploadAssetTool(server, container);

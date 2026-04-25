@@ -73,6 +73,15 @@ describe('registerOpenDeckEditorTool', () => {
     };
 
     const container = {
+      deckService: {
+        getDeckSummary: vi.fn().mockResolvedValue({
+          id: 'deck-1',
+          title: 'Deck',
+          authoringModel: 'slides',
+          slideCount: 1,
+          sectionCount: 0,
+        }),
+      },
       editorService: {
         getEditorState: vi.fn().mockResolvedValue(editorState),
       },
@@ -85,6 +94,7 @@ describe('registerOpenDeckEditorTool', () => {
     expect(result.isError).toBeUndefined();
     expect(result.structuredContent).toEqual({
       deck_id: 'deck-1',
+      authoring_model: 'slides',
       initial_slide_id: 'slide-1',
       app_resource_uri: 'ui://deck-editor/index.html',
       editor_state: editorState,
@@ -116,6 +126,15 @@ describe('registerOpenDeckEditorTool', () => {
     };
 
     const container = {
+      deckService: {
+        getDeckSummary: vi.fn().mockResolvedValue({
+          id: 'deck-1',
+          title: 'Deck',
+          authoringModel: 'slides',
+          slideCount: 1,
+          sectionCount: 0,
+        }),
+      },
       editorService: {
         getEditorState: vi.fn().mockResolvedValue({
           deck: { id: 'deck-1', title: 'Deck', slideCount: 1, slides: [] },
@@ -179,5 +198,58 @@ describe('registerOpenDeckEditorTool', () => {
 
     expect(result.structuredContent?.ui_capability_detected).toBe(true);
     expect(result.structuredContent?.warning).toBeUndefined();
+  });
+
+  it('opens document-mode decks without calling the slide-centric editor state builder', async () => {
+    let handler:
+      | ((args: { deck_id: string; slide_id?: string | null }) => Promise<Record<string, unknown>>)
+      | undefined;
+
+    const server = {
+      server: {
+        getClientCapabilities: () => ({
+          extensions: {
+            'io.modelcontextprotocol/ui': {
+              mimeTypes: [RESOURCE_MIME_TYPE],
+            },
+          },
+        }),
+      },
+      registerTool: (_name: string, _config: unknown, callback: typeof handler) => {
+        handler = callback;
+        return {} as never;
+      },
+    };
+
+    const container = {
+      deckService: {
+        getDeckSummary: vi.fn().mockResolvedValue({
+          id: 'doc-deck',
+          title: 'Química Cosmética — Cuadros Sinópticos',
+          authoringModel: 'document',
+          slideCount: 0,
+          sectionCount: 22,
+        }),
+      },
+      editorService: {
+        getEditorState: vi.fn(),
+      },
+    };
+
+    registerOpenDeckEditorTool(server as never, container as never);
+
+    const result = await handler!({ deck_id: 'doc-deck' });
+
+    expect(result.isError).toBeUndefined();
+    expect(container.editorService.getEditorState).not.toHaveBeenCalled();
+    expect(result.structuredContent).toMatchObject({
+      deck_id: 'doc-deck',
+      authoring_model: 'document',
+      section_count: 22,
+      app_resource_uri: 'ui://deck-editor/index.html',
+      ui_capability_detected: true,
+    });
+    expect(result.structuredContent).not.toHaveProperty('editor_state');
+    expect(result.structuredContent).not.toHaveProperty('initial_slide_id');
   });
 });

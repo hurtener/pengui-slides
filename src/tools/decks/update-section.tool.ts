@@ -10,6 +10,7 @@ import type { ServiceContainer } from '../../container.js';
 import { textResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 import { ALL_SECTION_KINDS } from '../../types/section.js';
+import { soulId } from '../../types/common.js';
 
 const sourceSchema = z.object({
   url: z.string().optional().describe('Source URL.'),
@@ -53,17 +54,49 @@ export function registerUpdateSectionTool(server: McpServer, container: ServiceC
     {
       title: 'Update Section',
       description:
-        "Update a section's HTML, kind, break hints, and/or metadata. Fragment contract still applies: single `<section class=\"pengui-section pengui-{kind}\">` root, no DOCTYPE/html/head/body/script, no standalone <style> blocks, no :root tokens. See pengui://docs/document-mode.",
+        'Update any combination of a section\'s HTML, kind, break hints, or metadata. ' +
+        'Only valid for document-model decks. All fields are optional — pass only what you want to change. ' +
+        '\n\n' +
+        'FRAGMENT CONTRACT — when replacing `html`, the same rules as `add_section` apply: one ' +
+        '`<section class="pengui-section pengui-{kind}">` root, no DOCTYPE/html/head/body/script/style, ' +
+        'no `:root { }`, no fixed page dimensions. Do NOT emit `<!-- @section-meta -->` — the server ' +
+        'always re-injects it from the current metadata struct, including when you change `metadata` ' +
+        'without touching `html`. ' +
+        '\n\n' +
+        'KIND CHANGES — if you only pass `kind` (without `html`), the stored HTML keeps its old ' +
+        '`pengui-{old-kind}` class. Call `promote_section_root` afterwards to normalize the class ' +
+        'list, or resubmit `html` with the new kind class. ' +
+        '\n\n' +
+        'VALIDATION — response includes a `validation` block. Repair tools: `promote_section_root` ' +
+        '(single non-`<section>` root), `wrap_section_root` (multiple top-level nodes). ' +
+        '\n\n' +
+        'See `pengui://docs/document-mode`.',
       inputSchema: z.object({
-        deck_id: z.string().describe('The deck containing the section.'),
-        section_id: z.string().describe('The section to update.'),
-        html: z.string().nullish().describe('New HTML fragment for the section.'),
+        deck_id: z.string().describe('UUID or slug of the deck containing the section.'),
+        section_id: z.string().describe('UUID of the section to update.'),
+        html: z
+          .string()
+          .nullish()
+          .describe(
+            'New HTML fragment. Same contract as `add_section.html`: one `<section>` root, no ' +
+              'DOCTYPE/document-level tags, no @section-meta comment (server re-injects it).',
+          ),
         kind: z
           .enum(ALL_SECTION_KINDS as [string, ...string[]])
           .nullish()
-          .describe('New section kind.'),
-        break_hints: breakHintsSchema.describe('Pagination overrides to merge in.'),
-        metadata: partialMetadataSchema.describe('Partial metadata fields to update.'),
+          .describe(
+            'New SectionKind. Changes break defaults and kind-specific shape checks. If you do not ' +
+              'also resubmit `html`, the stored wrapper may still carry the old pengui-{kind} class — ' +
+              'call `promote_section_root` after to resync.',
+          ),
+        break_hints: breakHintsSchema.describe(
+          'Per-section pagination overrides to MERGE (not replace) onto the section\'s current hints. ' +
+            'Pass null for a field to leave it unchanged.',
+        ),
+        metadata: partialMetadataSchema.describe(
+          'Partial metadata fields to update. Any field you pass overwrites the current value; omitted ' +
+            'fields are left unchanged. Re-embedding the @section-meta comment happens automatically.',
+        ),
       }),
     },
     async ({ deck_id, section_id, html, kind, break_hints, metadata }) => {
@@ -121,11 +154,24 @@ export function registerUpdateSectionTool(server: McpServer, container: ServiceC
           ...(mappedMetadata ? { metadata: mappedMetadata } : {}),
         });
 
+        const deck = await container.deckService.getDeckSummary(deck_id);
+        const validation = await container.validationService.validateSection(
+          { id: section.id, kind: section.kind, html: section.html },
+          soulId(deck.soulId as string),
+          deck.format,
+        );
+
         return textResponse({
           section_id: section.id,
           kind: section.kind,
           position: section.position,
           title: section.metadata.title,
+          validation: {
+            passed: validation.passed,
+            error_count: validation.errorCount,
+            warning_count: validation.warningCount,
+            issues: validation.issues,
+          },
         });
       } catch (error) {
         return handleToolError(error);

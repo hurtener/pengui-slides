@@ -83,6 +83,35 @@
     void loadSections();
     void loadChromeFromDeck();
     void loadSoul();
+
+    // Refresh the rail when the agent mutates sections via the MCP tools
+    // (add_section / update_section / promote_section_root / wrap_section_root /
+    // remove_section / reorder_sections). Without this the list is frozen
+    // at whatever it looked like on mount. Heuristic: every section-
+    // mutating tool returns `section_id` or `section_count` in its
+    // structuredContent.
+    const dispose = bridge.onToolResult((result) => {
+      const payload = result.structuredContent as
+        | { section_id?: unknown; section_count?: unknown }
+        | undefined;
+      if (!payload || typeof payload !== 'object') return;
+      const touchedSection = typeof payload.section_id === 'string';
+      const touchedCount = typeof payload.section_count === 'number';
+      if (!touchedSection && !touchedCount) return;
+
+      void loadSections();
+      // If the currently-selected section was mutated (or may have been),
+      // re-fetch its detail so the preview/inspector reflect the new
+      // stored HTML/kind/metadata.
+      if (touchedSection && selectedId && payload.section_id === selectedId) {
+        void selectSection(selectedId);
+      } else if (touchedCount && selectedId) {
+        // Remove/reorder: selected section may still exist but index-wise
+        // could have shifted. Re-fetch to stay in sync.
+        void selectSection(selectedId);
+      }
+    });
+    return dispose;
   });
 
   async function loadSoul(): Promise<void> {

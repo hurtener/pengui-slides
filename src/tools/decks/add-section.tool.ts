@@ -12,6 +12,7 @@ import type { ServiceContainer } from '../../container.js';
 import { textResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 import { ALL_SECTION_KINDS } from '../../types/section.js';
+import { soulId } from '../../types/common.js';
 
 const sourceSchema = z.object({
   url: z.string().optional().describe('Source URL.'),
@@ -53,16 +54,61 @@ export function registerAddSectionTool(server: McpServer, container: ServiceCont
     {
       title: 'Add Section',
       description:
-        'Add a section (content block) to a continuous-document print deck. Sections are HTML FRAGMENTS — no DOCTYPE, no <html>/<head>/<body>, no standalone <style> blocks, no :root custom properties, no fixed page-shaped dimensions. Root element MUST be `<section class="pengui-section pengui-{kind}">`. Wrap keep-together content in canonical classes (.pengui-figure, .pengui-chart, .pengui-diagram, .pengui-callout, .pengui-quote, .pengui-image) so universal break rules apply. See pengui://docs/document-mode for the authoring guide.',
+        'Append a section (content block) to a continuous-document print deck. ' +
+        'Only valid for decks with `authoring_model: "document"` — for slide decks, call `add_slide`; ' +
+        'a mismatch returns `WRONG_AUTHORING_MODEL` naming the right verb. ' +
+        '\n\n' +
+        'FRAGMENT CONTRACT — the HTML you pass must be a FRAGMENT, not a full document: ' +
+        'exactly one top-level `<section class="pengui-section pengui-{kind}">` root, no `<!DOCTYPE>`, ' +
+        'no `<html>`/`<head>`/`<body>`, no `<script>`, no standalone `<style>` blocks, no `:root { ... }` ' +
+        'custom-property declarations, no fixed page dimensions on the wrapper. ' +
+        'Use soul tokens (`var(--color-*)`, `var(--space-*)`, etc.) for styling. ' +
+        '\n\n' +
+        'AUTO-FIX BEHAVIOUR — the server always injects a canonical `<!-- @section-meta {...} -->` ' +
+        'comment above the wrapper from the metadata you provide, so you never emit that comment yourself. ' +
+        '\n\n' +
+        'VALIDATION — the response includes a `validation` block with `error_count`, `warning_count`, and ' +
+        '`issues[]`. Inspect it on every call. If a structural issue fires, prefer the surgical repair tools ' +
+        'over re-emitting the whole fragment: ' +
+        '`promote_section_root` for `section-structural-root-not-section` (single non-`<section>` root), ' +
+        '`wrap_section_root` for `section-structural-multiple-root-elements` (multiple top-level nodes). ' +
+        '\n\n' +
+        'See `pengui://docs/document-mode` for the full authoring guide and canonical class/break ' +
+        'conventions (e.g. `.pengui-figure`, `.pengui-callout`, `.pengui-quote` → break-inside: avoid).',
       inputSchema: z.object({
-        deck_id: z.string().describe('The document-mode deck to add the section to.'),
+        deck_id: z
+          .string()
+          .describe('UUID or slug of the document-mode deck to add the section to.'),
         kind: z
           .enum(ALL_SECTION_KINDS as [string, ...string[]])
-          .describe('Section kind (drives break defaults and structural validation).'),
-        html: z.string().describe('The section HTML fragment.'),
-        metadata: metadataSchema.describe('Section metadata.'),
-        break_hints: breakHintsSchema.describe('Per-section pagination overrides.'),
-        position: z.number().nullish().describe('Zero-based position to insert the section. Appends to end if omitted.'),
+          .describe(
+            'SectionKind. Drives default break behaviour and kind-specific structural checks. ' +
+              'Keep-together kinds (figure, chart, diagram, callout, quote, image) get break-inside: avoid. ' +
+              'Full-page kinds (cover, chapter_header) get min-height: 100vh + break-after: page by default.',
+          ),
+        html: z
+          .string()
+          .describe(
+            'Section HTML fragment. Exactly one top-level `<section class="pengui-section pengui-{kind}">` ' +
+              'root. No DOCTYPE, no document-level tags, no fixed page dimensions. ' +
+              'Do NOT emit `<!-- @section-meta -->` — the server injects it from `metadata`.',
+          ),
+        metadata: metadataSchema.describe(
+          'Section metadata. Drives the auto-injected @section-meta comment, exports, and the MCP App sidebar.',
+        ),
+        break_hints: breakHintsSchema.describe(
+          'Per-section pagination overrides. Useful when the default for `kind` is not what you want ' +
+            '(e.g. a figure you want to allow splitting across pages: `keep_together: false`).',
+        ),
+        position: z
+          .number()
+          .int()
+          .nonnegative()
+          .nullish()
+          .describe(
+            'Zero-based insertion position. Omit to append to the end. Existing sections at this ' +
+              'position and after are shifted down by one.',
+          ),
       }),
     },
     async ({ deck_id, kind, html, metadata, break_hints, position }) => {
@@ -116,11 +162,26 @@ export function registerAddSectionTool(server: McpServer, container: ServiceCont
 
         const deck = await container.deckService.getDeckSummary(deck_id);
 
+        // Fragment lints run inline so the agent learns structural
+        // violations on turn 1 instead of discovering them at export.
+        // Matches the add_slide contract.
+        const validation = await container.validationService.validateSection(
+          { id: section.id, kind: section.kind, html: section.html },
+          soulId(deck.soulId as string),
+          deck.format,
+        );
+
         return textResponse({
           section_id: section.id,
           position: section.position,
           kind: section.kind,
           section_count: deck.sectionCount,
+          validation: {
+            passed: validation.passed,
+            error_count: validation.errorCount,
+            warning_count: validation.warningCount,
+            issues: validation.issues,
+          },
         });
       } catch (error) {
         return handleToolError(error);

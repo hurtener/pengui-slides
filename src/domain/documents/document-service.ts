@@ -32,6 +32,13 @@ import {
 import type { Logger } from '../../infrastructure/index.js';
 import { DeckService } from '../decks/deck-service.js';
 import { RevisionTracker } from '../decks/revision-tracker.js';
+import { embedSectionMeta } from './section-meta-embedder.js';
+import {
+  promoteRootToSection,
+  summarizeTopLevelElements,
+  wrapRootsInSection,
+  type TopLevelElementSummary,
+} from './section-wrapper-ops.js';
 
 export class DocumentService {
   private readonly deckStore: IDeckStore;
@@ -135,11 +142,17 @@ export class DocumentService {
       revisionHash: sha256(input.html),
     };
 
+    // `metadata.revisionHash` hashes the author-supplied HTML, mirroring the
+    // slides side. The stored HTML additionally carries the embedded
+    // `@section-meta` comment so round-trip consumers (exports, MCP App
+    // previews) see valid provenance without the agent having to emit it.
+    const embeddedHtml = embedSectionMeta(input.html, metadata);
+
     const section: Section = {
       id: generateSectionId(),
       deckId: deck.id,
       position,
-      html: input.html,
+      html: embeddedHtml,
       kind: input.kind,
       breakHints: { ...(input.breakHints ?? {}) },
       metadata,
@@ -208,15 +221,19 @@ export class DocumentService {
     }
 
     const now = this.clock.now();
+    let htmlDirty = false;
+    let metaDirty = false;
 
     if (input.html !== undefined) {
       section.html = input.html;
       section.metadata.revisionHash = sha256(input.html);
+      htmlDirty = true;
     }
 
     if (input.kind !== undefined) {
       section.kind = input.kind;
       section.metadata.kind = input.kind;
+      metaDirty = true;
     }
 
     if (input.breakHints !== undefined) {
@@ -241,10 +258,18 @@ export class DocumentService {
       if (m.chromeOverrides !== undefined) {
         section.metadata.chromeOverrides = { ...m.chromeOverrides };
       }
+      metaDirty = true;
     }
 
     if (input.lastValidation !== undefined) {
       section.lastValidation = input.lastValidation;
+    }
+
+    // Refresh the embedded `@section-meta` comment whenever HTML or any
+    // metadata field changed. Also refresh when only metadata changed so
+    // the stored comment stays in sync with the struct.
+    if (htmlDirty || metaDirty) {
+      section.html = embedSectionMeta(section.html, section.metadata);
     }
 
     section.updatedAt = now;
@@ -268,6 +293,136 @@ export class DocumentService {
     await this.deckStore.addRevision(revision);
 
     this.logger.info('Section updated', {
+      deckId: deck.id,
+      sectionId: section.id,
+    });
+    return section;
+  }
+
+  // ── Surgical wrapper repair (promote / wrap) ────────────────────
+  //
+  // These exist so agents can fix the two most common structural errors
+  // (wrong root tag, multiple top-level elements) without re-emitting the
+  // whole fragment. They're surfaced as MCP tools `promote_section_root`
+  // and `wrap_section_root`; the structural validator's fix suggestions
+  // name them directly.
+
+  /**
+   * Describe the top-level elements of a section fragment. Used by
+   * `wrap_section_root` to echo back the structure so an agent can choose
+   * a child ordering.
+   */
+  async listSectionTopLevelElements(
+    deckRef: string,
+    sectionIdStr: string,
+  ): Promise<TopLevelElementSummary[]> {
+    const did = await this.resolveDeckRef(deckRef);
+    const sid = sectionId(sectionIdStr);
+    const section = await this.sectionStore.get(sid);
+    if (!section || (section.deckId as string) !== (did as string)) {
+      throw new SectionNotFoundError(sectionIdStr);
+    }
+    return summarizeTopLevelElements(section.html);
+  }
+
+  /**
+   * Promote a section's single root element into
+   * `<section class="pengui-section pengui-{kind}">`, preserving attrs and
+   * children. Throws if the fragment doesn't have exactly one top-level
+   * element — callers should use `wrapSectionRoot` in that case.
+   */
+  async promoteSectionRoot(
+    deckRef: string,
+    sectionIdStr: string,
+  ): Promise<Section> {
+    const did = await this.resolveDeckRef(deckRef);
+    const deck = await this.deckStore.get(did);
+    if (!deck) throw new DeckNotFoundError(deckRef);
+    this.assertDocumentModel(deck, 'update_slide');
+
+    const sid = sectionId(sectionIdStr);
+    const section = await this.sectionStore.get(sid);
+    if (!section || (section.deckId as string) !== (did as string)) {
+      throw new SectionNotFoundError(sectionIdStr);
+    }
+
+    const promoted = promoteRootToSection(section.html, section.kind);
+    if (!promoted.changed) return section;
+
+    section.html = embedSectionMeta(promoted.html, section.metadata);
+    section.metadata.revisionHash = sha256(promoted.html);
+    section.updatedAt = this.clock.now();
+
+    await this.sectionStore.save(section);
+    deck.updatedAt = section.updatedAt;
+    await this.deckStore.save(deck);
+
+    const sectionIds = deck.sectionIds ?? [];
+    const allHtmls = await this.collectSectionHtmls(deck.id, sectionIds);
+    const revision = this.revisionTracker.createRevision({
+      deckId: deck.id,
+      type: 'section_updated',
+      description: `Section "${section.metadata.title}" root promoted to <section>`,
+      slideIdsSnapshot: [],
+      slideHtmls: [],
+      sectionIdsSnapshot: sectionIds,
+      sectionHtmls: allHtmls,
+    });
+    await this.deckStore.addRevision(revision);
+
+    this.logger.info('Section root promoted', {
+      deckId: deck.id,
+      sectionId: section.id,
+    });
+    return section;
+  }
+
+  /**
+   * Wrap every top-level element in a section fragment in a new
+   * `<section class="pengui-section pengui-{kind}">`. Optional
+   * `childOrder` reorders top-level elements by their original indices.
+   */
+  async wrapSectionRoot(
+    deckRef: string,
+    sectionIdStr: string,
+    childOrder?: number[],
+  ): Promise<Section> {
+    const did = await this.resolveDeckRef(deckRef);
+    const deck = await this.deckStore.get(did);
+    if (!deck) throw new DeckNotFoundError(deckRef);
+    this.assertDocumentModel(deck, 'update_slide');
+
+    const sid = sectionId(sectionIdStr);
+    const section = await this.sectionStore.get(sid);
+    if (!section || (section.deckId as string) !== (did as string)) {
+      throw new SectionNotFoundError(sectionIdStr);
+    }
+
+    const wrapped = wrapRootsInSection(section.html, section.kind, childOrder);
+    if (!wrapped.changed) return section;
+
+    section.html = embedSectionMeta(wrapped.html, section.metadata);
+    section.metadata.revisionHash = sha256(wrapped.html);
+    section.updatedAt = this.clock.now();
+
+    await this.sectionStore.save(section);
+    deck.updatedAt = section.updatedAt;
+    await this.deckStore.save(deck);
+
+    const sectionIds = deck.sectionIds ?? [];
+    const allHtmls = await this.collectSectionHtmls(deck.id, sectionIds);
+    const revision = this.revisionTracker.createRevision({
+      deckId: deck.id,
+      type: 'section_updated',
+      description: `Section "${section.metadata.title}" top-level elements wrapped`,
+      slideIdsSnapshot: [],
+      slideHtmls: [],
+      sectionIdsSnapshot: sectionIds,
+      sectionHtmls: allHtmls,
+    });
+    await this.deckStore.addRevision(revision);
+
+    this.logger.info('Section roots wrapped', {
       deckId: deck.id,
       sectionId: section.id,
     });
@@ -485,8 +640,15 @@ export class DocumentService {
     for (let i = startIndex; i < sectionIds.length; i++) {
       const section = await this.sectionStore.get(sectionIds[i]);
       if (section) {
+        if (section.position === i && section.metadata.position === i) {
+          continue;
+        }
         section.position = i;
         section.metadata.position = i;
+        // Re-embed so the stored @section-meta comment stays in sync with
+        // the struct. Without this, the comment's "position" field drifts
+        // stale after every add/remove/reorder.
+        section.html = embedSectionMeta(section.html, section.metadata);
         await this.sectionStore.save(section);
       }
     }

@@ -504,4 +504,120 @@ describe('DocumentService', () => {
       ).rejects.toThrow(WrongAuthoringModelError);
     });
   });
+
+  describe('meta embedding + surgical wrapper repairs', () => {
+    it('auto-embeds @section-meta from stored metadata on addSection', async () => {
+      const section = await documentService.addSection({
+        deckId: documentDeckId,
+        kind: 'prose',
+        html: '<section class="pengui-section pengui-prose"><p>x</p></section>',
+        metadata: { title: 'Hello', narrative: 'N' },
+      });
+      expect(section.html).toMatch(/<!--\s*@section-meta/);
+      expect(section.html).toContain('"title": "Hello"');
+      // Meta sits above the section wrapper so the single-root-element check
+      // still sees exactly one element node.
+      const metaIdx = section.html.indexOf('@section-meta');
+      const sectionIdx = section.html.indexOf('<section');
+      expect(metaIdx).toBeLessThan(sectionIdx);
+    });
+
+    it('refreshes @section-meta when metadata changes via updateSection', async () => {
+      const created = await documentService.addSection({
+        deckId: documentDeckId,
+        kind: 'prose',
+        html: '<section class="pengui-section pengui-prose"><p>x</p></section>',
+        metadata: { title: 'First', narrative: 'N' },
+      });
+      const updated = await documentService.updateSection({
+        deckId: documentDeckId,
+        sectionId: created.id as string,
+        metadata: { title: 'Second' },
+      });
+      expect(updated.html.match(/@section-meta/g)?.length).toBe(1);
+      expect(updated.html).toContain('"title": "Second"');
+    });
+
+    it('promoteSectionRoot rewrites a <div> root into a conforming <section>', async () => {
+      const created = await documentService.addSection({
+        deckId: documentDeckId,
+        kind: 'cover',
+        html: '<div class="cover" style="background:red"><h1>Hi</h1></div>',
+        metadata: { title: 'Cover', narrative: 'N' },
+      });
+      const promoted = await documentService.promoteSectionRoot(
+        documentDeckId,
+        created.id as string,
+      );
+      expect(promoted.html).toMatch(/<section[^>]*class="pengui-section pengui-cover cover"/);
+      expect(promoted.html).toContain('style="background:red"');
+      expect(promoted.html).toContain('<h1>Hi</h1>');
+    });
+
+    it('wrapSectionRoot bundles multiple top-level elements into a single section', async () => {
+      const created = await documentService.addSection({
+        deckId: documentDeckId,
+        kind: 'cover',
+        html: '<div class="stripe"></div><div class="body">b</div><div class="foot">f</div>',
+        metadata: { title: 'Cover', narrative: 'N' },
+      });
+      const elements = await documentService.listSectionTopLevelElements(
+        documentDeckId,
+        created.id as string,
+      );
+      expect(elements).toHaveLength(3);
+
+      const wrapped = await documentService.wrapSectionRoot(
+        documentDeckId,
+        created.id as string,
+      );
+      const sectionMatches = wrapped.html.match(/<section/g) ?? [];
+      expect(sectionMatches).toHaveLength(1);
+      expect(wrapped.html).toContain('<div class="stripe">');
+      expect(wrapped.html).toContain('<div class="body">');
+      expect(wrapped.html).toContain('<div class="foot">');
+    });
+
+    it('re-embeds @section-meta when reindexPositions bumps the position (via insert at head)', async () => {
+      const first = await documentService.addSection({
+        deckId: documentDeckId,
+        kind: 'prose',
+        html: '<section class="pengui-section pengui-prose"><p>first</p></section>',
+        metadata: { title: 'First', narrative: 'N' },
+      });
+      // Inserting at position 0 shifts the first section to position 1.
+      // Its stored meta comment should reflect the new position, not the
+      // stale 0 it was written with.
+      await documentService.addSection({
+        deckId: documentDeckId,
+        kind: 'prose',
+        html: '<section class="pengui-section pengui-prose"><p>new</p></section>',
+        metadata: { title: 'Inserted', narrative: 'N' },
+        position: 0,
+      });
+      const shifted = await documentService.getSection(first.id as string);
+      expect(shifted.position).toBe(1);
+      expect(shifted.metadata.position).toBe(1);
+      expect(shifted.html).toContain('"position": 1');
+      expect(shifted.html).not.toContain('"position": 0');
+    });
+
+    it('wrapSectionRoot honors child_order', async () => {
+      const created = await documentService.addSection({
+        deckId: documentDeckId,
+        kind: 'prose',
+        html: '<div>A</div><div>B</div><div>C</div>',
+        metadata: { title: 'T', narrative: 'N' },
+      });
+      const wrapped = await documentService.wrapSectionRoot(
+        documentDeckId,
+        created.id as string,
+        [2, 0, 1],
+      );
+      const inner = wrapped.html
+        .replace(/^[\s\S]*?<section[^>]*>/, '')
+        .replace(/<\/section>[\s\S]*$/, '');
+      expect(inner).toBe('<div>C</div><div>A</div><div>B</div>');
+    });
+  });
 });

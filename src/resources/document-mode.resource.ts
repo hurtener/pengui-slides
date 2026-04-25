@@ -67,14 +67,15 @@ Continuous mode puts pagination back where it belongs: in the exporter's renderi
 A section's HTML is a FRAGMENT, not a full document. It **MUST**:
 
 1. Have a single root: \`<section class="pengui-section pengui-{kind}">…</section>\`.
-2. Be preceded by \`<!-- @section-meta {...} -->\` (mirror of \`@slide-meta\`).
-3. **NOT** contain \`<!DOCTYPE>\`, \`<html>\`, \`<head>\`, \`<body>\`, \`<script>\`, or \`<link>\`.
-4. **NOT** contain standalone \`<style>\` tags. Recipe CSS is registered once at compose time; use inline \`style="…"\` on elements only as a last resort.
-5. **NOT** declare \`:root { ... }\` custom properties. Soul tokens are injected once by the composer.
-6. **NOT** set page-shaped dimensions (\`width: 1240px\`, \`height: 1754px\`, \`overflow: hidden\`) on the root wrapper.
-7. Wrap keep-together content in canonical classes (\`pengui-figure\`, \`pengui-chart\`, etc.).
+2. **NOT** contain \`<!DOCTYPE>\`, \`<html>\`, \`<head>\`, \`<body>\`, \`<script>\`, or \`<link>\`.
+3. **NOT** contain standalone \`<style>\` tags. Recipe CSS is registered once at compose time; use inline \`style="…"\` on elements only as a last resort.
+4. **NOT** declare \`:root { ... }\` custom properties. Soul tokens are injected once by the composer.
+5. **NOT** set page-shaped dimensions (\`width: 1240px\`, \`height: 1754px\`, \`overflow: hidden\`) on the root wrapper.
+6. Wrap keep-together content in canonical classes (\`pengui-figure\`, \`pengui-chart\`, etc.).
 
-Everything is enforced by Section Stage 1 lints — errors surface in one turn.
+**Do NOT emit a \`<!-- @section-meta -->\` comment yourself.** The server always injects it from the metadata struct when persisting — on add, update, promote, wrap, and reorder. Hand-written comments are stripped and replaced.
+
+Everything is enforced by Section Stage 1 lints — errors surface in one turn. Violations of rules 1 with a single wrong root element can be fixed with \`promote_section_root\` without rewriting the fragment; violations with multiple top-level elements can be fixed with \`wrap_section_root\`.
 
 ---
 
@@ -152,10 +153,21 @@ Add a section with \`kind: "toc"\` and an **empty fragment body** (just the wrap
 
 ## Validation
 
-- **Section Stage 1** runs on every \`add_section\` / \`update_section\`. Fragment contract, wrapper-class presence, figure/table shape, token/font compliance, network isolation. Fast (<100ms). Callable standalone via \`validate_section\` — pass \`html\`, \`kind\`, \`soul_id\`, and optionally \`deck_id\` (so the checks use the deck's format geometry).
+- **Section Stage 1** runs on every \`add_section\` / \`update_section\`. Fragment contract, wrapper-class presence, figure/table shape, token/font compliance, network isolation. Fast (<100ms). Response includes a \`validation\` block with \`passed\`, \`error_count\`, \`warning_count\`, and \`issues[]\` — **always inspect it before moving to the next section**. Callable standalone via \`validate_section\`.
 - **Document Stage 2** runs at export. Composes the full document, renders in Playwright, measures each keep-together block against page boundaries, flags splits. Reports page count. Not callable directly — it always runs as part of \`export_pdf\`.
 
 Disabled for document mode: \`safe-area-check\`, \`overflow-detector\`, slide-shaped \`structural-check\` — they assume a fixed-size \`.slide\` container.
+
+---
+
+## Surgical structural repair tools
+
+When a structural lint fires, prefer these over re-emitting the whole fragment. Both are targeted and preserve content verbatim.
+
+- **\`promote_section_root\`** — rewrites a single non-\`<section>\` root into \`<section class="pengui-section pengui-{kind}">\`, preserving style/id/data-* and merging classes. Trigger: \`validation.issues[]\` contains id ending in \`-root-not-section\` and the fragment has exactly one top-level element. Fails with \`SECTION_INVALID_FRAGMENT\` on multi-root fragments (use \`wrap_section_root\` instead).
+- **\`wrap_section_root\`** — wraps every top-level element into a single \`<section class="pengui-section pengui-{kind}">\`. Trigger: \`validation.issues[]\` contains id ending in \`-multiple-root-elements\`. The issue's \`actual\` field enumerates the top-level nodes as \`[i] <tag#id.class>\` so you can decide whether to pass an explicit \`child_order\` (a permutation of \`[0..n-1]\`) or rely on source order.
+
+The \`@section-meta\` comment is **always** injected by the server from the stored metadata struct — never emit it in your fragment HTML and never edit it by hand. It re-embeds automatically on add/update/promote/wrap/reorder.
 
 ---
 
@@ -165,7 +177,7 @@ Disabled for document mode: \`safe-area-check\`, \`overflow-detector\`, slide-sh
 {
   "deck_id": "deck_abc",
   "kind": "figure",
-  "html": "<!-- @section-meta {\\"title\\":\\"Fig 3.1\\",\\"kind\\":\\"figure\\",\\"narrative\\":\\"Orbital resonance\\"} -->\\n<section class=\\"pengui-section pengui-figure\\"><figure class=\\"pengui-figure\\"><svg viewBox=\\"0 0 600 400\\" role=\\"img\\">...</svg><figcaption><span class=\\"pengui-figure-number\\">Figure 3.1</span> Orbital resonance in the Jovian system.</figcaption></figure></section>",
+  "html": "<section class=\\"pengui-section pengui-figure\\"><figure class=\\"pengui-figure\\"><svg viewBox=\\"0 0 600 400\\" role=\\"img\\">...</svg><figcaption><span class=\\"pengui-figure-number\\">Figure 3.1</span> Orbital resonance in the Jovian system.</figcaption></figure></section>",
   "metadata": {
     "title": "Fig 3.1",
     "narrative": "Illustrates the 1:2:4 resonance between Io, Europa, and Ganymede.",

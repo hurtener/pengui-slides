@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run build && vitest run",
     "test:watch": "vitest",
+    "test:e2e": "node scripts/e2e-section-flow.mjs",
     "lint": "eslint src/"
   },
   "keywords": [
