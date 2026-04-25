@@ -16,8 +16,8 @@ import {
   buildValidationPresentation,
 } from '../../domain/validation/validation-presentation.js';
 import {
-  buildColorTokenLookup,
-  substituteColorLiterals,
+  buildSoulTokenLookups,
+  substituteSoulTokens,
 } from '../../domain/souls/index.js';
 
 const dataPointSchema = z.object({
@@ -55,7 +55,7 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
     {
       title: 'Add Slide',
       description:
-        'Add a new slide to a slide-model deck. ONLY applies to decks with authoringModel="slides" (slides_16_9, plus legacy print decks created with authoringModel="slides"). For document-model print decks (v3 default), use add_section instead — the tool returns a WRONG_AUTHORING_MODEL error naming add_section. The slide HTML must declare .slide dimensions that match the DECK FORMAT: 1920×1080 for slides_16_9, 1240×1754 for print_a4_portrait (legacy), 1275×1650 for print_letter_portrait (legacy). .slide MUST carry "position: relative" and "padding: var(--space-safe-area)"; declare "html, body { margin: 0 }" explicitly. The server auto-injects @slide-meta from `metadata` and auto-substitutes hex color literals (e.g. `#228be6`) for the matching soul-declared `var(--color-*)` before storage; the change set is returned in `auto_substitutions` so you can emit var() form directly on the next turn. See pengui://docs/slide-format for the canonical template. See pengui://docs/document-mode for the v3 continuous-document flow. Returns the slide ID, position, slide count, auto-substitutions, and validation results.',
+        'Add a new slide to a slide-model deck. ONLY applies to decks with authoringModel="slides" (slides_16_9, plus legacy print decks created with authoringModel="slides"). For document-model print decks (v3 default), use add_section instead — the tool returns a WRONG_AUTHORING_MODEL error naming add_section. The slide HTML must declare .slide dimensions that match the DECK FORMAT: 1920×1080 for slides_16_9, 1240×1754 for print_a4_portrait (legacy), 1275×1650 for print_letter_portrait (legacy). .slide MUST carry "position: relative" and "padding: var(--space-safe-area)"; declare "html, body { margin: 0 }" explicitly. The server auto-injects @slide-meta from `metadata` and auto-substitutes literal CSS values for the matching soul-declared `var(--*)` before storage. Three categories are substituted: color hex literals (e.g. `#228be6` → `var(--color-accent-primary)`), spacing px literals on margin/padding/gap/inset/top/right/bottom/left (e.g. `padding: 16px` → `var(--space-md)`), and radius dimensions on border-radius (e.g. `border-radius: 8px` → `var(--radius-md)`). The change set is returned in `auto_substitutions` (each entry tagged with `category: "color" | "spacing" | "radius"`) so you can emit var() form directly on the next turn. Values inside calc()/var()/min()/max() are left alone. See pengui://docs/slide-format for the canonical template. See pengui://docs/document-mode for the v3 continuous-document flow. Returns the slide ID, position, slide count, auto-substitutions, and validation results.',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to add the slide to.'),
         html: z.string().describe('The slide HTML content.'),
@@ -65,17 +65,17 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
     },
     async ({ deck_id, html, metadata, position }) => {
       try {
-        // Load the deck's soul up-front so we can run color-literal
-        // substitution before storage. Any soul-known hex literal in the
-        // slide HTML is rewritten to var(--token); the change set is
-        // returned in the response so the agent learns and emits the
-        // var() form on the next turn.
+        // Load the deck's soul up-front so we can run token-literal
+        // substitution before storage. Any soul-known color hex, spacing
+        // px, or radius dimension in the slide HTML is rewritten to
+        // var(--token); the change set is returned in the response so the
+        // agent learns and emits the var() form on the next turn.
         const deckPre = await container.deckService.getDeckSummary(deck_id);
         const soulPre = await container.soulStore.get(deckPre.soulId);
-        const colorLookup = soulPre
-          ? buildColorTokenLookup(soulPre.layers)
-          : new Map<string, string>();
-        const sub = substituteColorLiterals(html, colorLookup);
+        const lookups = soulPre
+          ? buildSoulTokenLookups(soulPre.layers)
+          : { color: new Map(), spacing: new Map(), radius: new Map() };
+        const sub = substituteSoulTokens(html, lookups);
         const sourceHtml = sub.html;
 
         // 1. Add slide (stores with substituted HTML)

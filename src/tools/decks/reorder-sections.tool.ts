@@ -7,7 +7,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServiceContainer } from '../../container.js';
-import { textResponse } from '../_shared/responses.js';
+import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 
 export function registerReorderSectionsTool(
@@ -31,9 +31,9 @@ export function registerReorderSectionsTool(
       try {
         const deck = await container.documentService.reorderSections(deck_id, new_order);
 
-        return textResponse({
+        return structuredResponse({
           section_count: deck.sectionIds.length,
-          order: deck.sectionIds,
+          order: deck.sectionIds as unknown as string[],
         });
       } catch (error) {
         return handleToolError(error);

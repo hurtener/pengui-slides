@@ -13,6 +13,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServiceContainer } from '../../container.js';
+import { BUILD_INFO } from '../../build-info.js';
 import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 
@@ -27,7 +28,11 @@ export function registerGetSessionTool(server: McpServer, container: ServiceCont
         'slug + name + status), active_workflow, and open_panels. All fields are OPTIONAL ' +
         '— missing means "the app hasn\'t declared one." Use this to avoid re-asking the ' +
         'user which deck/soul to work with; fall back to list_decks / list_design_souls ' +
-        'when a slot is empty.',
+        'when a slot is empty. Also returns build_info {server_version, build_sha, ' +
+        'build_time, git_dirty} for the running process. Use build_time to detect a ' +
+        'stale-build session: if the user just ran `npm run build:server` but build_time ' +
+        'pre-dates that, Claude Desktop is still serving the old process and must be ' +
+        'restarted before new code takes effect.',
       inputSchema: z.object({}),
     },
     async () => {
@@ -60,6 +65,7 @@ export function registerGetSessionTool(server: McpServer, container: ServiceCont
           ...(session.activeWorkflow ? { active_workflow: session.activeWorkflow } : {}),
           open_panels: session.openPanels,
           ...(session.updatedAt ? { updated_at: session.updatedAt } : {}),
+          build_info: BUILD_INFO,
         });
       } catch (error) {
         return handleToolError(error);

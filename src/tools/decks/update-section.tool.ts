@@ -7,7 +7,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServiceContainer } from '../../container.js';
-import { textResponse } from '../_shared/responses.js';
+import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 import { ALL_SECTION_KINDS } from '../../types/section.js';
 import { soulId } from '../../types/common.js';
@@ -61,8 +61,11 @@ export function registerUpdateSectionTool(server: McpServer, container: ServiceC
         '`<section class="pengui-section pengui-{kind}">` root, no DOCTYPE/html/head/body/script/style, ' +
         'no `:root { }`, no fixed page dimensions. Do NOT emit `<!-- @section-meta -->` — the server ' +
         'always re-injects it from the current metadata struct, including when you change `metadata` ' +
-        'without touching `html`. Soul-known hex literals are auto-substituted for the matching ' +
-        '`var(--token)`; the change set is returned in `auto_substitutions`. ' +
+        'without touching `html`. Soul-known literals are auto-substituted for the matching ' +
+        '`var(--token)` across three categories: color hex (`#228be6` → `var(--color-accent-primary)`), ' +
+        'spacing px on margin/padding/gap/inset (`16px` → `var(--space-md)`), and radius dimensions ' +
+        'on border-radius (`8px` → `var(--radius-md)`). Each `auto_substitutions[]` entry carries a ' +
+        '`category` field. Values inside calc()/var()/min()/max() are left alone. ' +
         '\n\n' +
         'KIND CHANGES — if you only pass `kind` (without `html`), the stored HTML keeps its old ' +
         '`pengui-{old-kind}` class. Call `promote_section_root` afterwards to normalize the class ' +
@@ -162,8 +165,8 @@ export function registerUpdateSectionTool(server: McpServer, container: ServiceC
           deck.format,
         );
 
-        return textResponse({
-          section_id: section.id,
+        return structuredResponse({
+          section_id: section.id as string,
           kind: section.kind,
           position: section.position,
           title: section.metadata.title,

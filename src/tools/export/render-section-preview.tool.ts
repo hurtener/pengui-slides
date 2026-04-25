@@ -28,6 +28,7 @@ import {
 } from '../../types/errors.js';
 import { DocumentComposer } from '../../domain/rendering/document-composer.js';
 import type { DocumentMeta } from '../../types/deck.js';
+import { soulId as toSoulId } from '../../types/common.js';
 
 const DEFAULT_SCALE = 1;
 
@@ -52,8 +53,14 @@ export function registerRenderSectionPreviewTool(
         'image size for clarity. The screenshot uses fullPage capture so tall sections (long bibliographies, ' +
         'extended prose) are not clipped at the page boundary. ' +
         '\n\n' +
-        'OUTPUT — `{ section_id, kind, image_base64, format: "png", width, height, render_time_ms, warnings[] }`. ' +
-        '`warnings` carries any composer-level issues (recipe missing, asset unresolvable). ' +
+        'OUTPUT — `{ section_id, kind, image_base64, format: "png", width, height, render_time_ms, ' +
+        'warnings[], validation: { passed, error_count, warning_count, issues[] } }`. ' +
+        '`warnings` carries composer-level issues (recipe missing, asset unresolvable). `validation` ' +
+        'carries the section\'s Stage 1 lint result (v4.3): the same shape as add_section / update_section ' +
+        'so you do not need a separate validate_section round-trip. The screenshot is ALWAYS produced even ' +
+        'when validation has errors — the composer defensively normalizes broken roots so you can see what ' +
+        'the agent\'s HTML actually rendered as. If `validation.passed` is false, prefer the surgical ' +
+        'repair tools (`promote_section_root`, `wrap_section_root`) over re-emitting the fragment. ' +
         '\n\n' +
         'FAILURE MODES — `WRONG_AUTHORING_MODEL` if the deck is slides-mode (use `render_preview` there); ' +
         '`DECK_NOT_FOUND` if the deck is missing; `SECTION_NOT_FOUND` if the section doesn\'t belong to the ' +
@@ -137,6 +144,18 @@ export function registerRenderSectionPreviewTool(
           },
         );
 
+        // Inline Stage 1 validation (v4.3): closes the
+        // composer-defensive-normalization vs. validator-strict-rejection
+        // gap. Previously the preview path skipped validation entirely, so
+        // the composer's normalization branches could mask broken HTML
+        // until the agent tried to export. Now the agent sees both the
+        // rendered preview AND the validation result on the same turn.
+        const validation = await container.validationService.validateSection(
+          { id: section.id, kind: section.kind, html: section.html },
+          toSoulId(summary.soulId as string),
+          summary.format,
+        );
+
         return textResponse({
           section_id: section.id,
           kind: section.kind,
@@ -146,6 +165,12 @@ export function registerRenderSectionPreviewTool(
           height: result.height,
           render_time_ms: result.renderTimeMs,
           warnings: composed.warnings,
+          validation: {
+            passed: validation.passed,
+            error_count: validation.errorCount,
+            warning_count: validation.warningCount,
+            issues: validation.issues,
+          },
         });
       } catch (error) {
         return handleToolError(error);

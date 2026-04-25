@@ -14,7 +14,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServiceContainer } from '../../container.js';
-import { textResponse } from '../_shared/responses.js';
+import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 import { soulId } from '../../types/common.js';
 
@@ -63,8 +63,8 @@ export function registerPromoteSectionRootTool(
           deck.format,
         );
 
-        return textResponse({
-          section_id: section.id,
+        return structuredResponse({
+          section_id: section.id as string,
           kind: section.kind,
           position: section.position,
           validation: {

@@ -40,9 +40,10 @@ import {
   type TopLevelElementSummary,
 } from './section-wrapper-ops.js';
 import {
-  buildColorTokenLookup,
-  substituteColorLiterals,
-  type ColorSubstitution,
+  buildSoulTokenLookups,
+  substituteSoulTokens,
+  type SoulTokenLookups,
+  type TokenSubstitution,
 } from '../souls/index.js';
 
 export class DocumentService {
@@ -73,15 +74,15 @@ export class DocumentService {
   }
 
   /**
-   * Build the soul's hex→token lookup for auto-substitution. Returns an
-   * empty map (which makes substituteColorLiterals a no-op) when the soul
-   * is missing — defensive, since add/update would have failed earlier in
-   * normal flow if the soul were genuinely gone.
+   * Build the soul's reverse lookups (color + spacing + radius) for
+   * auto-substitution. Returns empty maps (which makes substituteSoulTokens
+   * a no-op) when the soul is missing — defensive, since add/update would
+   * have failed earlier in normal flow if the soul were genuinely gone.
    */
-  private async colorLookupForDeck(deck: Deck): Promise<ReadonlyMap<string, string>> {
+  private async tokenLookupsForDeck(deck: Deck): Promise<SoulTokenLookups> {
     const soul = await this.soulStore.get(deck.soulId);
-    if (!soul) return new Map();
-    return buildColorTokenLookup(soul.layers);
+    if (!soul) return { color: new Map(), spacing: new Map(), radius: new Map() };
+    return buildSoulTokenLookups(soul.layers);
   }
 
   /** Resolve a UUID or slug to a DeckId. Delegates to DeckService. */
@@ -117,18 +118,19 @@ export class DocumentService {
    * Auto-fills provenance metadata (generatedAt, soulId, deckId, position,
    * metaVersion='3.0', revisionHash) mirroring DeckService.addSlide.
    *
-   * Also runs `substituteColorLiterals` against the active soul's color
-   * tokens before persisting: any literal hex that exactly matches a soul
-   * token is rewritten to `var(--token)`, and the change set is returned
-   * so callers can echo it to the agent. The agent learns the substitution
-   * from the response and emits the var() form on the next turn.
+   * Also runs `substituteSoulTokens` against the active soul's token
+   * lookups (color + spacing + radius) before persisting: any literal that
+   * exactly matches a soul token is rewritten to `var(--token)`, and the
+   * change set is returned so callers can echo it to the agent. The agent
+   * learns the substitution from the response and emits the var() form on
+   * the next turn.
    *
    * @throws DeckNotFoundError if the deck does not exist.
    * @throws WrongAuthoringModelError if the deck is slides-mode.
    */
   async addSection(
     input: AddSectionInput,
-  ): Promise<{ section: Section; substitutions: ColorSubstitution[] }> {
+  ): Promise<{ section: Section; substitutions: TokenSubstitution[] }> {
     const did = await this.resolveDeckRef(input.deckId);
     const deck = await this.deckStore.get(did);
     if (!deck) {
@@ -140,12 +142,13 @@ export class DocumentService {
     const currentSectionIds = deck.sectionIds ?? [];
     const position = input.position ?? currentSectionIds.length;
 
-    // Auto-substitute soul-known color literals BEFORE building the meta
-    // hash, so the hash reflects what is actually stored. Any literal the
-    // soul does not declare passes through untouched and falls to the
-    // token-compliance check at validation time.
-    const colorLookup = await this.colorLookupForDeck(deck);
-    const sub = substituteColorLiterals(input.html, colorLookup);
+    // Auto-substitute soul-known token literals (color, spacing, radius)
+    // BEFORE building the meta hash, so the hash reflects what is actually
+    // stored. Any literal the soul does not declare passes through
+    // untouched and falls to the relevant compliance check at validation
+    // time.
+    const lookups = await this.tokenLookupsForDeck(deck);
+    const sub = substituteSoulTokens(input.html, lookups);
     const sourceHtml = sub.html;
 
     const metadata: SectionMetadata = {
@@ -239,9 +242,10 @@ export class DocumentService {
   /**
    * Update a section's HTML / kind / break hints / metadata.
    *
-   * When `input.html` is supplied, soul-known color literals are
-   * auto-substituted before persisting (same logic as `addSection`).
-   * The substitution log is returned alongside the updated section.
+   * When `input.html` is supplied, soul-known token literals (color,
+   * spacing, radius) are auto-substituted before persisting (same logic as
+   * `addSection`). The substitution log is returned alongside the updated
+   * section.
    *
    * @throws DeckNotFoundError if the deck does not exist.
    * @throws SectionNotFoundError if the section does not exist.
@@ -249,7 +253,7 @@ export class DocumentService {
    */
   async updateSection(
     input: UpdateSectionInput,
-  ): Promise<{ section: Section; substitutions: ColorSubstitution[] }> {
+  ): Promise<{ section: Section; substitutions: TokenSubstitution[] }> {
     const did = await this.resolveDeckRef(input.deckId);
     const sid = sectionId(input.sectionId);
 
@@ -267,11 +271,11 @@ export class DocumentService {
     const now = this.clock.now();
     let htmlDirty = false;
     let metaDirty = false;
-    let substitutions: ColorSubstitution[] = [];
+    let substitutions: TokenSubstitution[] = [];
 
     if (input.html !== undefined) {
-      const colorLookup = await this.colorLookupForDeck(deck);
-      const sub = substituteColorLiterals(input.html, colorLookup);
+      const lookups = await this.tokenLookupsForDeck(deck);
+      const sub = substituteSoulTokens(input.html, lookups);
       substitutions = sub.substitutions;
       section.html = sub.html;
       section.metadata.revisionHash = sha256(sub.html);

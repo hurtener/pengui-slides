@@ -359,6 +359,61 @@ async function main() {
     `head=${tokenHtml.slice(0, 200)}…`,
   );
 
+  // 12a. v4.3: spacing + radius literals that match soul tokens are
+  //      auto-substituted alongside colors. Each substitution carries
+  //      `category: "color" | "spacing" | "radius"` so the agent can group.
+  const dimsLiteral = await client.callTool({
+    name: 'add_section',
+    arguments: {
+      deck_id: deckId,
+      kind: 'prose',
+      html:
+        '<section class="pengui-section pengui-prose" ' +
+        'style="padding: 16px 24px; border-radius: 8px; background: #228be6">' +
+        '<p>x</p></section>',
+      metadata: { title: 'DimsLiteral', narrative: 'spacing + radius substitution' },
+    },
+  });
+  const dimsP = payload(dimsLiteral);
+  const dimsSid = dimsP?.section_id;
+  const dimsSubs = dimsP?.auto_substitutions ?? [];
+  const dimsByCategory = dimsSubs.reduce((acc, s) => {
+    acc[s.category] = (acc[s.category] ?? 0) + 1;
+    return acc;
+  }, {});
+  check(
+    'add_section auto_substitutes spacing px (16px → --space-md, 24px → --space-lg)',
+    dimsSubs.some((s) => s.category === 'spacing' && s.literal === '16px' && s.token === '--space-md') &&
+      dimsSubs.some((s) => s.category === 'spacing' && s.literal === '24px' && s.token === '--space-lg'),
+    `spacing entries: ${JSON.stringify(dimsSubs.filter((s) => s.category === 'spacing'))}`,
+  );
+  check(
+    'add_section auto_substitutes radius px (8px → --radius-md)',
+    dimsSubs.some((s) => s.category === 'radius' && s.literal === '8px' && s.token === '--radius-md'),
+    `radius entries: ${JSON.stringify(dimsSubs.filter((s) => s.category === 'radius'))}`,
+  );
+  check(
+    'auto_substitutions tags every entry with a category field',
+    dimsSubs.length > 0 && dimsSubs.every((s) => ['color', 'spacing', 'radius'].includes(s.category)),
+    `categories: ${JSON.stringify(dimsByCategory)}`,
+  );
+  // Storage check: stored HTML uses var() forms not literals.
+  const dimsStored = await client.callTool({
+    name: 'get_section',
+    arguments: { section_id: dimsSid },
+  });
+  const dimsHtml = payload(dimsStored)?.section?.html ?? '';
+  check(
+    'stored HTML uses var(--space-md) / var(--space-lg) / var(--radius-md), not the literals',
+    dimsHtml.includes('var(--space-md)') &&
+      dimsHtml.includes('var(--space-lg)') &&
+      dimsHtml.includes('var(--radius-md)') &&
+      !dimsHtml.includes('16px') &&
+      !dimsHtml.includes('24px') &&
+      !dimsHtml.includes('8px'),
+    `head=${dimsHtml.slice(0, 240)}…`,
+  );
+
   // 12b. A literal that the soul does NOT declare passes through untouched
   //      and the validator still emits the helpful fallback fix-suggestion.
   const unknownHex = await client.callTool({
@@ -467,6 +522,18 @@ async function main() {
       && previewP.width > 0 && previewP.height > 0,
     `${previewP?.width}x${previewP?.height}`,
   );
+  // v4.3: render_section_preview now also returns Stage 1 validation
+  // alongside the screenshot so the agent doesn't need a separate
+  // validate_section round-trip.
+  check(
+    'render_section_preview returns a validation block (v4.3)',
+    typeof previewP?.validation === 'object' &&
+      typeof previewP.validation.passed === 'boolean' &&
+      typeof previewP.validation.error_count === 'number' &&
+      typeof previewP.validation.warning_count === 'number' &&
+      Array.isArray(previewP.validation.issues),
+    `passed=${previewP?.validation?.passed} errors=${previewP?.validation?.error_count} warnings=${previewP?.validation?.warning_count}`,
+  );
   check(
     'render_section_preview rejects on slides decks (FormatNotExportableError)',
     await (async () => {
@@ -477,6 +544,46 @@ async function main() {
       return wrong.isError && payload(wrong)?.code === 'FORMAT_NOT_EXPORTABLE';
     })(),
   );
+
+  // v4.3 follow-on: when a section has a known structural defect, the
+  // preview must STILL render (defensive composer) AND surface the
+  // validation issues. Build a deliberately-broken section by mutating an
+  // existing one to remove its <section> wrapper, then ensure preview
+  // returns a screenshot AND a validation.passed=false block.
+  // We use update_section here directly with malformed HTML.
+  const brokenUpdate = await client.callTool({
+    name: 'update_section',
+    arguments: {
+      deck_id: deckId,
+      section_id: singleSid,
+      html: '<div class="pengui-section pengui-prose"><p>no section root</p></div>',
+    },
+  });
+  // update_section may itself report validation errors — that's fine; the
+  // payload still stores the broken HTML. Then preview should show it and
+  // flag the validation.
+  if (!brokenUpdate.isError) {
+    const previewBroken = await client.callTool({
+      name: 'render_section_preview',
+      arguments: { deck_id: deckId, section_id: singleSid, scale: 0.5 },
+    });
+    const previewBP = payload(previewBroken);
+    check(
+      'render_section_preview still produces a screenshot for a broken section (defensive composer)',
+      typeof previewBP?.image_base64 === 'string' && previewBP.image_base64.length > 1000,
+      `bytes=${previewBP?.image_base64?.length ?? 0}`,
+    );
+    check(
+      'render_section_preview validation.passed=false when section root is malformed',
+      previewBP?.validation?.passed === false && previewBP.validation.error_count > 0,
+      `passed=${previewBP?.validation?.passed} errors=${previewBP?.validation?.error_count}`,
+    );
+    // Restore the section to a valid state so subsequent checks aren't skewed.
+    await client.callTool({
+      name: 'promote_section_root',
+      arguments: { deck_id: deckId, section_id: singleSid },
+    });
+  }
 
   // 16. Tool descriptions surface enough context for an agent without repo access
   const tools = await client.listTools();
@@ -510,6 +617,122 @@ async function main() {
     'render_section_preview description names trigger conditions (after add/update/promote/wrap)',
     previewTool?.description?.includes('add_section') &&
       previewTool?.description?.includes('promote_section_root'),
+  );
+
+  // v4.3: every section-mutating tool MUST populate structuredContent
+  // with `section_id` (string) or `section_count` (number). The bridge
+  // heuristic in app/src/routes/DocumentEditor.svelte (onToolResult) keys
+  // off these fields to know when to reload the section rail; tools that
+  // omit them silently break live refresh in the MCP App.
+  const SECTION_MUTATING_TOOL_NAMES = [
+    'add_section',
+    'update_section',
+    'remove_section',
+    'reorder_sections',
+    'promote_section_root',
+    'wrap_section_root',
+  ];
+  function satisfiesSectionMutationContract(structuredContent) {
+    if (!structuredContent || typeof structuredContent !== 'object') return false;
+    const sid = structuredContent.section_id;
+    const sc = structuredContent.section_count;
+    return (typeof sid === 'string' && sid.length > 0) || (typeof sc === 'number' && sc >= 0);
+  }
+  // Spin up a small throwaway deck so we can exercise every tool back-to-back.
+  const contractDeck = await client.callTool({
+    name: 'create_deck',
+    arguments: { soul_id: soulId, format: 'print_a4_portrait', title: 'Contract' },
+  });
+  const contractDeckId = payload(contractDeck)?.deck_id;
+  const baseSection = {
+    deck_id: contractDeckId,
+    kind: 'prose',
+    html: '<section class="pengui-section pengui-prose"><p>x</p></section>',
+    metadata: { title: 'A', narrative: 'a' },
+  };
+  const baseSection2 = {
+    deck_id: contractDeckId,
+    kind: 'prose',
+    html: '<section class="pengui-section pengui-prose"><p>y</p></section>',
+    metadata: { title: 'B', narrative: 'b' },
+  };
+  const tracked = {};
+  tracked.add_section = await client.callTool({ name: 'add_section', arguments: baseSection });
+  const sec1Id = tracked.add_section.structuredContent?.section_id;
+  await client.callTool({ name: 'add_section', arguments: baseSection2 });
+
+  tracked.update_section = await client.callTool({
+    name: 'update_section',
+    arguments: { deck_id: contractDeckId, section_id: sec1Id, html: '<section class="pengui-section pengui-prose"><p>x2</p></section>' },
+  });
+  // Make a section that needs surgical repair, then call promote/wrap.
+  const promoCand = await client.callTool({
+    name: 'add_section',
+    arguments: {
+      deck_id: contractDeckId,
+      kind: 'prose',
+      html: '<div class="some-wrap"><p>needs promote</p></div>',
+      metadata: { title: 'Promote', narrative: 'needs root promotion' },
+    },
+  });
+  const promoSid = promoCand.structuredContent?.section_id;
+  tracked.promote_section_root = await client.callTool({
+    name: 'promote_section_root',
+    arguments: { deck_id: contractDeckId, section_id: promoSid },
+  });
+  const wrapCand = await client.callTool({
+    name: 'add_section',
+    arguments: {
+      deck_id: contractDeckId,
+      kind: 'cover',
+      html: '<div>top1</div><div>top2</div>',
+      metadata: { title: 'Wrap', narrative: 'multi-root needs wrap' },
+    },
+  });
+  const wrapSid = wrapCand.structuredContent?.section_id;
+  tracked.wrap_section_root = await client.callTool({
+    name: 'wrap_section_root',
+    arguments: { deck_id: contractDeckId, section_id: wrapSid },
+  });
+  // reorder, then remove.
+  const contractList = await client.callTool({ name: 'list_sections', arguments: { deck_id: contractDeckId } });
+  const orderIds = (payload(contractList)?.sections ?? []).map((s) => s.id).reverse();
+  tracked.reorder_sections = await client.callTool({
+    name: 'reorder_sections',
+    arguments: { deck_id: contractDeckId, new_order: orderIds },
+  });
+  tracked.remove_section = await client.callTool({
+    name: 'remove_section',
+    arguments: { deck_id: contractDeckId, section_id: sec1Id },
+  });
+
+  for (const name of SECTION_MUTATING_TOOL_NAMES) {
+    const r = tracked[name];
+    const ok = !r?.isError && satisfiesSectionMutationContract(r?.structuredContent);
+    check(
+      `${name} populates structuredContent with section_id or section_count (v4.3 contract)`,
+      ok,
+      `structuredContent keys=${r?.structuredContent ? Object.keys(r.structuredContent).join(',') : 'undefined'}`,
+    );
+  }
+
+  // 16. get_session returns build_info so the agent can detect a stale-build
+  // session (Claude Desktop holding an old process after npm run build:server).
+  const sessionRes = await client.callTool({ name: 'get_session', arguments: {} });
+  const sessionBody = payload(sessionRes);
+  const buildInfo = sessionBody?.build_info;
+  check(
+    'get_session returns build_info with the four contracted fields',
+    !!buildInfo &&
+      typeof buildInfo.server_version === 'string' &&
+      typeof buildInfo.build_sha === 'string' &&
+      typeof buildInfo.build_time === 'string' &&
+      typeof buildInfo.git_dirty === 'boolean',
+    buildInfo ? `${buildInfo.build_sha} @ ${buildInfo.build_time}` : 'missing',
+  );
+  check(
+    'get_session build_info.build_time is a valid ISO date',
+    !!buildInfo && !Number.isNaN(Date.parse(buildInfo.build_time)),
   );
 
   await client.close();

@@ -9,7 +9,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServiceContainer } from '../../container.js';
-import { textResponse } from '../_shared/responses.js';
+import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 import { ALL_SECTION_KINDS } from '../../types/section.js';
 import { soulId } from '../../types/common.js';
@@ -66,10 +66,14 @@ export function registerAddSectionTool(server: McpServer, container: ServiceCont
         '\n\n' +
         'AUTO-FIX BEHAVIOUR — the server always injects a canonical `<!-- @section-meta {...} -->` ' +
         'comment above the wrapper from the metadata you provide, so you never emit that comment yourself. ' +
-        'It also auto-substitutes hex literals (e.g. `background: #228be6`) for the matching ' +
-        'soul-declared CSS custom property (`var(--color-accent-primary)`) before storage. The ' +
-        '`auto_substitutions` field of the response lists every change so you can emit `var(--token)` ' +
-        'directly on the next turn. ' +
+        'It also auto-substitutes literal CSS values for the matching soul-declared CSS custom ' +
+        'property before storage, across three categories: color hex (e.g. `background: #228be6` → ' +
+        '`var(--color-accent-primary)`), spacing px on margin/padding/gap/inset/top/right/bottom/left ' +
+        '(e.g. `padding: 16px` → `var(--space-md)`), and radius dimensions on border-radius ' +
+        '(e.g. `border-radius: 8px` → `var(--radius-md)`). Each `auto_substitutions[]` entry carries ' +
+        'a `category: "color" | "spacing" | "radius"` field so you can group / display by layer. ' +
+        'Values inside calc()/var()/min()/max() are left alone. Use the substitution log to emit ' +
+        '`var(--token)` directly on the next turn. ' +
         '\n\n' +
         'VALIDATION — the response includes a `validation` block with `error_count`, `warning_count`, and ' +
         '`issues[]`. Inspect it on every call. If a structural issue fires, prefer the surgical repair tools ' +
@@ -175,8 +179,8 @@ export function registerAddSectionTool(server: McpServer, container: ServiceCont
           deck.format,
         );
 
-        return textResponse({
-          section_id: section.id,
+        return structuredResponse({
+          section_id: section.id as string,
           position: section.position,
           kind: section.kind,
           section_count: deck.sectionCount,
