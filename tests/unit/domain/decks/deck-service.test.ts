@@ -7,7 +7,8 @@ import { InMemorySoulStore } from '../../../../src/storage/memory/soul-store.js'
 import { FixedClock } from '../../../../src/infrastructure/clock.js';
 import { Logger } from '../../../../src/infrastructure/logger.js';
 import { SoulService } from '../../../../src/domain/souls/soul-service.js';
-import { sampleSoulInput } from '../../../helpers/fixtures.js';
+import { sampleSoulInput, makeSlideIR } from '../../../helpers/fixtures.js';
+import { rt } from '../../../../src/domain/ir/rich-text.js';
 import {
   DeckNotFoundError,
   SlideNotFoundError,
@@ -103,7 +104,7 @@ describe('DeckService', () => {
       await expect(
         deckService.addSlide({
           deckId: deck.id as string,
-          html: '<div class="slide"></div>',
+          ir: makeSlideIR(),
           metadata: { title: 't', type: 'content', narrative: '' },
         }),
       ).rejects.toThrow(WrongAuthoringModelError);
@@ -118,7 +119,7 @@ describe('DeckService', () => {
         deckService.updateSlide({
           deckId: deck.id as string,
           slideId: 'nope',
-          html: '<div></div>',
+          ir: makeSlideIR(),
         }),
       ).rejects.toThrow(WrongAuthoringModelError);
     });
@@ -141,7 +142,7 @@ describe('DeckService', () => {
       try {
         await deckService.addSlide({
           deckId: deck.id as string,
-          html: '<div></div>',
+          ir: makeSlideIR(),
           metadata: { title: 't', type: 'content', narrative: '' },
         });
         expect.fail('expected WrongAuthoringModelError');
@@ -174,7 +175,7 @@ describe('DeckService', () => {
 
       const slide = await deckService.addSlide({
         deckId: deck.id as string,
-        html: '<div class="slide">Hello</div>',
+        ir: makeSlideIR(),
         metadata: {
           title: 'Intro Slide',
           type: 'title',
@@ -192,7 +193,7 @@ describe('DeckService', () => {
 
       const slide = await deckService.addSlide({
         deckId: deck.id as string,
-        html: '<div>test</div>',
+        ir: makeSlideIR(),
         metadata: {
           title: 'Test',
           type: 'content',
@@ -213,13 +214,13 @@ describe('DeckService', () => {
 
       const slide1 = await deckService.addSlide({
         deckId,
-        html: '<div>1</div>',
+        ir: makeSlideIR(),
         metadata: { title: 'First', type: 'content', narrative: '' },
       });
 
       const slide2 = await deckService.addSlide({
         deckId,
-        html: '<div>2</div>',
+        ir: makeSlideIR(),
         metadata: { title: 'Second', type: 'content', narrative: '' },
       });
 
@@ -233,7 +234,7 @@ describe('DeckService', () => {
 
       const slide = await deckService.addSlide({
         deckId,
-        html: '<div>1</div>',
+        ir: makeSlideIR(),
         metadata: { title: 'First', type: 'content', narrative: '' },
       });
 
@@ -245,7 +246,7 @@ describe('DeckService', () => {
       await expect(
         deckService.addSlide({
           deckId: 'non-existent',
-          html: '<div>test</div>',
+          ir: makeSlideIR(),
           metadata: { title: 'Test', type: 'content', narrative: '' },
         }),
       ).rejects.toThrow(DeckNotFoundError);
@@ -256,7 +257,7 @@ describe('DeckService', () => {
 
       await deckService.addSlide({
         deckId: deck.id as string,
-        html: '<div>1</div>',
+        ir: makeSlideIR(),
         metadata: { title: 'First', type: 'content', narrative: '' },
       });
 
@@ -269,28 +270,31 @@ describe('DeckService', () => {
   });
 
   describe('updateSlide', () => {
-    it('updates slide HTML', async () => {
+    it('updates slide IR and recompiles HTML', async () => {
       const deck = await deckService.createDeck({ soulId: approvedSoulId });
       const slide = await deckService.addSlide({
         deckId: deck.id as string,
-        html: '<div>original</div>',
+        ir: makeSlideIR('original'),
         metadata: { title: 'Slide', type: 'content', narrative: '' },
       });
 
+      const originalHtml = slide.html;
       const updated = await deckService.updateSlide({
         deckId: deck.id as string,
         slideId: slide.id as string,
-        html: '<div>updated</div>',
+        ir: { body: [{ type: 'hero', title: rt('updated heading') }] },
       });
 
-      expect(updated.html).toBe('<div>updated</div>');
+      expect(updated.html).not.toBe(originalHtml);
+      expect(updated.html).toContain('updated heading');
+      expect(updated.ir).toBeDefined();
     });
 
     it('updates slide metadata', async () => {
       const deck = await deckService.createDeck({ soulId: approvedSoulId });
       const slide = await deckService.addSlide({
         deckId: deck.id as string,
-        html: '<div>test</div>',
+        ir: makeSlideIR(),
         metadata: { title: 'Original Title', type: 'content', narrative: '' },
       });
 
@@ -329,7 +333,7 @@ describe('DeckService', () => {
       const deck = await deckService.createDeck({ soulId: approvedSoulId });
       const slide = await deckService.addSlide({
         deckId: deck.id as string,
-        html: '<div>1</div>',
+        ir: makeSlideIR(),
         metadata: { title: 'First', type: 'content', narrative: '' },
       });
 
@@ -345,17 +349,17 @@ describe('DeckService', () => {
 
       const slide1 = await deckService.addSlide({
         deckId,
-        html: '<div>1</div>',
+        ir: makeSlideIR(),
         metadata: { title: 'First', type: 'content', narrative: '' },
       });
       const slide2 = await deckService.addSlide({
         deckId,
-        html: '<div>2</div>',
+        ir: makeSlideIR(),
         metadata: { title: 'Second', type: 'content', narrative: '' },
       });
       const slide3 = await deckService.addSlide({
         deckId,
-        html: '<div>3</div>',
+        ir: makeSlideIR(),
         metadata: { title: 'Third', type: 'content', narrative: '' },
       });
 
@@ -391,12 +395,12 @@ describe('DeckService', () => {
 
       const slide1 = await deckService.addSlide({
         deckId,
-        html: '<div>1</div>',
+        ir: makeSlideIR(),
         metadata: { title: 'First', type: 'content', narrative: '' },
       });
       const slide2 = await deckService.addSlide({
         deckId,
-        html: '<div>2</div>',
+        ir: makeSlideIR(),
         metadata: { title: 'Second', type: 'content', narrative: '' },
       });
 
@@ -434,12 +438,12 @@ describe('DeckService', () => {
 
       await deckService.addSlide({
         deckId,
-        html: '<div>1</div>',
+        ir: makeSlideIR(),
         metadata: { title: 'First Slide', type: 'title', narrative: 'Intro' },
       });
       await deckService.addSlide({
         deckId,
-        html: '<div>2</div>',
+        ir: makeSlideIR(),
         metadata: { title: 'Second Slide', type: 'content', narrative: 'Main' },
       });
 

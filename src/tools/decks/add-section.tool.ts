@@ -1,9 +1,10 @@
 /**
  * MCP Tool: add_section
  *
- * Appends a section (content block) to a continuous-document print deck.
- * Sections are HTML FRAGMENTS, not full documents — the DocumentComposer
- * concatenates them at export time and lets Chromium paginate.
+ * Appends a section (content block) to a continuous-document print deck
+ * from a structured SectionIR tree. The document-service compiles the IR
+ * into an HTML fragment, embeds @section-meta, and stores both
+ * representations on the section.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -13,6 +14,7 @@ import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 import { ALL_SECTION_KINDS } from '../../types/section.js';
 import { soulId } from '../../types/common.js';
+import { SectionIRSchema } from '../../domain/ir/index.js';
 
 const sourceSchema = z.object({
   url: z.string().optional().describe('Source URL.'),
@@ -58,33 +60,21 @@ export function registerAddSectionTool(server: McpServer, container: ServiceCont
         'Only valid for decks with `authoring_model: "document"` — for slide decks, call `add_slide`; ' +
         'a mismatch returns `WRONG_AUTHORING_MODEL` naming the right verb. ' +
         '\n\n' +
-        'FRAGMENT CONTRACT — the HTML you pass must be a FRAGMENT, not a full document: ' +
-        'exactly one top-level `<section class="pengui-section pengui-{kind}">` root, no `<!DOCTYPE>`, ' +
-        'no `<html>`/`<head>`/`<body>`, no `<script>`, no standalone `<style>` blocks, no `:root { ... }` ' +
-        'custom-property declarations, no fixed page dimensions on the wrapper. ' +
-        'Use soul tokens (`var(--color-*)`, `var(--space-*)`, etc.) for styling. ' +
+        'INPUT — `section_ir` is a structured tree of nodes (hero, prose, image, callout, two_column). ' +
+        'The compiler produces a single canonical `<section class="pengui-section pengui-{kind}">` fragment ' +
+        'using the deck\'s Design Soul tokens; agents do not write HTML, CSS, or hex literals. Token ' +
+        'references are SEMANTIC (e.g. `background: "accent"` → `var(--color-accent-primary)`). ' +
+        'Fetch `pengui://schema/slide-ir` for the node grammar — sections share the slide IR. ' +
         '\n\n' +
-        'AUTO-FIX BEHAVIOUR — the server always injects a canonical `<!-- @section-meta {...} -->` ' +
-        'comment above the wrapper from the metadata you provide, so you never emit that comment yourself. ' +
-        'It also auto-substitutes literal CSS values for the matching soul-declared CSS custom ' +
-        'property before storage, across four categories: color hex (e.g. `background: #228be6` → ' +
-        '`var(--color-accent-primary)`), spacing px on margin/padding/gap/inset/top/right/bottom/left ' +
-        '(e.g. `padding: 16px` → `var(--space-md)`), radius dimensions on border-radius ' +
-        '(e.g. `border-radius: 8px` → `var(--radius-md)`), and font-family stacks ' +
-        '(e.g. `font-family: \'Inter\', sans-serif` → `var(--font-display)`; canonicalized so quote ' +
-        'and whitespace variants match). Each `auto_substitutions[]` entry carries a ' +
-        '`category: "color" | "spacing" | "radius" | "font"` field so you can group / display by layer. ' +
-        'Values inside calc()/var()/min()/max() are left alone. Use the substitution log to emit ' +
-        '`var(--token)` directly on the next turn. ' +
+        'IMAGES — image nodes reference assets by id (`asset_id: "uuid"`). Upload binaries via ' +
+        '`upload_asset` first, then pass the returned id. ' +
         '\n\n' +
-        'VALIDATION — the response includes a `validation` block with `error_count`, `warning_count`, and ' +
-        '`issues[]`. Inspect it on every call. If a structural issue fires, prefer the surgical repair tools ' +
-        'over re-emitting the whole fragment: ' +
-        '`promote_section_root` for `section-structural-root-not-section` (single non-`<section>` root), ' +
-        '`wrap_section_root` for `section-structural-multiple-root-elements` (multiple top-level nodes). ' +
+        'KIND DEFAULTS — keep-together kinds (figure, chart, diagram, callout, quote, image) get ' +
+        'break-inside: avoid. Full-page kinds (cover, chapter_header) get min-height: 100vh + ' +
+        'break-after: page. Use `break_hints` to override per section. ' +
         '\n\n' +
-        'See `pengui://docs/document-mode` for the full authoring guide and canonical class/break ' +
-        'conventions (e.g. `.pengui-figure`, `.pengui-callout`, `.pengui-quote` → break-inside: avoid).',
+        'RETURNS — `{ section_id, position, kind, section_count, validation }`. The section is ' +
+        'stored with both `ir` (source of truth) and `html` (compiled fragment for the App + composer).',
       inputSchema: z.object({
         deck_id: z
           .string()
@@ -96,13 +86,10 @@ export function registerAddSectionTool(server: McpServer, container: ServiceCont
               'Keep-together kinds (figure, chart, diagram, callout, quote, image) get break-inside: avoid. ' +
               'Full-page kinds (cover, chapter_header) get min-height: 100vh + break-after: page by default.',
           ),
-        html: z
-          .string()
-          .describe(
-            'Section HTML fragment. Exactly one top-level `<section class="pengui-section pengui-{kind}">` ' +
-              'root. No DOCTYPE, no document-level tags, no fixed page dimensions. ' +
-              'Do NOT emit `<!-- @section-meta -->` — the server injects it from `metadata`.',
-          ),
+        section_ir: SectionIRSchema.describe(
+          'Structured IR tree describing the section content. Compiled to a canonical ' +
+            '<section class="pengui-section pengui-{kind}"> fragment.',
+        ),
         metadata: metadataSchema.describe(
           'Section metadata. Drives the auto-injected @section-meta comment, exports, and the MCP App sidebar.',
         ),
@@ -121,7 +108,7 @@ export function registerAddSectionTool(server: McpServer, container: ServiceCont
           ),
       }),
     },
-    async ({ deck_id, kind, html, metadata, break_hints, position }) => {
+    async ({ deck_id, kind, section_ir, metadata, break_hints, position }) => {
       try {
         const chromeOverrides = metadata.chrome_overrides
           ? {
@@ -154,10 +141,10 @@ export function registerAddSectionTool(server: McpServer, container: ServiceCont
             }
           : undefined;
 
-        const { section, substitutions } = await container.documentService.addSection({
+        const { section } = await container.documentService.addSection({
           deckId: deck_id,
           kind: kind as Parameters<typeof container.documentService.addSection>[0]['kind'],
-          html,
+          ir: section_ir,
           metadata: {
             title: metadata.title,
             narrative: metadata.narrative,
@@ -172,9 +159,6 @@ export function registerAddSectionTool(server: McpServer, container: ServiceCont
 
         const deck = await container.deckService.getDeckSummary(deck_id);
 
-        // Fragment lints run inline so the agent learns structural
-        // violations on turn 1 instead of discovering them at export.
-        // Matches the add_slide contract.
         const validation = await container.validationService.validateSection(
           { id: section.id, kind: section.kind, html: section.html },
           soulId(deck.soulId as string),
@@ -186,7 +170,6 @@ export function registerAddSectionTool(server: McpServer, container: ServiceCont
           position: section.position,
           kind: section.kind,
           section_count: deck.sectionCount,
-          auto_substitutions: substitutions,
           validation: {
             passed: validation.passed,
             error_count: validation.errorCount,

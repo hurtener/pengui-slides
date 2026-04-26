@@ -83,7 +83,6 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
   const documentService = new DocumentService(
     deckStore,
     sectionStore,
-    soulStore,
     deckService,
     clock,
     logger.child('documents'),
@@ -113,9 +112,7 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
   const editorService = new EditorService(
     deckService,
     soulService,
-    validationService,
     renderService,
-    metadataEmbedder,
     slideDocumentService,
     logger.child('editor'),
   );

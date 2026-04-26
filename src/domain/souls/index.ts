@@ -12,11 +12,3 @@ export {
   buildFontTokenLookup,
   canonicalizeFontStack,
 } from './font-token-lookup.js';
-export {
-  substituteSoulTokens,
-  type SoulTokenLookups,
-  type TokenCategory,
-  type TokenSubstitution,
-  type TokenSubstitutionResult,
-} from './token-substituter.js';
-export { buildSoulTokenLookups } from './soul-token-lookups.js';

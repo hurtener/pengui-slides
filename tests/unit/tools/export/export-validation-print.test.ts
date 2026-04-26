@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import { createContainer } from '../../../../src/container.js';
 import { loadConfig } from '../../../../src/config.js';
 import { validateSlidesForExport } from '../../../../src/tools/export/export-validation.js';
-import { sampleSoulInput, makeValidPrintA4Html } from '../../../helpers/fixtures.js';
+import { sampleSoulInput, makeSlideIR } from '../../../helpers/fixtures.js';
 
 describe('validateSlidesForExport — format threading', () => {
   it('validates a print_a4_portrait deck against A4 geometry, not 1920×1080', async () => {
@@ -29,7 +29,7 @@ describe('validateSlidesForExport — format threading', () => {
 
     const slide = await container.deckService.addSlide({
       deckId: deck.id as string,
-      html: makeValidPrintA4Html('Valid A4 content'),
+      ir: makeSlideIR('Valid A4 content'),
       metadata: { title: 'Print Page', type: 'content', narrative: 'A4 page' },
     });
 

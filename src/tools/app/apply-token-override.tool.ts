@@ -3,11 +3,13 @@
  *
  * App-only tool (visibility: ['app']). Lets the MCP App live-edit individual
  * design token values on a soul without going through the full re-register flow.
- * For example, the user can tweak a brand colour from a colour picker and have
- * all slides re-render immediately with the new token.
  *
  * The soul is updated in place; if it is already approved, recipes are also
- * regenerated so that new slides pick up the change.
+ * regenerated so that NEW slides / sections pick up the change. Existing
+ * slides retain their compiled HTML (with the old soul tokens baked into
+ * the embedded `:root` block); they need an `update_slide` (with the
+ * unchanged IR) to recompile against the new token values. v4.6+ will add
+ * automatic recompile-on-token-override for IR slides.
  */
 
 import { z } from 'zod';
@@ -27,7 +29,9 @@ export function registerApplyTokenOverrideTool(server: McpServer, container: Ser
       description:
         'Live-edit a single design token on a soul. Regenerates CSS tokens, utility CSS, ' +
         'and the style guide immediately. If the soul is approved, layout recipes are also ' +
-        'regenerated so new slides pick up the change. Returns the updated soul summary.',
+        'regenerated so NEW slides pick up the change. Existing slides keep their compiled ' +
+        'HTML (with the old soul tokens baked in); call update_slide with the unchanged IR ' +
+        'to recompile against the new tokens. Returns the updated soul summary.',
       inputSchema: z.object({
         soul_ref: z.string().describe('Soul UUID or slug.'),
         layer: z

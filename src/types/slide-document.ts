@@ -1,4 +1,4 @@
-export type SlideSourceKind = 'legacy_html' | 'document_v1';
+export type SlideSourceKind = 'legacy_html' | 'document_v1' | 'authored_ir';
 export type SlideExportDisposition = 'native' | 'background' | 'blocked';
 
 export type TranslationIssueSeverity = 'error' | 'warning';

@@ -211,10 +211,12 @@ export class RenderService {
   }
 
   private shouldFallbackToImagePptx(slide: Slide): boolean {
-    return slide.sourceKind !== 'document_v1'
-      || !slide.document
-      || slide.translationIssues.some((issue) => issue.severity === 'error')
-      || slide.document.elements.some((element) => element.exportDisposition === 'blocked');
+    const hasStructuredDocument =
+      (slide.sourceKind === 'document_v1' || slide.sourceKind === 'authored_ir')
+      && Boolean(slide.document);
+    if (!hasStructuredDocument) return true;
+    return slide.translationIssues.some((issue) => issue.severity === 'error')
+      || slide.document!.elements.some((element) => element.exportDisposition === 'blocked');
   }
 
   // ── Lazy Initialization ──────────────────────────────────────

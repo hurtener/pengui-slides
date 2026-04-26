@@ -44,7 +44,7 @@ export function registerRenderSectionPreviewTool(
         'Render a single section of a document-mode deck to a base64-encoded PNG, composed with the deck\'s ' +
         'soul + recipe CSS. Counterpart to `render_preview` (which is slides-only). ' +
         '\n\n' +
-        'WHEN TO CALL — after `add_section` / `update_section` / `promote_section_root` / `wrap_section_root`, ' +
+        'WHEN TO CALL — after `add_section` / `update_section`, ' +
         'when the structural validation passes but you want a visual sanity check before stacking more ' +
         'sections. Especially useful for kinds where token-correct content can still look wrong (cover, ' +
         'figure, table layouts). ' +
@@ -59,8 +59,8 @@ export function registerRenderSectionPreviewTool(
         'carries the section\'s Stage 1 lint result (v4.3): the same shape as add_section / update_section ' +
         'so you do not need a separate validate_section round-trip. The screenshot is ALWAYS produced even ' +
         'when validation has errors — the composer defensively normalizes broken roots so you can see what ' +
-        'the agent\'s HTML actually rendered as. If `validation.passed` is false, prefer the surgical ' +
-        'repair tools (`promote_section_root`, `wrap_section_root`) over re-emitting the fragment. ' +
+        'the compiled HTML actually rendered as. If `validation.passed` is false, call `update_section` ' +
+        'with a corrected `section_ir`. ' +
         '\n\n' +
         'FAILURE MODES — `WRONG_AUTHORING_MODEL` if the deck is slides-mode (use `render_preview` there); ' +
         '`DECK_NOT_FOUND` if the deck is missing; `SECTION_NOT_FOUND` if the section doesn\'t belong to the ' +

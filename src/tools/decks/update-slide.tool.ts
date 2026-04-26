@@ -1,7 +1,9 @@
 /**
  * MCP Tool: update_slide
  *
- * Updates a slide's HTML and/or metadata. Re-validates if HTML changed.
+ * Updates a slide's IR tree and/or metadata. When the IR is replaced,
+ * the slide's HTML is recompiled from the new IR (using the deck's
+ * Design Soul + format geometry) and re-validated.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -14,11 +16,7 @@ import {
   buildValidationDelta,
   buildValidationPresentation,
 } from '../../domain/validation/validation-presentation.js';
-import {
-  buildSoulTokenLookups,
-  substituteSoulTokens,
-  type TokenSubstitution,
-} from '../../domain/souls/index.js';
+import { SlideIRSchema, type SlideIR } from '../../domain/ir/index.js';
 
 const dataPointSchema = z.object({
   label: z.string().describe('Label for the data point.'),
@@ -55,44 +53,38 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
     {
       title: 'Update Slide',
       description:
-        "Update a slide's HTML and/or metadata. Re-validates if HTML changed. When replacing HTML, keep the .slide dimensions aligned with the DECK FORMAT: 1920×1080 (slides_16_9), 1240×1754 (print_a4_portrait), or 1275×1650 (print_letter_portrait). Also preserve \"position: relative\" and \"padding: var(--space-safe-area)\" on .slide, and \"html, body { margin: 0 }\" explicitly in the reset — these are load-bearing. Soul-known literals are auto-substituted for the matching token before storage across four categories: color hex (`#228be6` → `var(--color-accent-primary)`), spacing px on margin/padding/gap/inset (`16px` → `var(--space-md)`), radius dimensions on border-radius (`8px` → `var(--radius-md)`), and font-family stacks (`\'Inter\', sans-serif` → `var(--font-display)`; canonicalized for quote/whitespace match). Each `auto_substitutions[]` entry carries a `category: \"color\" | \"spacing\" | \"radius\" | \"font\"` field. Values inside calc()/var()/min()/max() are left alone. See pengui://docs/slide-format (especially the Common Pitfalls section).",
+        "Update a slide's IR tree and/or metadata. When `slide_ir` is provided, the slide's HTML is recompiled from the new IR using the deck's Design Soul + format geometry, and re-validated. " +
+        '\n\n' +
+        'INPUT — `slide_ir` is the structured tree (hero/prose/image/callout/two_column nodes). Token references are SEMANTIC (e.g. background: "accent"), so the same IR re-renders cleanly when the soul changes. Fetch `pengui://schema/slide-ir` for the node grammar. ' +
+        '\n\n' +
+        'PARTIAL UPDATES — omit `slide_ir` to update only metadata. Omit `metadata` to replace only the IR. Both may be set together. ' +
+        '\n\n' +
+        'RETURNS — `{ slide_id, source_kind, validation?, validation_delta? }`. Validation runs only when content changes (IR or metadata).',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck containing the slide.'),
         slide_id: z.string().describe('The slide to update.'),
-        html: z.string().nullish().describe('New HTML content for the slide.'),
+        slide_ir: SlideIRSchema.nullish().describe('New structured IR tree. Omit to keep existing IR.'),
         metadata: partialMetadataSchema.describe('Partial metadata fields to update.'),
       }),
     },
-    async ({ deck_id, slide_id, html, metadata }) => {
+    async ({ deck_id, slide_id, slide_ir, metadata }) => {
       try {
         const previousSlide = await container.deckService.getSlide(slide_id);
         const previousValidation = previousSlide.lastValidation ?? null;
-        const shouldSyncMetadata = html != null || metadata != null;
+        const shouldRevalidate = slide_ir != null || metadata != null;
+
         const updateInput: {
           deckId: string;
           slideId: string;
-          html?: string;
+          ir?: SlideIR;
           metadata?: Record<string, unknown>;
         } = {
           deckId: deck_id,
           slideId: slide_id,
         };
 
-        // Auto-substitute soul-known token literals when the HTML is being
-        // replaced. Mirrors add_slide so the agent never has to translate
-        // hex/px → token by hand for values the soul already declares.
-        let substitutions: TokenSubstitution[] = [];
-        let substitutedHtml = html;
-        if (html != null) {
-          const deckPre = await container.deckService.getDeckSummary(deck_id);
-          const soulPre = await container.soulStore.get(deckPre.soulId);
-          const lookups = soulPre
-            ? buildSoulTokenLookups(soulPre.layers)
-            : { color: new Map(), spacing: new Map(), radius: new Map(), font: new Map() };
-          const sub = substituteSoulTokens(html, lookups);
-          substitutions = sub.substitutions;
-          substitutedHtml = sub.html;
-          updateInput.html = substitutedHtml;
+        if (slide_ir != null) {
+          updateInput.ir = slide_ir;
         }
 
         if (metadata != null) {
@@ -116,45 +108,17 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
         let validation;
         let validationDelta;
         let validationPresentation;
-        let sourceKind;
-        let translationIssues;
-        if (shouldSyncMetadata) {
-          const sourceHtml = substitutedHtml ?? slide.html;
-          const embeddedHtml = container.metadataEmbedder.update(sourceHtml, slide.metadata);
 
-          await container.deckService.updateSlide({
-            deckId: deck_id,
-            slideId: slide_id,
-            html: embeddedHtml,
-          });
-
+        if (shouldRevalidate) {
           const deck = await container.deckService.getDeckSummary(deck_id);
           const sId = soulId(deck.soulId as string);
-          validation = await container.validationService.validateSlide(embeddedHtml, sId, 'lint', deck.format);
+          validation = await container.validationService.validateSlide(slide.html, sId, 'lint', deck.format);
 
-          // Store the validation result on the slide
           await container.deckService.updateSlide({
             deckId: deck_id,
             slideId: slide_id,
             lastValidation: validation,
           });
-
-          const refreshed = await container.deckService.getSlide(slide_id);
-          const compilation = await container.slideDocumentService.compileSlideHtml(
-            embeddedHtml,
-            refreshed.metadata.revisionHash,
-          );
-          const translationState = container.slideDocumentService.buildTranslationState(compilation);
-
-          await container.deckService.updateSlide({
-            deckId: deck_id,
-            slideId: slide_id,
-            sourceKind: translationState.sourceKind,
-            document: translationState.document ?? undefined,
-            translationIssues: translationState.translationIssues,
-          });
-          sourceKind = translationState.sourceKind;
-          translationIssues = translationState.translationIssues;
 
           validationDelta = buildValidationDelta(validation, previousValidation);
           validationPresentation = buildValidationPresentation(validationDelta);
@@ -162,9 +126,7 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
 
         return textResponse({
           slide_id: slide.id,
-          ...(sourceKind ? { source_kind: sourceKind } : {}),
-          ...(translationIssues ? { translation_issues: translationIssues } : {}),
-          auto_substitutions: substitutions,
+          source_kind: slide.sourceKind,
           ...(validation ? { validation } : {}),
           ...(validationDelta ? { validation_delta: validationDelta } : {}),
           ...(validationPresentation ? { validation_presentation: validationPresentation } : {}),

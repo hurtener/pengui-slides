@@ -11,6 +11,7 @@ import { registerChartsAndDiagramsResource } from './print-charts-and-diagrams.r
 import { registerPrintModeResource } from './print-mode.resource.js';
 import { registerDocumentModeResource } from './document-mode.resource.js';
 import { registerCollaborationResource } from './collaboration.resource.js';
+import { registerSlideIRSchemaResource } from './slide-ir.resource.js';
 
 /* ------------------------------------------------------------------ */
 /*  Content                                                           */
@@ -19,14 +20,16 @@ import { registerCollaborationResource } from './collaboration.resource.js';
 const OVERVIEW = `# Pengui Slides — System Overview
 
 Pengui Slides is an MCP server that lets LLM agents create branded decks and print
-documents. Two authoring models live inside it; pick the right one FIRST.
+documents. **As of v4.5, agents author SlideIR / SectionIR — structured node trees,
+not raw HTML.** The server compiles IR to HTML deterministically using the deck's
+Design Soul tokens. Two authoring models live inside it; pick the right one FIRST.
 
 ## The two authoring models
 
 | \`authoringModel\` | Default for | You author | Exports |
 |-------------------|-------------|------------|---------|
-| \`"slides"\` | \`slides_16_9\` (and legacy print, opt-in) | Per-page slide HTML documents of fixed dimensions (1920×1080 or 1240×1754 / 1275×1650). Each slide is self-contained: its own DOCTYPE, own \`<style>\`, all soul tokens in \`:root\`. | \`export_pptx\`, \`export_pdf\`, \`export_html\`, \`export_google_slides\`, \`render_preview\` |
-| \`"document"\` | \`print_a4_portrait\`, \`print_letter_portrait\` (v3 default) | Linear list of **Section FRAGMENTS** — one \`<section class="pengui-section pengui-{kind}">\`. NO DOCTYPE, NO \`<html>\`/\`<head>\`/\`<body>\`, NO \`<style>\` blocks, NO \`:root\` tokens (the composer injects them once). The exporter composes sections into one flowing HTML document and lets Chromium paginate. | \`export_pdf\` only |
+| \`"slides"\` | \`slides_16_9\` (and legacy print, opt-in) | A \`slide_ir\` tree (hero / prose / image / callout / two_column nodes) per slide. The server compiles to a 1920×1080 (or print-sized) HTML page using soul tokens. | \`export_pptx\`, \`export_pdf\`, \`export_html\`, \`export_google_slides\`, \`render_preview\` |
+| \`"document"\` | \`print_a4_portrait\`, \`print_letter_portrait\` (v3 default) | A \`section_ir\` tree per content block. The server compiles to a single \`<section class="pengui-section pengui-{kind}">\` fragment. The exporter composes sections into one flowing HTML document and lets Chromium paginate. | \`export_pdf\` only |
 
 \`create_deck\` picks the default model from the \`format\` argument; pass
 \`authoring_model\` explicitly to override. After creation, call
@@ -39,10 +42,10 @@ slide verbs or section verbs.
 |---------|-----------|
 | **Design Soul** | A complete visual identity (colors, typography, spacing, shapes, depth, components, motion). Generates ~73 CSS custom-property tokens, 6 slide recipes, and 11 print recipes. Shared across both authoring models. |
 | **Deck** | An ordered collection of slides **or** sections tied to one Design Soul, with a \`format\` and an \`authoringModel\`. |
-| **Slide** | (slide-model only) A self-contained HTML document carrying its own \`<style>\` block with all soul tokens. Dimensions come from the deck \`format\`. |
-| **Section** | (document-model only) An HTML FRAGMENT — a content block (\`prose\`, \`figure\`, \`chart\`, \`diagram\`, \`table\`, \`callout\`, \`cover\`, \`chapter_header\`, \`toc\`, and more). The composer wraps it and handles pagination. |
-| **Asset** | An uploaded image (PNG, SVG, JPEG). Referenced as \`asset://UUID\` — never raw base64. |
-| **Recipe** | A validated layout template. Slide recipes (title-slide, two-column, metrics, features-grid, closing-cta, blank-themed) ship with every soul; print recipes (cover, toc, chapter_intro, content, content_chart, content_diagram, compare, glossary, timeline, summary, bibliography) ship alongside them. |
+| **SlideIR / SectionIR** | The agent-authored source of truth. A tree of nodes (hero, prose, image, callout, two_column) referencing soul tokens by SEMANTIC role (\`background: "accent"\` → \`var(--color-accent-primary)\`). Fetch \`pengui://schema/slide-ir\` for the grammar. |
+| **Slide / Section HTML** | The COMPILED snapshot. Stored alongside the IR for the App, exporters, and validators. Do NOT edit \`html\` directly — mutate the IR and let the server recompile. |
+| **Asset** | An uploaded image (PNG, SVG, JPEG). Referenced from IR by id (\`asset_id: "uuid"\`); the server resolves to data URIs at render/export time. |
+| **Recipe** | A validated layout template (HTML). Inspirational reference only — agents author via IR, not by copying recipe HTML. v4.6+ will add IR-native recipes. |
 | **Validation** | Runs automatically on add/update. Slide validator (Stage 1 + 2) for slide-model; Section Stage 1 for each fragment + Document Stage 2 at export for document-model. Produces a 0–1 style score. |
 
 ## Pick-your-path workflow
@@ -51,58 +54,62 @@ slide verbs or section verbs.
 \`\`\`
 1. register_design_soul   → draft soul
 2. approve_design_soul    → generates tokens + recipes
-3. upload_asset (×N)      → asset://UUID refs
+3. upload_asset (×N)      → asset_id refs (use in IR image nodes)
 4. create_deck            → slide-model deck
-5. add_slide (×N)         → each slide is a full HTML document
-6. export_pptx / export_pdf / export_html / export_google_slides
+5. (optional) read pengui://schema/slide-ir for the IR node grammar
+6. add_slide (×N)         → pass slide_ir + metadata; server compiles
+7. export_pptx / export_pdf / export_html / export_google_slides
 \`\`\`
 
 **Document-model deck (print_a4_portrait / print_letter_portrait, v3 default):**
 \`\`\`
 1. register_design_soul   → draft soul
 2. approve_design_soul    → generates tokens + recipes
-3. upload_asset (×N)      → asset://UUID refs
+3. upload_asset (×N)      → asset_id refs
 4. create_deck { format: 'print_a4_portrait' }   → document-model deck (automatic)
 5. update_document_meta   → (optional) running chrome + TOC config
-6. add_section (×N)       → each section is an HTML fragment
-7. export_pdf             → document composed, paginated by Chromium
+6. (optional) read pengui://schema/slide-ir for the IR node grammar (sections share it)
+7. add_section (×N)       → pass section_ir + kind + metadata; server compiles
+8. export_pdf             → document composed, paginated by Chromium
 \`\`\`
 
 ## Key Rules
 
-- **Choose the right verbs for the model.** Slide verbs (\`add_slide\`, \`update_slide\`,
-  \`render_preview\`, \`export_html\`, \`export_pptx\`, \`export_google_slides\`) reject
-  document-model decks with a \`WRONG_AUTHORING_MODEL\` or \`FORMAT_NOT_EXPORTABLE\`
-  error naming the right tool. Section verbs (\`add_section\`, \`update_section\`,
-  \`list_sections\`, \`update_document_meta\`) do the mirror check.
-- **Tokens are mandatory.** Slide-model: every slide's \`<style>\` includes ALL soul
-  CSS tokens in \`:root\`. Document-model: tokens are injected once by the composer,
-  so section fragments MUST NOT repeat them (validation flags it).
-- **Never use literal colors or spacing values.** Use \`var(--token)\` everywhere.
-  Literal hex / rgb / px values for spacing fail validation.
-- **Never reference external URLs.** No Google Fonts, no CDN links, no remote images.
-  Use \`asset://UUID\` for images; the server resolves refs at render/export time.
-- **Slide dimensions come from the deck format.** \`slides_16_9\` → 1920×1080,
-  \`print_a4_portrait\` → 1240×1754, \`print_letter_portrait\` → 1275×1650. The
-  safe-area check reports the expected size in its error message.
+- **Author IR, not HTML.** \`add_slide\` / \`update_slide\` take \`slide_ir\`;
+  \`add_section\` / \`update_section\` take \`section_ir\`. The compiled HTML
+  is a derived snapshot — mutate IR and let the server recompile.
+- **Choose the right verbs for the model.** Slide verbs reject document-model
+  decks with \`WRONG_AUTHORING_MODEL\`, naming the right tool. Section verbs
+  mirror.
+- **Token references are SEMANTIC, not literal.** A node says \`background: "accent"\`;
+  the compiler emits \`var(--color-accent-primary)\`. Agents never write hex.
+- **Validate IR shape before submitting.** \`validate_slide_ir\` /
+  \`validate_section_ir\` give Zod-level shape errors without storage side effects.
+- **Images flow by id.** Upload via \`upload_asset\`, get an asset id, reference
+  it from an IR \`image\` node's \`asset_id\` field.
 
 ## Where to go next
 
-- \`pengui://docs/slide-format\` — canonical slide HTML (slide-model decks)
+- \`pengui://schema/slide-ir\` — JSON Schema for the IR node grammar (the contract)
 - \`pengui://docs/document-mode\` — continuous-document authoring guide (document-model decks)
-- \`pengui://docs/print-mode\` — legacy per-page print flow (only if opted-in via \`authoring_model: "slides"\`)
 - \`pengui://docs/design-souls\` — the 7 layers + every CSS token they emit
 - \`pengui://docs/validation\` — all lints, scoring, tips for score 1.0
 - \`pengui://docs/assets\` — upload & reference images
-- \`pengui://docs/recipes\` — the built-in layout templates
 - \`pengui://docs/workflows\` — step-by-step guides for each path
-- \`pengui://docs/charts-and-diagrams\` — copy-paste SVG templates for print
+- \`pengui://docs/slide-format\` — (legacy) the HTML the compiler emits, for debugging
 `;
 
-const SLIDE_FORMAT = `# Slide HTML Format — Complete Reference
+const SLIDE_FORMAT = `# Slide HTML Format — Compiler Output Reference
 
-Every slide is a **standalone HTML document**. The LLM generates the full document
-for each slide, and the server stores, validates, and renders them independently.
+> **v4.5 note:** Agents author **SlideIR**, not HTML. The server compiles IR
+> to the HTML described below. This doc is preserved for debugging the
+> compiler output, validating exported \`.html\` files, and as a reference
+> for what \`slide.html\` looks like when read via \`get_slide\`. To author
+> a slide, use \`add_slide\` with \`slide_ir\`; fetch \`pengui://schema/slide-ir\`
+> for the IR grammar.
+
+Every slide is a **standalone HTML document** emitted by the compiler.
+The server stores, validates, and renders them independently.
 
 ## 🔸 First: pick the right dimensions for your deck's format
 
@@ -646,8 +653,10 @@ Step 5 — Create a Deck
 
 Step 6 — Add Slides (repeat per slide)
   Tool: add_slide
-  Input: deck_id, html (complete HTML document with all tokens in :root), metadata
-  Result: slide_id, validation score
+  Input: deck_id, slide_ir (a tree of nodes — see pengui://schema/slide-ir),
+         metadata
+  Result: slide_id, validation score, source_kind: "authored_ir"
+  Tip: validate_slide_ir gives a fast schema check before submitting.
   IMPORTANT: Do not introduce new blocking issues while iterating.
   Fix pre-existing issues when requested or before export.
 
@@ -676,9 +685,11 @@ Step 6 — Configure document meta (optional but recommended)
 
 Step 7 — Add Sections (repeat per content block)
   Tool: add_section
-  Input: deck_id, kind, html (FRAGMENT — no DOCTYPE/html/head/body/:root/style),
+  Input: deck_id, kind, section_ir (a tree of nodes — see
+         pengui://schema/slide-ir; sections share the slide IR grammar),
          metadata, break_hints (optional)
   Result: section_id, position, validation score
+  Tip: validate_section_ir gives a fast schema check before submitting.
   Sections are content blocks, not pages. The composer paginates on export.
 
 Step 8 — Export
@@ -700,10 +711,9 @@ Step 1 — Upload the image
          data_base64
   Result: ref = "asset://UUID"
 
-Step 2 — Use the ref where images live
-  Slide-model:    <img src="asset://UUID" ...> inside the slide HTML
-  Document-model: <img src="asset://UUID" ...> inside a figure/image section
-                  fragment (wrapped in .pengui-figure or .pengui-image)
+Step 2 — Use the asset id in an IR image node
+  Both models: { type: "image", asset_id: "UUID-from-step-1", caption? }
+  The compiler emits <img src="asset://UUID" ...> automatically.
 
 Step 3 — The server resolves refs at render/export time
   asset://UUID → data:image/png;base64,...
@@ -713,46 +723,46 @@ Step 3 — The server resolves refs at render/export time
 
 \`\`\`
 Step 1 — add_slide or update_slide → validation results
-Step 2 — Common fixes:
-  - "literal color" → var(--color-*)
-  - "literal spacing" → var(--space-*)
-  - "font not allowed" → use the soul's allowedFonts
-  - "external URL" → upload_asset and use asset://UUID
-  - "missing DOCTYPE" → <!DOCTYPE html> first
-  - "missing root container" → <div class="slide">
-  - "safe-area-check: missing position: relative" → add it to .slide
-  - "missing html, body margin reset" → html, body { margin: 0; padding: 0 }
-Step 3 — Resubmit via update_slide. Or call validate_slide standalone
-         (pass deck_id so dimension checks match the deck's format).
+Step 2 — Common fixes (most legacy lints don't apply to IR slides — the
+         compiler emits canonical structure by construction):
+  - "image asset not found" → upload_asset first, use the returned id
+  - "schema validation: unknown node type" → fetch
+    pengui://schema/slide-ir for the current node grammar
+  - "two_column.left/right contains nested two_column" → flatten;
+    v4.5 explicitly disallows recursion inside two_column
+  - "rich text run has both bold and italic" → split into separate runs
+Step 3 — Resubmit via update_slide. Or use validate_slide_ir for a
+         schema-only pre-flight check (no storage side effects).
 \`\`\`
 
 ## Workflow 3b: Iterate on a Section (document-model)
 
 \`\`\`
 Step 1 — add_section or update_section → validation results
-Step 2 — Common fixes (Section Stage 1):
-  - "fragment-contract: DOCTYPE/html/body/head found" → strip everything
-    except the <section> root; the composer wraps for you
-  - "fragment-contract: :root block" → delete it; tokens are injected once
-  - "wrapper-class: missing .pengui-figure" → add the canonical class on
-    the inner wrapper of keep-together kinds
-  - "section-shape: figure missing figcaption" → add one
-  - "literal color/spacing/font" → switch to var(--*) / soul fonts
-Step 3 — Resubmit via update_section. Or call validate_section standalone
-         (pass deck_id for format-aware geometry). Stage 2 (split-keep-together,
+Step 2 — Common fixes (most legacy fragment-contract lints don't fire on
+         IR-compiled sections — the compiler always emits one canonical
+         <section class="pengui-section pengui-{kind}"> root):
+  - "schema validation: unknown node type" → fetch
+    pengui://schema/slide-ir for the current node grammar
+  - "image asset not found" → upload_asset first, use the returned id
+  - "two_column.left/right contains nested two_column" → flatten
+Step 3 — Resubmit via update_section. Or use validate_section_ir for a
+         schema-only pre-flight check. Stage 2 (split-keep-together,
          orphan-heading) only runs at export_pdf time.
 \`\`\`
 
-## Workflow 4: Create a Custom Slide Recipe
+## Workflow 4: Save a Slide as a Template (recipe)
 
 \`\`\`
-Step 1 — add_slide with the custom HTML (must pass validation)
-Step 2 — save_as_template → new recipe on the soul
+Step 1 — add_slide with valid IR → slide_id with passing validation
+Step 2 — save_as_template → new HTML recipe on the soul (compiled snapshot)
 Step 3 — get_design_soul { include_recipes: true } — the new recipe is there
 \`\`\`
 
-(Document-mode section recipes are not yet authorable via save_as_template — the
-built-in 11 print recipes plus the 14 section \`kind\`s cover the current surface.)
+Note: in v4.5 \`save_as_template\` saves the slide's compiled HTML, not its IR.
+That makes recipes useful as visual references but NOT as templates that
+\`add_slide\` can consume directly (since add_slide takes IR). v4.6+ will
+add IR-native recipe authoring.
 `;
 
 /* ------------------------------------------------------------------ */
@@ -764,6 +774,7 @@ export function registerAllResources(server: McpServer): void {
   registerPrintModeResource(server);
   registerDocumentModeResource(server);
   registerCollaborationResource(server);
+  registerSlideIRSchemaResource(server);
   server.registerResource('overview', 'pengui://docs/overview', {
     description: 'High-level overview of Pengui Slides: concepts, workflow, and key rules.',
     mimeType: 'text/markdown',

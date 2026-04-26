@@ -3,6 +3,8 @@
  */
 
 import type { SoulLayers, DesignSoulInput } from '../../src/types/design-soul.js';
+import type { SlideIR, SectionIR } from '../../src/domain/ir/index.js';
+import { rt } from '../../src/domain/ir/rich-text.js';
 
 export const sampleLayers: SoulLayers = {
   color: {
@@ -144,6 +146,26 @@ export function makeValidPrintA4Html(content: string = 'Page content'): string {
   </div>
 </body>
 </html>`;
+}
+
+/**
+ * Minimal SlideIR for tests. Single hero node — compiles to a valid
+ * slide HTML doc with all structural requirements.
+ */
+export function makeSlideIR(title: string = 'Hello World'): SlideIR {
+  return {
+    body: [{ type: 'hero', title: rt({ text: title }) }],
+  };
+}
+
+/**
+ * Minimal SectionIR for tests with the given content. Compiles to a
+ * canonical <section class="pengui-section pengui-{kind}"> fragment.
+ */
+export function makeSectionIR(content: string = 'Hello World'): SectionIR {
+  return {
+    body: [{ type: 'prose', body: rt({ text: content }) }],
+  };
 }
 
 /**

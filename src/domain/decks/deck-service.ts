@@ -24,6 +24,7 @@ import {
   DEFAULT_FORMAT,
   assertKnownFormat,
   defaultAuthoringModelFor,
+  getFormat,
 } from '../formats/format-registry.js';
 import type { SlideMetadata, SlideType } from '../../types/metadata.js';
 import {
@@ -48,6 +49,8 @@ import type { Logger } from '../../infrastructure/index.js';
 import { RevisionTracker } from './revision-tracker.js';
 import { SlugIndex } from '../_shared/slug-index.js';
 import type { SoulService } from '../souls/soul-service.js';
+import { compileSlideIRToHtml } from '../ir/index.js';
+import { MetadataEmbedder } from '../metadata/metadata-embedder.js';
 
 export class DeckService {
   private readonly deckStore: IDeckStore;
@@ -59,6 +62,7 @@ export class DeckService {
   private readonly logger: Logger;
   private readonly revisionTracker: RevisionTracker;
   private readonly slugIndex: SlugIndex<DeckId>;
+  private readonly metadataEmbedder = new MetadataEmbedder();
 
   constructor(
     deckStore: IDeckStore,
@@ -230,8 +234,19 @@ export class DeckService {
     }
     this.assertSlidesModel(deck, 'add_section');
 
+    const soul = await this.soulStore.get(deck.soulId);
+    if (!soul) {
+      throw new SoulNotFoundError(deck.soulId as string);
+    }
+
     const now = this.clock.now();
     const position = input.position ?? deck.slideIds.length;
+
+    // v4.5: compile the IR to HTML deterministically. Soul tokens flow
+    // in via the compiler emitting var() references; no post-emit
+    // substitution required.
+    const geometry = getFormat(deck.format ?? DEFAULT_FORMAT).geometry;
+    const compiledHtml = compileSlideIRToHtml({ ir: input.ir, soul, geometry });
 
     // Build full metadata from input + auto-generated fields
     const metadata: SlideMetadata = {
@@ -270,15 +285,20 @@ export class DeckService {
       deckId: deck.id as string,
       position,
       metaVersion: '1.0',
-      revisionHash: sha256(input.html),
+      revisionHash: sha256(compiledHtml),
     };
+
+    // Embed @slide-meta into the compiled HTML so validators / exporters
+    // see the canonical metadata block — same contract as legacy slides.
+    const embeddedHtml = this.metadataEmbedder.embed(compiledHtml, metadata);
 
     const slide: Slide = {
       id: generateSlideId(),
       deckId: deck.id,
       position,
-      html: input.html,
-      sourceKind: 'legacy_html',
+      ir: input.ir,
+      html: embeddedHtml,
+      sourceKind: 'authored_ir',
       translationIssues: [],
       metadata,
       createdAt: now,
@@ -340,10 +360,18 @@ export class DeckService {
 
     const now = this.clock.now();
 
-    // Update HTML if provided
-    if (input.html !== undefined) {
-      slide.html = input.html;
-      slide.metadata.revisionHash = sha256(input.html);
+    // v4.5: when IR changes, recompile HTML and refresh revisionHash.
+    let recompiled = false;
+    if (input.ir !== undefined) {
+      const soul = await this.soulStore.get(deck.soulId);
+      if (!soul) {
+        throw new SoulNotFoundError(deck.soulId as string);
+      }
+      const geometry = getFormat(deck.format ?? DEFAULT_FORMAT).geometry;
+      slide.ir = input.ir;
+      slide.html = compileSlideIRToHtml({ ir: input.ir, soul, geometry });
+      slide.metadata.revisionHash = sha256(slide.html);
+      recompiled = true;
     }
 
     if (input.sourceKind !== undefined) {
@@ -397,6 +425,12 @@ export class DeckService {
           ...(s.retrievedAt ? { retrievedAt: s.retrievedAt } : {}),
         }));
       }
+    }
+
+    // Re-embed @slide-meta whenever IR or metadata changed so the
+    // canonical comment stays in sync with both. Validation looks for it.
+    if (recompiled || input.metadata) {
+      slide.html = this.metadataEmbedder.embed(slide.html, slide.metadata);
     }
 
     slide.updatedAt = now;

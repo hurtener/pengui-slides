@@ -23,7 +23,7 @@ import {
   SectionNotFoundError,
   WrongAuthoringModelError,
 } from '../../types/errors.js';
-import type { IDeckStore, ISectionStore, ISoulStore } from '../../storage/interfaces.js';
+import type { IDeckStore, ISectionStore } from '../../storage/interfaces.js';
 import {
   generateSectionId,
   sha256,
@@ -33,23 +33,11 @@ import type { Logger } from '../../infrastructure/index.js';
 import { DeckService } from '../decks/deck-service.js';
 import { RevisionTracker } from '../decks/revision-tracker.js';
 import { embedSectionMeta } from './section-meta-embedder.js';
-import {
-  promoteRootToSection,
-  summarizeTopLevelElements,
-  wrapRootsInSection,
-  type TopLevelElementSummary,
-} from './section-wrapper-ops.js';
-import {
-  buildSoulTokenLookups,
-  substituteSoulTokens,
-  type SoulTokenLookups,
-  type TokenSubstitution,
-} from '../souls/index.js';
+import { compileSectionIRToHtml } from '../ir/index.js';
 
 export class DocumentService {
   private readonly deckStore: IDeckStore;
   private readonly sectionStore: ISectionStore;
-  private readonly soulStore: ISoulStore;
   private readonly deckService: DeckService;
   private readonly clock: Clock;
   private readonly logger: Logger;
@@ -58,7 +46,6 @@ export class DocumentService {
   constructor(
     deckStore: IDeckStore,
     sectionStore: ISectionStore,
-    soulStore: ISoulStore,
     deckService: DeckService,
     clock: Clock,
     logger: Logger,
@@ -66,23 +53,10 @@ export class DocumentService {
   ) {
     this.deckStore = deckStore;
     this.sectionStore = sectionStore;
-    this.soulStore = soulStore;
     this.deckService = deckService;
     this.clock = clock;
     this.logger = logger;
     this.revisionTracker = revisionTracker ?? new RevisionTracker(clock);
-  }
-
-  /**
-   * Build the soul's reverse lookups (color + spacing + radius) for
-   * auto-substitution. Returns empty maps (which makes substituteSoulTokens
-   * a no-op) when the soul is missing — defensive, since add/update would
-   * have failed earlier in normal flow if the soul were genuinely gone.
-   */
-  private async tokenLookupsForDeck(deck: Deck): Promise<SoulTokenLookups> {
-    const soul = await this.soulStore.get(deck.soulId);
-    if (!soul) return { color: new Map(), spacing: new Map(), radius: new Map(), font: new Map() };
-    return buildSoulTokenLookups(soul.layers);
   }
 
   /** Resolve a UUID or slug to a DeckId. Delegates to DeckService. */
@@ -115,22 +89,20 @@ export class DocumentService {
   /**
    * Add a new section (content block) to a document-model deck.
    *
-   * Auto-fills provenance metadata (generatedAt, soulId, deckId, position,
-   * metaVersion='3.0', revisionHash) mirroring DeckService.addSlide.
+   * v4.5: input carries a structured IR tree, not raw HTML. The service
+   * compiles IR → HTML deterministically, embeds @section-meta, and
+   * stores both the IR (source of truth) and the compiled HTML (used
+   * by the App, exporters, and DocumentComposer).
    *
-   * Also runs `substituteSoulTokens` against the active soul's token
-   * lookups (color + spacing + radius) before persisting: any literal that
-   * exactly matches a soul token is rewritten to `var(--token)`, and the
-   * change set is returned so callers can echo it to the agent. The agent
-   * learns the substitution from the response and emits the var() form on
-   * the next turn.
+   * Auto-fills provenance metadata (generatedAt, soulId, deckId,
+   * position, metaVersion='4.5', revisionHash).
    *
    * @throws DeckNotFoundError if the deck does not exist.
    * @throws WrongAuthoringModelError if the deck is slides-mode.
    */
   async addSection(
     input: AddSectionInput,
-  ): Promise<{ section: Section; substitutions: TokenSubstitution[] }> {
+  ): Promise<{ section: Section }> {
     const did = await this.resolveDeckRef(input.deckId);
     const deck = await this.deckStore.get(did);
     if (!deck) {
@@ -142,14 +114,11 @@ export class DocumentService {
     const currentSectionIds = deck.sectionIds ?? [];
     const position = input.position ?? currentSectionIds.length;
 
-    // Auto-substitute soul-known token literals (color, spacing, radius)
-    // BEFORE building the meta hash, so the hash reflects what is actually
-    // stored. Any literal the soul does not declare passes through
-    // untouched and falls to the relevant compliance check at validation
-    // time.
-    const lookups = await this.tokenLookupsForDeck(deck);
-    const sub = substituteSoulTokens(input.html, lookups);
-    const sourceHtml = sub.html;
+    // Compile IR → HTML. The compiler emits soul-token references
+    // (var(--*)) by construction, so no post-emit substitution is
+    // needed. Asset references emit as asset://UUID and resolve at
+    // render boundaries via the existing resolveAssetRefs.
+    const sourceHtml = compileSectionIRToHtml({ ir: input.ir, kind: input.kind });
 
     const metadata: SectionMetadata = {
       title: input.metadata.title,
@@ -179,7 +148,7 @@ export class DocumentService {
       position,
       metaVersion: '3.0',
       revisionHash: sha256(sourceHtml),
-    };
+    } as SectionMetadata;
 
     // `metadata.revisionHash` hashes the post-substitution HTML so the
     // hash matches what is stored. The stored HTML additionally carries
@@ -192,6 +161,7 @@ export class DocumentService {
       id: generateSectionId(),
       deckId: deck.id,
       position,
+      ir: input.ir,
       html: embeddedHtml,
       kind: input.kind,
       breakHints: { ...(input.breakHints ?? {}) },
@@ -232,20 +202,19 @@ export class DocumentService {
       deckId: deck.id,
       sectionId: section.id,
       position,
-      autoSubstitutions: sub.substitutions.length,
     });
-    return { section, substitutions: sub.substitutions };
+    return { section };
   }
 
   // ── Update Section ───────────────────────────────────────────────
 
   /**
-   * Update a section's HTML / kind / break hints / metadata.
+   * Update a section's IR / kind / break hints / metadata.
    *
-   * When `input.html` is supplied, soul-known token literals (color,
-   * spacing, radius) are auto-substituted before persisting (same logic as
-   * `addSection`). The substitution log is returned alongside the updated
-   * section.
+   * v4.5: when `input.ir` is supplied, the service recompiles the
+   * section HTML from the new IR and refreshes revisionHash. Soul-token
+   * substitution is structurally unnecessary in IR-world (the compiler
+   * emits var() references by construction).
    *
    * @throws DeckNotFoundError if the deck does not exist.
    * @throws SectionNotFoundError if the section does not exist.
@@ -253,7 +222,7 @@ export class DocumentService {
    */
   async updateSection(
     input: UpdateSectionInput,
-  ): Promise<{ section: Section; substitutions: TokenSubstitution[] }> {
+  ): Promise<{ section: Section }> {
     const did = await this.resolveDeckRef(input.deckId);
     const sid = sectionId(input.sectionId);
 
@@ -271,20 +240,27 @@ export class DocumentService {
     const now = this.clock.now();
     let htmlDirty = false;
     let metaDirty = false;
-    let substitutions: TokenSubstitution[] = [];
 
-    if (input.html !== undefined) {
-      const lookups = await this.tokenLookupsForDeck(deck);
-      const sub = substituteSoulTokens(input.html, lookups);
-      substitutions = sub.substitutions;
-      section.html = sub.html;
-      section.metadata.revisionHash = sha256(sub.html);
+    // Capture the new kind (if any) BEFORE compiling so the recompiled
+    // HTML carries the right pengui-{kind} class on its root.
+    const effectiveKind = input.kind ?? section.kind;
+
+    if (input.ir !== undefined) {
+      section.ir = input.ir;
+      section.html = compileSectionIRToHtml({ ir: input.ir, kind: effectiveKind });
+      section.metadata.revisionHash = sha256(section.html);
       htmlDirty = true;
     }
 
     if (input.kind !== undefined) {
       section.kind = input.kind;
       section.metadata.kind = input.kind;
+      // If kind changed but IR did not, still recompile so the HTML root
+      // class reflects the new kind.
+      if (input.ir === undefined) {
+        section.html = compileSectionIRToHtml({ ir: section.ir, kind: input.kind });
+        htmlDirty = true;
+      }
       metaDirty = true;
     }
 
@@ -347,139 +323,9 @@ export class DocumentService {
     this.logger.info('Section updated', {
       deckId: deck.id,
       sectionId: section.id,
-      autoSubstitutions: substitutions.length,
+      irChanged: input.ir !== undefined,
     });
-    return { section, substitutions };
-  }
-
-  // ── Surgical wrapper repair (promote / wrap) ────────────────────
-  //
-  // These exist so agents can fix the two most common structural errors
-  // (wrong root tag, multiple top-level elements) without re-emitting the
-  // whole fragment. They're surfaced as MCP tools `promote_section_root`
-  // and `wrap_section_root`; the structural validator's fix suggestions
-  // name them directly.
-
-  /**
-   * Describe the top-level elements of a section fragment. Used by
-   * `wrap_section_root` to echo back the structure so an agent can choose
-   * a child ordering.
-   */
-  async listSectionTopLevelElements(
-    deckRef: string,
-    sectionIdStr: string,
-  ): Promise<TopLevelElementSummary[]> {
-    const did = await this.resolveDeckRef(deckRef);
-    const sid = sectionId(sectionIdStr);
-    const section = await this.sectionStore.get(sid);
-    if (!section || (section.deckId as string) !== (did as string)) {
-      throw new SectionNotFoundError(sectionIdStr);
-    }
-    return summarizeTopLevelElements(section.html);
-  }
-
-  /**
-   * Promote a section's single root element into
-   * `<section class="pengui-section pengui-{kind}">`, preserving attrs and
-   * children. Throws if the fragment doesn't have exactly one top-level
-   * element — callers should use `wrapSectionRoot` in that case.
-   */
-  async promoteSectionRoot(
-    deckRef: string,
-    sectionIdStr: string,
-  ): Promise<Section> {
-    const did = await this.resolveDeckRef(deckRef);
-    const deck = await this.deckStore.get(did);
-    if (!deck) throw new DeckNotFoundError(deckRef);
-    this.assertDocumentModel(deck, 'update_slide');
-
-    const sid = sectionId(sectionIdStr);
-    const section = await this.sectionStore.get(sid);
-    if (!section || (section.deckId as string) !== (did as string)) {
-      throw new SectionNotFoundError(sectionIdStr);
-    }
-
-    const promoted = promoteRootToSection(section.html, section.kind);
-    if (!promoted.changed) return section;
-
-    section.html = embedSectionMeta(promoted.html, section.metadata);
-    section.metadata.revisionHash = sha256(promoted.html);
-    section.updatedAt = this.clock.now();
-
-    await this.sectionStore.save(section);
-    deck.updatedAt = section.updatedAt;
-    await this.deckStore.save(deck);
-
-    const sectionIds = deck.sectionIds ?? [];
-    const allHtmls = await this.collectSectionHtmls(deck.id, sectionIds);
-    const revision = this.revisionTracker.createRevision({
-      deckId: deck.id,
-      type: 'section_updated',
-      description: `Section "${section.metadata.title}" root promoted to <section>`,
-      slideIdsSnapshot: [],
-      slideHtmls: [],
-      sectionIdsSnapshot: sectionIds,
-      sectionHtmls: allHtmls,
-    });
-    await this.deckStore.addRevision(revision);
-
-    this.logger.info('Section root promoted', {
-      deckId: deck.id,
-      sectionId: section.id,
-    });
-    return section;
-  }
-
-  /**
-   * Wrap every top-level element in a section fragment in a new
-   * `<section class="pengui-section pengui-{kind}">`. Optional
-   * `childOrder` reorders top-level elements by their original indices.
-   */
-  async wrapSectionRoot(
-    deckRef: string,
-    sectionIdStr: string,
-    childOrder?: number[],
-  ): Promise<Section> {
-    const did = await this.resolveDeckRef(deckRef);
-    const deck = await this.deckStore.get(did);
-    if (!deck) throw new DeckNotFoundError(deckRef);
-    this.assertDocumentModel(deck, 'update_slide');
-
-    const sid = sectionId(sectionIdStr);
-    const section = await this.sectionStore.get(sid);
-    if (!section || (section.deckId as string) !== (did as string)) {
-      throw new SectionNotFoundError(sectionIdStr);
-    }
-
-    const wrapped = wrapRootsInSection(section.html, section.kind, childOrder);
-    if (!wrapped.changed) return section;
-
-    section.html = embedSectionMeta(wrapped.html, section.metadata);
-    section.metadata.revisionHash = sha256(wrapped.html);
-    section.updatedAt = this.clock.now();
-
-    await this.sectionStore.save(section);
-    deck.updatedAt = section.updatedAt;
-    await this.deckStore.save(deck);
-
-    const sectionIds = deck.sectionIds ?? [];
-    const allHtmls = await this.collectSectionHtmls(deck.id, sectionIds);
-    const revision = this.revisionTracker.createRevision({
-      deckId: deck.id,
-      type: 'section_updated',
-      description: `Section "${section.metadata.title}" top-level elements wrapped`,
-      slideIdsSnapshot: [],
-      slideHtmls: [],
-      sectionIdsSnapshot: sectionIds,
-      sectionHtmls: allHtmls,
-    });
-    await this.deckStore.addRevision(revision);
-
-    this.logger.info('Section roots wrapped', {
-      deckId: deck.id,
-      sectionId: section.id,
-    });
-    return section;
+    return { section };
   }
 
   // ── Get Section ──────────────────────────────────────────────────

@@ -93,12 +93,15 @@ export function registerGetThumbnailTool(server: McpServer, container: ServiceCo
         const section = await container.documentService.getSection(section_id!);
         const revisionHash = createHash('sha256').update(section.html).digest('hex');
 
-        // Wrap section HTML as a minimal slide for the renderer
+        // Wrap section HTML as a minimal slide for the renderer. We only
+        // need the renderer to read `html` + format geometry, so the IR
+        // field is set to an empty body — the renderer never inspects IR.
         const wrappedHtml = `<section class="slide">${section.html}</section>`;
         const fakeSlide = {
           id: section.id,
           deckId: section.deckId,
           position: section.position,
+          ir: { body: [] },
           html: wrappedHtml,
           metadata: {
             title: section.metadata.title,
@@ -108,7 +111,7 @@ export function registerGetThumbnailTool(server: McpServer, container: ServiceCo
             soulId: section.metadata.soulId,
             deckId: section.metadata.deckId,
             position: section.position,
-            metaVersion: '2.0' as const,
+            metaVersion: '1.0' as const,
           },
           sourceKind: 'legacy_html' as const,
           translationIssues: [],

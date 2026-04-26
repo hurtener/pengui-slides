@@ -1,7 +1,8 @@
 /**
  * MCP Tool: update_section
  *
- * Mutates a section's HTML, kind, break hints, and/or metadata.
+ * Mutates a section's IR tree, kind, break hints, and/or metadata. When
+ * the IR or kind changes, the section's HTML fragment is recompiled.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -11,6 +12,7 @@ import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 import { ALL_SECTION_KINDS } from '../../types/section.js';
 import { soulId } from '../../types/common.js';
+import { SectionIRSchema } from '../../domain/ir/index.js';
 
 const sourceSchema = z.object({
   url: z.string().optional().describe('Source URL.'),
@@ -54,46 +56,34 @@ export function registerUpdateSectionTool(server: McpServer, container: ServiceC
     {
       title: 'Update Section',
       description:
-        'Update any combination of a section\'s HTML, kind, break hints, or metadata. ' +
+        'Update any combination of a section\'s IR tree, kind, break hints, or metadata. ' +
         'Only valid for document-model decks. All fields are optional — pass only what you want to change. ' +
         '\n\n' +
-        'FRAGMENT CONTRACT — when replacing `html`, the same rules as `add_section` apply: one ' +
-        '`<section class="pengui-section pengui-{kind}">` root, no DOCTYPE/html/head/body/script/style, ' +
-        'no `:root { }`, no fixed page dimensions. Do NOT emit `<!-- @section-meta -->` — the server ' +
-        'always re-injects it from the current metadata struct, including when you change `metadata` ' +
-        'without touching `html`. Soul-known literals are auto-substituted for the matching ' +
-        '`var(--token)` across four categories: color hex (`#228be6` → `var(--color-accent-primary)`), ' +
-        'spacing px on margin/padding/gap/inset (`16px` → `var(--space-md)`), radius dimensions ' +
-        'on border-radius (`8px` → `var(--radius-md)`), and font-family stacks ' +
-        '(`\'Inter\', sans-serif` → `var(--font-display)`; canonicalized for quote/whitespace match). ' +
-        'Each `auto_substitutions[]` entry carries a `category` field. Values inside ' +
-        'calc()/var()/min()/max() are left alone. ' +
+        'INPUT — `section_ir` is the structured tree (hero/prose/image/callout/two_column nodes). ' +
+        'When provided, the HTML fragment is recompiled from the new IR. Token references are SEMANTIC ' +
+        '(e.g. background: "accent"); the same IR re-renders cleanly when the soul changes. ' +
+        'Fetch `pengui://schema/slide-ir` for the node grammar — sections share the slide IR. ' +
         '\n\n' +
-        'KIND CHANGES — if you only pass `kind` (without `html`), the stored HTML keeps its old ' +
-        '`pengui-{old-kind}` class. Call `promote_section_root` afterwards to normalize the class ' +
-        'list, or resubmit `html` with the new kind class. ' +
+        'KIND CHANGES — passing `kind` alone (without `section_ir`) recompiles the existing IR with ' +
+        'the new wrapper class, so the stored fragment always carries the right `pengui-{kind}` class. ' +
         '\n\n' +
-        'VALIDATION — response includes a `validation` block. Repair tools: `promote_section_root` ' +
-        '(single non-`<section>` root), `wrap_section_root` (multiple top-level nodes). ' +
+        'PARTIAL UPDATES — omit `section_ir` to keep current IR. Omit `metadata` to keep current ' +
+        'metadata. break_hints / metadata are MERGED, not replaced; pass null on a field to leave ' +
+        'it unchanged. ' +
         '\n\n' +
-        'See `pengui://docs/document-mode`.',
+        'RETURNS — `{ section_id, kind, position, title, validation }`.',
       inputSchema: z.object({
         deck_id: z.string().describe('UUID or slug of the deck containing the section.'),
         section_id: z.string().describe('UUID of the section to update.'),
-        html: z
-          .string()
-          .nullish()
-          .describe(
-            'New HTML fragment. Same contract as `add_section.html`: one `<section>` root, no ' +
-              'DOCTYPE/document-level tags, no @section-meta comment (server re-injects it).',
-          ),
+        section_ir: SectionIRSchema.nullish().describe(
+          'New structured IR tree. Omit to keep existing IR.',
+        ),
         kind: z
           .enum(ALL_SECTION_KINDS as [string, ...string[]])
           .nullish()
           .describe(
-            'New SectionKind. Changes break defaults and kind-specific shape checks. If you do not ' +
-              'also resubmit `html`, the stored wrapper may still carry the old pengui-{kind} class — ' +
-              'call `promote_section_root` after to resync.',
+            'New SectionKind. Changes break defaults and kind-specific shape checks. The HTML ' +
+              'fragment is recompiled with the new wrapper class.',
           ),
         break_hints: breakHintsSchema.describe(
           'Per-section pagination overrides to MERGE (not replace) onto the section\'s current hints. ' +
@@ -105,7 +95,7 @@ export function registerUpdateSectionTool(server: McpServer, container: ServiceC
         ),
       }),
     },
-    async ({ deck_id, section_id, html, kind, break_hints, metadata }) => {
+    async ({ deck_id, section_id, section_ir, kind, break_hints, metadata }) => {
       try {
         const breakHints = break_hints
           ? {
@@ -149,10 +139,10 @@ export function registerUpdateSectionTool(server: McpServer, container: ServiceC
             }
           : undefined;
 
-        const { section, substitutions } = await container.documentService.updateSection({
+        const { section } = await container.documentService.updateSection({
           deckId: deck_id,
           sectionId: section_id,
-          ...(html != null ? { html } : {}),
+          ...(section_ir != null ? { ir: section_ir } : {}),
           ...(kind != null
             ? { kind: kind as Parameters<typeof container.documentService.updateSection>[0]['kind'] }
             : {}),
@@ -172,7 +162,6 @@ export function registerUpdateSectionTool(server: McpServer, container: ServiceC
           kind: section.kind,
           position: section.position,
           title: section.metadata.title,
-          auto_substitutions: substitutions,
           validation: {
             passed: validation.passed,
             error_count: validation.errorCount,

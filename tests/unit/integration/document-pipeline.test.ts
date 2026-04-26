@@ -10,35 +10,34 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createContainer } from '../../../src/container.js';
 import { loadConfig } from '../../../src/config.js';
-import { sampleSoulInput } from '../../helpers/fixtures.js';
+import { sampleSoulInput, makeSlideIR } from '../../helpers/fixtures.js';
+import { rt } from '../../../src/domain/ir/rich-text.js';
+import type { SectionIR } from '../../../src/domain/ir/index.js';
 import { DocumentComposer } from '../../../src/domain/rendering/document-composer.js';
 import { Logger } from '../../../src/infrastructure/logger.js';
 import { FORMAT_REGISTRY } from '../../../src/domain/formats/format-registry.js';
 import { soulId as toSoulId } from '../../../src/types/common.js';
 
 describe('v3 continuous-document pipeline', () => {
-  const figureHtml = `<!-- @section-meta {"title":"Fig 1","kind":"figure","narrative":"A placeholder figure."} -->
-<section class="pengui-section pengui-figure">
-  <figure class="pengui-figure">
-    <svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
-      <rect x="0" y="0" width="600" height="400" fill="var(--color-surface)" />
-    </svg>
-    <figcaption>Figure 1. Short placeholder caption.</figcaption>
-  </figure>
-</section>`;
+  const figureIR: SectionIR = {
+    body: [
+      { type: 'prose', body: rt('Figure 1. Short placeholder caption.') },
+    ],
+  };
 
-  const proseHtml = `<!-- @section-meta {"title":"Intro","kind":"prose","narrative":"A welcoming introduction."} -->
-<section class="pengui-section pengui-prose">
-  <h2>Introduction</h2>
-  <p>This is the first paragraph of the document.</p>
-  <p>And a second one explaining the structure.</p>
-</section>`;
+  const proseIR: SectionIR = {
+    body: [
+      { type: 'hero', title: rt('Introduction') },
+      { type: 'prose', body: rt('This is the first paragraph of the document.') },
+      { type: 'prose', body: rt('And a second one explaining the structure.') },
+    ],
+  };
 
-  const coverHtml = `<!-- @section-meta {"title":"Cover","kind":"cover","narrative":"Document cover."} -->
-<section class="pengui-section pengui-cover">
-  <h1>A Short Handbook</h1>
-  <p>Subtitle goes here</p>
-</section>`;
+  const coverIR: SectionIR = {
+    body: [
+      { type: 'hero', title: rt('A Short Handbook'), subtitle: rt('Subtitle goes here') },
+    ],
+  };
 
   let container: ReturnType<typeof createContainer>;
   let soulIdStr: string;
@@ -72,7 +71,7 @@ describe('v3 continuous-document pipeline', () => {
     await expect(
       container.deckService.addSlide({
         deckId: deckIdStr,
-        html: '<div class="slide"></div>',
+        ir: makeSlideIR(),
         metadata: { title: 't', type: 'content', narrative: '' },
       }),
     ).rejects.toMatchObject({ code: 'WRONG_AUTHORING_MODEL' });
@@ -82,7 +81,7 @@ describe('v3 continuous-document pipeline', () => {
     const { section: cover } = await container.documentService.addSection({
       deckId: deckIdStr,
       kind: 'cover',
-      html: coverHtml,
+      ir: coverIR,
       metadata: { title: 'Cover', narrative: '' },
     });
     expect(cover.kind).toBe('cover');
@@ -91,7 +90,7 @@ describe('v3 continuous-document pipeline', () => {
     const { section: prose } = await container.documentService.addSection({
       deckId: deckIdStr,
       kind: 'prose',
-      html: proseHtml,
+      ir: proseIR,
       metadata: { title: 'Intro', narrative: '' },
     });
     expect(prose.position).toBe(1);
@@ -105,19 +104,19 @@ describe('v3 continuous-document pipeline', () => {
     await container.documentService.addSection({
       deckId: deckIdStr,
       kind: 'cover',
-      html: coverHtml,
+      ir: coverIR,
       metadata: { title: 'Cover', narrative: '' },
     });
     await container.documentService.addSection({
       deckId: deckIdStr,
       kind: 'prose',
-      html: proseHtml,
+      ir: proseIR,
       metadata: { title: 'Intro', narrative: '' },
     });
     await container.documentService.addSection({
       deckId: deckIdStr,
       kind: 'figure',
-      html: figureHtml,
+      ir: figureIR,
       metadata: { title: 'Fig 1', narrative: '' },
       breakHints: { keepTogether: true },
     });

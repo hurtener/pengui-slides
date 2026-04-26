@@ -18,9 +18,18 @@ export function registerValidateSlideTool(server: McpServer, container: ServiceC
   server.registerTool(
     'validate_slide',
     {
-      title: 'Validate Slide',
+      title: 'Validate Slide (HTML)',
       description:
-        'Validate slide HTML against a Design Soul. Pass deck_id to validate against the deck\'s actual format geometry — without it the check uses the slides_16_9 default (1920×1080), which WILL flag false safe-area errors on print decks authored at 1240×1754 or 1275×1650. Returns issues, style score, and pass/fail status.',
+        'Validate slide HTML (the COMPILED snapshot) against a Design Soul. Useful for inspecting ' +
+        'the post-compile output of an IR-authored slide, or for diagnosing a stored slide\'s ' +
+        'lint/render results without re-running add_slide. ' +
+        '\n\n' +
+        'For pre-flight checks on agent-authored IR, prefer `validate_slide_ir` — it skips the ' +
+        'compile step entirely and returns Zod-level shape errors. ' +
+        '\n\n' +
+        'Pass deck_id to validate against the deck\'s actual format geometry — without it the check ' +
+        'uses the slides_16_9 default (1920×1080), which WILL flag false safe-area errors on print ' +
+        'decks authored at 1240×1754 or 1275×1650.',
       inputSchema: z.object({
         html: z.string().describe('The slide HTML to validate.'),
         soul_id: z.string().describe('The Design Soul to validate against.'),

@@ -8,7 +8,8 @@ import { InMemorySoulStore } from '../../../../src/storage/memory/soul-store.js'
 import { FixedClock } from '../../../../src/infrastructure/clock.js';
 import { Logger } from '../../../../src/infrastructure/logger.js';
 import { SoulService } from '../../../../src/domain/souls/soul-service.js';
-import { sampleSoulInput } from '../../../helpers/fixtures.js';
+import { sampleSoulInput, makeSectionIR } from '../../../helpers/fixtures.js';
+import { rt } from '../../../../src/domain/ir/rich-text.js';
 import {
   DeckNotFoundError,
   SectionNotFoundError,
@@ -47,7 +48,7 @@ describe('DocumentService', () => {
       clock,
       logger,
     );
-    documentService = new DocumentService(deckStore, sectionStore, soulStore, deckService, clock, logger);
+    documentService = new DocumentService(deckStore, sectionStore, deckService, clock, logger);
 
     const soul = await soulService.register(sampleSoulInput);
     await soulService.approve(soul.id);
@@ -70,7 +71,7 @@ describe('DocumentService', () => {
       const { section } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"><p>Hello</p></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'Intro', narrative: 'Intro narrative' },
       });
 
@@ -84,7 +85,7 @@ describe('DocumentService', () => {
       const { section } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'S1', narrative: '' },
       });
 
@@ -101,13 +102,13 @@ describe('DocumentService', () => {
       const { section: s1 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'A', narrative: '' },
       });
       const { section: s2 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'figure',
-        html: '<section class="pengui-section pengui-figure"></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'B', narrative: '' },
       });
 
@@ -119,20 +120,20 @@ describe('DocumentService', () => {
       const { section: s1 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'A', narrative: '' },
       });
       const { section: s2 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'B', narrative: '' },
       });
 
       const { section: inserted } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'Inserted', narrative: '' },
         position: 1,
       });
@@ -151,13 +152,13 @@ describe('DocumentService', () => {
       const { section: s1 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'A', narrative: '' },
       });
       const { section: s2 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'B', narrative: '' },
       });
 
@@ -172,7 +173,7 @@ describe('DocumentService', () => {
       const { section: s1 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'A', narrative: '' },
       });
       const revisions = await deckStore.getRevisions(s1.deckId);
@@ -187,7 +188,7 @@ describe('DocumentService', () => {
         documentService.addSection({
           deckId: 'nope',
           kind: 'prose',
-          html: '<section class="pengui-section pengui-prose"></section>',
+          ir: makeSectionIR(),
           metadata: { title: '', narrative: '' },
         }),
       ).rejects.toThrow(DeckNotFoundError);
@@ -198,7 +199,7 @@ describe('DocumentService', () => {
         documentService.addSection({
           deckId: slidesDeckId,
           kind: 'prose',
-          html: '<section class="pengui-section pengui-prose"></section>',
+          ir: makeSectionIR(),
           metadata: { title: '', narrative: '' },
         }),
       ).rejects.toThrow(WrongAuthoringModelError);
@@ -209,7 +210,7 @@ describe('DocumentService', () => {
         await documentService.addSection({
           deckId: slidesDeckId,
           kind: 'prose',
-          html: '<section class="pengui-section pengui-prose"></section>',
+          ir: makeSectionIR(),
           metadata: { title: '', narrative: '' },
         });
         expect.fail('expected WrongAuthoringModelError');
@@ -229,23 +230,23 @@ describe('DocumentService', () => {
       const { section: s } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose">old</section>',
+        ir: makeSectionIR(),
         metadata: { title: 'Old', narrative: 'Old narrative' },
       });
       sectionId = s.id as string;
     });
 
-    it('updates html and recomputes revisionHash', async () => {
+    it('recompiles HTML and recomputes revisionHash when ir changes', async () => {
       const before = await documentService.getSection(sectionId);
       const oldHash = before.metadata.revisionHash;
 
       const { section: updated } = await documentService.updateSection({
         deckId: documentDeckId,
         sectionId,
-        html: '<section class="pengui-section pengui-prose">new</section>',
+        ir: { body: [{ type: 'prose', body: rt('updated body content') }] },
       });
 
-      expect(updated.html).toContain('new');
+      expect(updated.html).toContain('updated body content');
       expect(updated.metadata.revisionHash).not.toBe(oldHash);
     });
 
@@ -284,7 +285,7 @@ describe('DocumentService', () => {
         documentService.updateSection({
           deckId: documentDeckId,
           sectionId: 'nope',
-          html: '<section class="pengui-section pengui-prose"></section>',
+          ir: makeSectionIR(),
         }),
       ).rejects.toThrow(SectionNotFoundError);
     });
@@ -294,7 +295,7 @@ describe('DocumentService', () => {
         documentService.updateSection({
           deckId: slidesDeckId,
           sectionId,
-          html: '<section class="pengui-section pengui-prose"></section>',
+          ir: makeSectionIR(),
         }),
       ).rejects.toThrow(WrongAuthoringModelError);
     });
@@ -307,7 +308,7 @@ describe('DocumentService', () => {
       const { section: created } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose">x</section>',
+        ir: makeSectionIR(),
         metadata: { title: 'S', narrative: '' },
       });
       const fetched = await documentService.getSection(created.id as string);
@@ -329,19 +330,19 @@ describe('DocumentService', () => {
       const { section: s1 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'A', narrative: '' },
       });
       const { section: s2 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'B', narrative: '' },
       });
       const { section: s3 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'C', narrative: '' },
       });
 
@@ -384,19 +385,19 @@ describe('DocumentService', () => {
       const { section: s1 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'A', narrative: '' },
       });
       const { section: s2 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'B', narrative: '' },
       });
       const { section: s3 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'C', narrative: '' },
       });
 
@@ -434,13 +435,13 @@ describe('DocumentService', () => {
       const { section: s1 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'A', narrative: '' },
       });
       const { section: s2 } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'B', narrative: '' },
       });
 
@@ -510,7 +511,7 @@ describe('DocumentService', () => {
       const { section } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"><p>x</p></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'Hello', narrative: 'N' },
       });
       expect(section.html).toMatch(/<!--\s*@section-meta/);
@@ -526,7 +527,7 @@ describe('DocumentService', () => {
       const { section: created } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"><p>x</p></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'First', narrative: 'N' },
       });
       const { section: updated } = await documentService.updateSection({
@@ -538,51 +539,11 @@ describe('DocumentService', () => {
       expect(updated.html).toContain('"title": "Second"');
     });
 
-    it('promoteSectionRoot rewrites a <div> root into a conforming <section>', async () => {
-      const { section: created } = await documentService.addSection({
-        deckId: documentDeckId,
-        kind: 'cover',
-        html: '<div class="cover" style="background:red"><h1>Hi</h1></div>',
-        metadata: { title: 'Cover', narrative: 'N' },
-      });
-      const promoted = await documentService.promoteSectionRoot(
-        documentDeckId,
-        created.id as string,
-      );
-      expect(promoted.html).toMatch(/<section[^>]*class="pengui-section pengui-cover cover"/);
-      expect(promoted.html).toContain('style="background:red"');
-      expect(promoted.html).toContain('<h1>Hi</h1>');
-    });
-
-    it('wrapSectionRoot bundles multiple top-level elements into a single section', async () => {
-      const { section: created } = await documentService.addSection({
-        deckId: documentDeckId,
-        kind: 'cover',
-        html: '<div class="stripe"></div><div class="body">b</div><div class="foot">f</div>',
-        metadata: { title: 'Cover', narrative: 'N' },
-      });
-      const elements = await documentService.listSectionTopLevelElements(
-        documentDeckId,
-        created.id as string,
-      );
-      expect(elements).toHaveLength(3);
-
-      const wrapped = await documentService.wrapSectionRoot(
-        documentDeckId,
-        created.id as string,
-      );
-      const sectionMatches = wrapped.html.match(/<section/g) ?? [];
-      expect(sectionMatches).toHaveLength(1);
-      expect(wrapped.html).toContain('<div class="stripe">');
-      expect(wrapped.html).toContain('<div class="body">');
-      expect(wrapped.html).toContain('<div class="foot">');
-    });
-
     it('re-embeds @section-meta when reindexPositions bumps the position (via insert at head)', async () => {
       const { section: first } = await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"><p>first</p></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'First', narrative: 'N' },
       });
       // Inserting at position 0 shifts the first section to position 1.
@@ -591,7 +552,7 @@ describe('DocumentService', () => {
       await documentService.addSection({
         deckId: documentDeckId,
         kind: 'prose',
-        html: '<section class="pengui-section pengui-prose"><p>new</p></section>',
+        ir: makeSectionIR(),
         metadata: { title: 'Inserted', narrative: 'N' },
         position: 0,
       });
@@ -602,22 +563,5 @@ describe('DocumentService', () => {
       expect(shifted.html).not.toContain('"position": 0');
     });
 
-    it('wrapSectionRoot honors child_order', async () => {
-      const { section: created } = await documentService.addSection({
-        deckId: documentDeckId,
-        kind: 'prose',
-        html: '<div>A</div><div>B</div><div>C</div>',
-        metadata: { title: 'T', narrative: 'N' },
-      });
-      const wrapped = await documentService.wrapSectionRoot(
-        documentDeckId,
-        created.id as string,
-        [2, 0, 1],
-      );
-      const inner = wrapped.html
-        .replace(/^[\s\S]*?<section[^>]*>/, '')
-        .replace(/<\/section>[\s\S]*$/, '');
-      expect(inner).toBe('<div>C</div><div>A</div><div>B</div>');
-    });
   });
 });

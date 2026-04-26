@@ -1,8 +1,10 @@
 /**
  * MCP Tool: add_slide
  *
- * Adds a new slide to an existing deck, then validates the HTML
- * against the deck's Design Soul.
+ * Adds a new slide to an existing deck from a structured SlideIR tree.
+ * The deck-service compiles the IR into HTML, embeds @slide-meta, and
+ * stores both representations on the slide. Stage 1/Stage 2 validation
+ * runs against the compiled HTML using the deck's Design Soul.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -15,10 +17,7 @@ import {
   buildValidationDelta,
   buildValidationPresentation,
 } from '../../domain/validation/validation-presentation.js';
-import {
-  buildSoulTokenLookups,
-  substituteSoulTokens,
-} from '../../domain/souls/index.js';
+import { SlideIRSchema } from '../../domain/ir/index.js';
 
 const dataPointSchema = z.object({
   label: z.string().describe('Label for the data point.'),
@@ -55,33 +54,25 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
     {
       title: 'Add Slide',
       description:
-        'Add a new slide to a slide-model deck. ONLY applies to decks with authoringModel="slides" (slides_16_9, plus legacy print decks created with authoringModel="slides"). For document-model print decks (v3 default), use add_section instead — the tool returns a WRONG_AUTHORING_MODEL error naming add_section. The slide HTML must declare .slide dimensions that match the DECK FORMAT: 1920×1080 for slides_16_9, 1240×1754 for print_a4_portrait (legacy), 1275×1650 for print_letter_portrait (legacy). .slide MUST carry "position: relative" and "padding: var(--space-safe-area)"; declare "html, body { margin: 0 }" explicitly. The server auto-injects @slide-meta from `metadata` and auto-substitutes literal CSS values for the matching soul-declared `var(--*)` before storage. Four categories are substituted: color hex literals (e.g. `#228be6` → `var(--color-accent-primary)`), spacing px literals on margin/padding/gap/inset/top/right/bottom/left (e.g. `padding: 16px` → `var(--space-md)`), radius dimensions on border-radius (e.g. `border-radius: 8px` → `var(--radius-md)`), and font-family stacks (e.g. `font-family: \'Inter\', sans-serif` → `var(--font-display)`; canonicalized so quote/whitespace variants match). The change set is returned in `auto_substitutions` (each entry tagged with `category: "color" | "spacing" | "radius" | "font"`) so you can emit var() form directly on the next turn. Values inside calc()/var()/min()/max() are left alone. See pengui://docs/slide-format for the canonical template. See pengui://docs/document-mode for the v3 continuous-document flow. Returns the slide ID, position, slide count, auto-substitutions, and validation results.',
+        'Add a new slide to a slide-model deck. ONLY applies to decks with authoringModel="slides" (slides_16_9, plus legacy print decks created with authoringModel="slides"). For document-model print decks (v3 default), use add_section instead — the tool returns a WRONG_AUTHORING_MODEL error naming add_section. ' +
+        '\n\n' +
+        'INPUT — `slide_ir` is a structured tree of nodes (hero, prose, image, callout, two_column). The compiler produces HTML deterministically using the deck\'s Design Soul tokens, so agents do not write CSS or hex literals — token references are SEMANTIC (e.g. background: "accent" → var(--color-accent-primary)). Fetch `pengui://schema/slide-ir` for the full node grammar and field shapes. ' +
+        '\n\n' +
+        'IMAGES — image nodes reference assets by id (e.g. `asset_id: "uuid"`). Upload binaries with `upload_asset` first, then pass the returned id. ' +
+        '\n\n' +
+        'RETURNS — `{ slide_id, position, slide_count, source_kind: "authored_ir", validation, validation_delta }`. The slide is stored with both `ir` (source of truth) and `html` (compiled snapshot for App/exporters).',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to add the slide to.'),
-        html: z.string().describe('The slide HTML content.'),
+        slide_ir: SlideIRSchema.describe('Structured IR tree describing the slide content.'),
         metadata: metadataSchema.describe('Slide metadata.'),
         position: z.number().nullish().describe('Zero-based position to insert the slide. Appends to end if omitted.'),
       }),
     },
-    async ({ deck_id, html, metadata, position }) => {
+    async ({ deck_id, slide_ir, metadata, position }) => {
       try {
-        // Load the deck's soul up-front so we can run token-literal
-        // substitution before storage. Any soul-known color hex, spacing
-        // px, or radius dimension in the slide HTML is rewritten to
-        // var(--token); the change set is returned in the response so the
-        // agent learns and emits the var() form on the next turn.
-        const deckPre = await container.deckService.getDeckSummary(deck_id);
-        const soulPre = await container.soulStore.get(deckPre.soulId);
-        const lookups = soulPre
-          ? buildSoulTokenLookups(soulPre.layers)
-          : { color: new Map(), spacing: new Map(), radius: new Map(), font: new Map() };
-        const sub = substituteSoulTokens(html, lookups);
-        const sourceHtml = sub.html;
-
-        // 1. Add slide (stores with substituted HTML)
         const slide = await container.deckService.addSlide({
           deckId: deck_id,
-          html: sourceHtml,
+          ir: slide_ir,
           metadata: {
             title: metadata.title,
             type: metadata.type,
@@ -96,43 +87,20 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
           position: position ?? undefined,
         });
 
-        // 2. Embed metadata into the (substituted) HTML
-        const embeddedHtml = container.metadataEmbedder.embed(sourceHtml, slide.metadata);
-
-        // 3. Update the slide with embedded HTML
-        await container.deckService.updateSlide({
-          deckId: deck_id,
-          slideId: slide.id as string,
-          html: embeddedHtml,
-        });
-
-        // 4. Retrieve the deck to get the soul ID and slide count
         const deck = await container.deckService.getDeckSummary(deck_id);
         const sId = soulId(deck.soulId as string);
 
-        // 5. Validate the embedded HTML against the deck's Design Soul using the deck's format geometry
-        const validation = await container.validationService.validateSlide(embeddedHtml, sId, 'lint', deck.format);
+        const validation = await container.validationService.validateSlide(
+          slide.html,
+          sId,
+          'lint',
+          deck.format,
+        );
 
-        // 6. Store the validation result on the slide
         await container.deckService.updateSlide({
           deckId: deck_id,
           slideId: slide.id as string,
           lastValidation: validation,
-        });
-
-        // 7. Compile HTML into the canonical slide document when possible.
-        const refreshedSlide = await container.deckService.getSlide(slide.id as string);
-        const compilation = await container.slideDocumentService.compileSlideHtml(
-          embeddedHtml,
-          refreshedSlide.metadata.revisionHash,
-        );
-        const translationState = container.slideDocumentService.buildTranslationState(compilation);
-        await container.deckService.updateSlide({
-          deckId: deck_id,
-          slideId: slide.id as string,
-          sourceKind: translationState.sourceKind,
-          document: translationState.document ?? undefined,
-          translationIssues: translationState.translationIssues,
         });
 
         const validationDelta = buildValidationDelta(validation, null);
@@ -142,9 +110,7 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
           slide_id: slide.id,
           position: slide.position,
           slide_count: deck.slideCount,
-          source_kind: translationState.sourceKind,
-          translation_issues: translationState.translationIssues,
-          auto_substitutions: sub.substitutions,
+          source_kind: slide.sourceKind,
           validation,
           validation_delta: validationDelta,
           validation_presentation: validationPresentation,

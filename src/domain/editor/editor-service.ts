@@ -1,8 +1,6 @@
 import type { DeckService } from '../decks/deck-service.js';
 import type { SoulService } from '../souls/soul-service.js';
-import type { ValidationService } from '../validation/validation-service.js';
 import type { RenderService } from '../rendering/render-service.js';
-import type { MetadataEmbedder } from '../metadata/metadata-embedder.js';
 import type { Logger } from '../../infrastructure/logger.js';
 import type { Slide } from '../../types/deck.js';
 import type { EditorState, EditorThumbnail, ApplyTextEditInput } from '../../types/editor.js';
@@ -11,7 +9,6 @@ import type {
   SessionView,
   SetActiveWorkspaceInput,
 } from '../../types/session.js';
-import { soulId } from '../../types/common.js';
 import { DeckEmptyError, DeckNotFoundError, SlideNotFoundError, SlideRevisionConflictError } from '../../types/errors.js';
 import { TextEditableNormalizer } from './text-editable-normalizer.js';
 import {
@@ -30,9 +27,7 @@ export class EditorService {
   constructor(
     private readonly deckService: DeckService,
     private readonly soulService: SoulService,
-    private readonly validationService: ValidationService,
     private readonly renderService: RenderService,
-    private readonly metadataEmbedder: MetadataEmbedder,
     private readonly slideDocumentService: SlideDocumentService,
     private readonly logger: Logger,
   ) {}
@@ -133,6 +128,13 @@ export class EditorService {
 
     if ((slide.deckId as string) !== input.deckId) {
       throw new DeckNotFoundError(input.deckId);
+    }
+
+    if (slide.sourceKind === 'authored_ir') {
+      throw new Error(
+        'EDITOR_HTML_MUTATION_DISABLED: slide is IR-first (sourceKind=authored_ir); ' +
+          'HTML-mutation editor flows are disabled until the IR-aware editor surface ships in v4.6.',
+      );
     }
 
     if (slide.metadata.revisionHash !== input.expectedRevisionHash) {
@@ -260,7 +262,10 @@ export class EditorService {
         sourceKind: finalSelectedSlide.sourceKind,
         document: selectedDocument,
         translationIssues: finalSelectedSlide.translationIssues,
-        editableExportReady: finalSelectedSlide.sourceKind === 'document_v1'
+        editableExportReady: (
+          finalSelectedSlide.sourceKind === 'document_v1'
+          || finalSelectedSlide.sourceKind === 'authored_ir'
+        )
           && !finalSelectedSlide.translationIssues.some((issue) => issue.severity === 'error'),
         metadata: finalSelectedSlide.metadata,
         lastValidation: finalSelectedSlide.lastValidation ?? null,
@@ -274,26 +279,20 @@ export class EditorService {
   }
 
   private async ensureEditableMarkup(
-    deckId: string,
+    _deckId: string,
     slide: Slide,
-    soulIdStr: string,
+    _soulIdStr: string,
   ): Promise<Slide> {
-    const normalized = this.normalizer.normalize(slide.html);
-    if (!normalized.changed) {
-      return slide;
-    }
-
-    this.logger.info('Normalizing slide for text editing', {
-      deckId,
-      slideId: slide.id,
-    });
-
-    await this.persistSlideState(deckId, slide, normalized.html, undefined, soulIdStr);
-    return this.deckService.getSlide(slide.id as string);
+    // v4.5: slides are IR-first. The legacy normalizer added data-edit-id
+    // attributes to slide HTML so the App could target text nodes, but
+    // mutating the stored HTML conflicts with the IR-as-source-of-truth
+    // contract. The IR-aware editable markup pass lands with the v4.6
+    // editor surface — until then, return the slide unchanged.
+    return slide;
   }
 
   private async ensureDocumentState(deckId: string, slide: Slide): Promise<SlideDocument | null> {
-    if (!this.slideDocumentService.needsCompilation(slide)) {
+    if (!this.slideDocumentService.needsEditorCompilation(slide)) {
       return slide.document ?? null;
     }
 
@@ -301,7 +300,7 @@ export class EditorService {
       slide.html,
       slide.metadata.revisionHash,
     );
-    const translationState = this.slideDocumentService.buildTranslationState(compilation);
+    const translationState = this.slideDocumentService.buildTranslationState(compilation, slide.sourceKind);
 
     await this.deckService.updateSlide({
       deckId,
@@ -354,39 +353,19 @@ export class EditorService {
   }
 
   private async persistSlideState(
-    deckId: string,
-    slide: Slide,
-    rawHtml: string,
-    document?: SlideDocument | null,
-    soulIdStr?: string,
+    _deckId: string,
+    _slide: Slide,
+    _rawHtml: string,
+    _document?: SlideDocument | null,
+    _soulIdStr?: string,
   ): Promise<void> {
-    const embeddedHtml = this.metadataEmbedder.update(rawHtml, slide.metadata);
-    const updateInput: Parameters<typeof this.deckService.updateSlide>[0] = {
-      deckId,
-      slideId: slide.id as string,
-      html: embeddedHtml,
-    };
-
-    if (document !== undefined) {
-      updateInput.sourceKind = document ? 'document_v1' : 'legacy_html';
-      updateInput.document = document ?? undefined;
-      updateInput.translationIssues = document ? [] : slide.translationIssues;
-    }
-
-    await this.deckService.updateSlide(updateInput);
-
-    const deckSummary = await this.deckService.getDeckSummary(deckId);
-    const validation = await this.validationService.validateSlide(
-      embeddedHtml,
-      soulId(soulIdStr ?? (deckSummary.soulId as string)),
-      'lint',
-      deckSummary.format,
+    // v4.5: slides are IR-first. Direct HTML mutation through the editor
+    // is no longer supported — the WYSIWYG must mutate IR. The IR-aware
+    // editor mutation surface lands in v4.6+. Raising here makes
+    // apply_text_edit fail loudly rather than silently dropping changes.
+    throw new Error(
+      'EDITOR_HTML_MUTATION_DISABLED: slides are IR-first in v4.5; HTML-mutation editor flows ' +
+        'are disabled until the IR-aware editor surface ships in v4.6.',
     );
-
-    await this.deckService.updateSlide({
-      deckId,
-      slideId: slide.id as string,
-      lastValidation: validation,
-    });
   }
 }

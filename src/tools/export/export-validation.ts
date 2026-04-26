@@ -164,7 +164,10 @@ export async function ensureSlidesReadyForEditableExport(
         workingSlide.html,
         workingSlide.metadata.revisionHash,
       );
-      const translationState = container.slideDocumentService.buildTranslationState(compilation);
+      const translationState = container.slideDocumentService.buildTranslationState(
+        compilation,
+        workingSlide.sourceKind,
+      );
 
       await container.deckService.updateSlide({
         deckId,
@@ -177,8 +180,10 @@ export async function ensureSlidesReadyForEditableExport(
       workingSlide = await container.deckService.getSlide(workingSlide.id as string);
     }
 
+    const isExportable =
+      workingSlide.sourceKind === 'document_v1' || workingSlide.sourceKind === 'authored_ir';
     if (
-      workingSlide.sourceKind !== 'document_v1'
+      !isExportable
       || !workingSlide.document
       || workingSlide.translationIssues.some((issue) => issue.severity === 'error')
     ) {

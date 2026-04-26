@@ -10,6 +10,7 @@
 
 import type { DeckId, SectionId, ISOTimestamp } from './common.js';
 import type { ValidationResult } from './validation.js';
+import type { SectionIR } from '../domain/ir/slide-ir.js';
 
 // ── SectionKind ───────────────────────────────────────────────────
 
@@ -145,11 +146,17 @@ export interface Section {
   deckId: DeckId;
   position: number;
   /**
-   * HTML FRAGMENT. Must start with a single
-   * `<section class="pengui-section pengui-{kind}">` wrapper. No
-   * `<!DOCTYPE>`, `<html>`, `<head>`, `<body>`, `<script>`, no standalone
-   * `<style>` blocks, no `:root` tokens (those are composed in once),
-   * no fixed page-shaped dimensions. Section Stage 1 enforces this.
+   * Pengui v4.5 source of truth: structured IR tree the agent authored.
+   * The compiler in `src/domain/ir/compile/` produces the HTML fragment
+   * stored in `html` deterministically; soul-token changes propagate
+   * without per-section rewrites.
+   */
+  ir: SectionIR;
+  /**
+   * HTML FRAGMENT — DERIVED from `ir` on every add/update. Always a
+   * single root `<section class="pengui-section pengui-{kind}">`. The
+   * App, exporters, and DocumentComposer still read this. Do NOT edit
+   * `html` directly; mutate `ir` and recompile.
    */
   html: string;
   kind: SectionKind;
@@ -165,7 +172,13 @@ export interface Section {
 export interface AddSectionInput {
   deckId: string;
   kind: SectionKind;
-  html: string;
+  /**
+   * Structured IR tree. Replaces the v4.x `html` field. The
+   * DocumentService validates the IR, compiles to HTML via
+   * `compileSectionIRToHtml`, embeds @section-meta, and stores both
+   * the IR and the compiled HTML on the Section record.
+   */
+  ir: SectionIR;
   metadata: {
     title: string;
     narrative: string;
@@ -181,7 +194,9 @@ export interface AddSectionInput {
 export interface UpdateSectionInput {
   deckId: string;
   sectionId: string;
-  html?: string;
+  /** New IR tree. When provided, recompiles HTML and refreshes
+   *  revisionHash. When omitted, the existing IR is preserved. */
+  ir?: SectionIR;
   kind?: SectionKind;
   breakHints?: SectionBreakHints;
   metadata?: Partial<AddSectionInput['metadata']>;

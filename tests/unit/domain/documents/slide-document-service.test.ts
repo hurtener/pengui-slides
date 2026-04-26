@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { createContainer } from '../../../../src/container.js';
 import { loadConfig } from '../../../../src/config.js';
-import { makeValidSlideHtml, sampleSoulInput } from '../../../helpers/fixtures.js';
+import { makeValidSlideHtml, makeSlideIR, sampleSoulInput } from '../../../helpers/fixtures.js';
 
 describe('SlideDocumentService', () => {
   const containers: ReturnType<typeof createContainer>[] = [];
@@ -52,7 +52,7 @@ describe('SlideDocumentService', () => {
     expect(textElement && 'text' in textElement ? textElement.text : '').toContain('• Blocked');
   }, 10000);
 
-  it('surfaces document-backed editor state after lazy compilation', async () => {
+  it('preserves authored_ir sourceKind on editor open (no wasted lazy compilation)', async () => {
     const container = createContainer(loadConfig({ logLevel: 'error' }));
     containers.push(container);
 
@@ -62,7 +62,7 @@ describe('SlideDocumentService', () => {
 
     const slide = await container.deckService.addSlide({
       deckId: deck.id as string,
-      html: makeValidSlideHtml('Editor document'),
+      ir: makeSlideIR('Editor document'),
       metadata: {
         title: 'Doc Slide',
         type: 'content',
@@ -72,8 +72,12 @@ describe('SlideDocumentService', () => {
 
     const state = await container.editorService.getEditorState(deck.id as string, slide.id as string);
 
-    expect(state.selectedSlide.sourceKind).toBe('document_v1');
-    expect(state.selectedSlide.document).not.toBeNull();
+    // v4.5: opening an IR slide in the editor must NOT clobber sourceKind.
+    // The IR tree is the canonical representation; the App reads slide.html
+    // for preview. SlideDocument is only produced lazily for editable
+    // export paths (export_pptx, export_google_slides).
+    expect(state.selectedSlide.sourceKind).toBe('authored_ir');
+    expect(state.selectedSlide.document).toBeNull();
     expect(state.selectedSlide.editableExportReady).toBe(true);
   }, 12000);
 

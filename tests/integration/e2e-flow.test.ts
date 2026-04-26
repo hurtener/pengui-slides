@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createContainer } from '../../src/container.js';
 import { loadConfig } from '../../src/config.js';
 import { HtmlExporter } from '../../src/domain/rendering/html-exporter.js';
-import { sampleSoulInput, makeValidSlideHtml } from '../helpers/fixtures.js';
+import { sampleSoulInput, makeSlideIR, makeValidSlideHtml } from '../helpers/fixtures.js';
 
 describe('End-to-end flow (no MCP)', () => {
   it('register soul -> approve -> create deck -> add slide -> validate -> export HTML', async () => {
@@ -30,10 +30,9 @@ describe('End-to-end flow (no MCP)', () => {
     expect(deck.slideIds).toHaveLength(0);
 
     // 4. Add Slide
-    const slideHtml = makeValidSlideHtml('E2E Slide Content');
     const slide = await container.deckService.addSlide({
       deckId: deck.id as string,
-      html: slideHtml,
+      ir: makeSlideIR('E2E Slide Content'),
       metadata: {
         title: 'First Slide',
         type: 'content',
@@ -45,10 +44,11 @@ describe('End-to-end flow (no MCP)', () => {
     expect(slide.position).toBe(0);
     expect(slide.metadata.title).toBe('First Slide');
     expect(slide.metadata.metaVersion).toBe('1.0');
+    expect(slide.sourceKind).toBe('authored_ir');
 
-    // 5. Validate (lint only)
+    // 5. Validate (lint only) — use the compiled HTML now stored on the slide
     const validation = await container.validationService.validateSlide(
-      slideHtml,
+      slide.html,
       soul.id,
       'lint',
     );
@@ -88,7 +88,7 @@ describe('End-to-end flow (no MCP)', () => {
     // 7. Add a second slide
     const slide2 = await container.deckService.addSlide({
       deckId: deck.id as string,
-      html: makeValidSlideHtml('Second Slide Content'),
+      ir: makeSlideIR('Second Slide Content'),
       metadata: {
         title: 'Second Slide',
         type: 'metrics',
@@ -132,8 +132,7 @@ describe('End-to-end flow (no MCP)', () => {
     expect(htmlOutput).toContain('slide-frame');
 
     // 11. Verify metadata can be parsed
-    const metadata = container.metadataParser.parse(slideHtml);
-    // makeValidSlideHtml embeds minimal meta in it
+    const metadata = container.metadataParser.parse(slide.html);
     expect(metadata).not.toBeNull();
 
     // 12. Verify metadata can be exported to markdown

@@ -73,9 +73,9 @@ A section's HTML is a FRAGMENT, not a full document. It **MUST**:
 5. **NOT** set page-shaped dimensions (\`width: 1240px\`, \`height: 1754px\`, \`overflow: hidden\`) on the root wrapper.
 6. Wrap keep-together content in canonical classes (\`pengui-figure\`, \`pengui-chart\`, etc.).
 
-**Do NOT emit a \`<!-- @section-meta -->\` comment yourself.** The server always injects it from the metadata struct when persisting — on add, update, promote, wrap, and reorder. Hand-written comments are stripped and replaced.
+**Do NOT emit a \`<!-- @section-meta -->\` comment yourself.** The server always injects it from the metadata struct when persisting — on add, update, and reorder. Hand-written comments are stripped and replaced.
 
-Everything is enforced by Section Stage 1 lints — errors surface in one turn. Violations of rules 1 with a single wrong root element can be fixed with \`promote_section_root\` without rewriting the fragment; violations with multiple top-level elements can be fixed with \`wrap_section_root\`.
+Everything is enforced by Section Stage 1 lints — errors surface in one turn. In v4.5 the section HTML is compiled from \`section_ir\`, so the canonical wrapper is always emitted; structural lints firing on stored fragments mean the SectionIR needs adjustment via \`update_section\`.
 
 ---
 
@@ -160,24 +160,28 @@ Disabled for document mode: \`safe-area-check\`, \`overflow-detector\`, slide-sh
 
 ---
 
-## Surgical structural repair tools
+## Repairing sections
 
-When a structural lint fires, prefer these over re-emitting the whole fragment. Both are targeted and preserve content verbatim.
+In v4.5 the section HTML fragment is compiled from \`section_ir\` — the source of truth. To fix any structural issue, call \`update_section\` with a corrected \`section_ir\`. The compiler always emits exactly one \`<section class="pengui-section pengui-{kind}">\` root with the canonical wrapper class, so most structural lints disappear automatically once the IR is well-formed.
 
-- **\`promote_section_root\`** — rewrites a single non-\`<section>\` root into \`<section class="pengui-section pengui-{kind}">\`, preserving style/id/data-* and merging classes. Trigger: \`validation.issues[]\` contains id ending in \`-root-not-section\` and the fragment has exactly one top-level element. Fails with \`SECTION_INVALID_FRAGMENT\` on multi-root fragments (use \`wrap_section_root\` instead).
-- **\`wrap_section_root\`** — wraps every top-level element into a single \`<section class="pengui-section pengui-{kind}">\`. Trigger: \`validation.issues[]\` contains id ending in \`-multiple-root-elements\`. The issue's \`actual\` field enumerates the top-level nodes as \`[i] <tag#id.class>\` so you can decide whether to pass an explicit \`child_order\` (a permutation of \`[0..n-1]\`) or rely on source order.
+Use \`validate_section_ir\` to schema-check a candidate IR before sending it to \`update_section\`. Use \`validate_section\` to run the full Stage 1 lint pipeline (token compliance, kind shape, etc.).
 
-The \`@section-meta\` comment is **always** injected by the server from the stored metadata struct — never emit it in your fragment HTML and never edit it by hand. It re-embeds automatically on add/update/promote/wrap/reorder.
+The \`@section-meta\` comment is **always** injected by the server from the stored metadata struct — never emit it and never edit it by hand. It re-embeds automatically on add / update / reorder.
 
 ---
 
-## Example: add a figure section
+## Example: add a figure section (v4.5 IR-first)
 
 \`\`\`json
 {
   "deck_id": "deck_abc",
   "kind": "figure",
-  "html": "<section class=\\"pengui-section pengui-figure\\"><figure class=\\"pengui-figure\\"><svg viewBox=\\"0 0 600 400\\" role=\\"img\\">...</svg><figcaption><span class=\\"pengui-figure-number\\">Figure 3.1</span> Orbital resonance in the Jovian system.</figcaption></figure></section>",
+  "section_ir": {
+    "body": [
+      { "type": "image", "asset_id": "uuid-from-upload_asset",
+        "caption": [{ "text": "Figure 3.1 — Orbital resonance in the Jovian system." }] }
+    ]
+  },
   "metadata": {
     "title": "Fig 3.1",
     "narrative": "Illustrates the 1:2:4 resonance between Io, Europa, and Ganymede.",
@@ -187,7 +191,13 @@ The \`@section-meta\` comment is **always** injected by the server from the stor
 }
 \`\`\`
 
-The composer wraps this section with \`data-kind="figure"\`, emits \`break-inside: avoid\` on \`.pengui-figure\`, and inserts it into the continuous document. Chromium paginates around it.
+The compiler emits the canonical \`<section class="pengui-section pengui-figure">\`
+fragment with the image and caption inside. The composer wraps it with
+\`data-kind="figure"\`, applies \`break-inside: avoid\` on \`.pengui-figure\`,
+and inserts it into the continuous document. Chromium paginates around it.
+
+Fetch \`pengui://schema/slide-ir\` for the full IR node grammar — sections share
+the same node union (hero / prose / image / callout / two_column).
 
 ---
 

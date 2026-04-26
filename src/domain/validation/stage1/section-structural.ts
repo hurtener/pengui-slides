@@ -217,7 +217,7 @@ export class SectionStructuralCheck implements Stage1Check {
           rule: this.id,
           message: `Section fragment root is <${tagName}> but must be <section class="pengui-section pengui-${kind}">.`,
           fixSuggestion:
-            `Call promote_section_root({ deck_id, section_id }) to rewrite the wrapper tag in-place — it preserves every attribute (style, id, data-*) and merges classes. Alternatively, resubmit the fragment with <section class="pengui-section pengui-${kind}"> as the root.`,
+            `In v4.5 sections are compiled from SectionIR — call update_section with a corrected section_ir. The compiler always emits a <section class="pengui-section pengui-${kind}"> root; this lint firing means the stored fragment was authored before the IR-first migration.`,
         });
       } else if (tagName !== 'section') {
         // Multiple root elements: prefer the wrap hint (covered below). Still
@@ -229,7 +229,7 @@ export class SectionStructuralCheck implements Stage1Check {
           rule: this.id,
           message: `Section fragment root is <${tagName}> but must be <section class="pengui-section pengui-${kind}">.`,
           fixSuggestion:
-            `Call wrap_section_root({ deck_id, section_id }) to wrap all top-level elements into a single <section class="pengui-section pengui-${kind}">.`,
+            `In v4.5 sections are compiled from SectionIR — call update_section with a corrected section_ir. The compiler always emits a single <section class="pengui-section pengui-${kind}"> root.`,
         });
       } else {
         const classAttr = firstTag.attr('class') ?? '';
@@ -276,7 +276,7 @@ export class SectionStructuralCheck implements Stage1Check {
           message:
             `Section fragment has ${elementNodes.length} top-level elements. Expected exactly one <section class="pengui-section ...">. Top-level nodes found: ${summary.join(', ')}.`,
           fixSuggestion:
-            `Call wrap_section_root({ deck_id, section_id }) to wrap them in a single <section class="pengui-section pengui-${kind}">. Pass optional child_order to reorder them, e.g. [2, 0, 1].`,
+            `In v4.5 sections are compiled from SectionIR — call update_section with a corrected section_ir. The compiler emits exactly one <section class="pengui-section pengui-${kind}"> root.`,
           actual: summary.join(', '),
         });
       }

@@ -20,6 +20,7 @@ import type {
 } from './slide-document.js';
 import type { PageChromeDirective } from './page-chrome.js';
 import type { SectionKind, SectionSummary } from './section.js';
+import type { SlideIR } from '../domain/ir/slide-ir.js';
 
 // ── Authoring Model ───────────────────────────────────────────────
 
@@ -42,6 +43,19 @@ export interface Slide {
   id: SlideId;
   deckId: DeckId;
   position: number;
+  /**
+   * The Pengui v4.5 source of truth: a structured IR tree the agent
+   * authored. The compiler in `src/domain/ir/compile/` turns this into
+   * `html` deterministically; soul-token changes propagate without
+   * per-slide rewrites.
+   */
+  ir: SlideIR;
+  /**
+   * Compiled HTML — DERIVED from `ir`. Re-emitted on every add/update
+   * so the App, exporters, and validators that still consume HTML get
+   * a current snapshot. Do NOT edit `html` directly; mutate `ir` and
+   * recompile.
+   */
   html: string;
   sourceKind: SlideSourceKind;
   document?: SlideDocument;
@@ -196,7 +210,12 @@ export interface CreateDeckInput {
 
 export interface AddSlideInput {
   deckId: string;
-  html: string;
+  /**
+   * Structured IR tree. Replaces the v4.x `html` field. The DeckService
+   * compiles to HTML via `compileSlideIRToHtml`, embeds @slide-meta,
+   * and stores both the IR and the compiled HTML on the Slide record.
+   */
+  ir: SlideIR;
   metadata: {
     title: string;
     type: string;
@@ -227,7 +246,9 @@ export interface AddSlideInput {
 export interface UpdateSlideInput {
   deckId: string;
   slideId: string;
-  html?: string;
+  /** New IR tree. When provided, recompiles HTML and refreshes
+   *  revisionHash. When omitted, the existing IR is preserved. */
+  ir?: SlideIR;
   sourceKind?: SlideSourceKind;
   document?: SlideDocument;
   translationIssues?: SlideTranslationIssue[];

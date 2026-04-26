@@ -4,13 +4,12 @@
  * Lightweight counterpart to `get_design_soul`: returns only the flat list
  * of CSS custom properties (`{ name, value, layer }`) the soul declares.
  * Strips recipes, utility CSS, style guide, parsed-tokens map, and full
- * layer dumps — payload is ~5x smaller, suitable for the substitution-check
- * turn where the agent only needs to know "does the soul declare a token
- * for this value?"
+ * layer dumps — payload is ~5x smaller, suitable for tool-driven inspection
+ * of the soul's color/spacing/typography palette.
  *
  * Use this instead of `get_design_soul` when:
- *   - You're about to emit CSS and want to pre-check which literals will
- *     be auto-substituted by the server.
+ *   - You want to enumerate the soul's available tokens before composing IR
+ *     that references them by semantic role (background: "accent", etc.).
  *   - You need just the token catalogue, not the full design surface.
  *
  * Use `get_design_soul` when you also need recipes, the style guide, or
@@ -54,12 +53,11 @@ export function registerGetDesignTokensTool(
         'style guide, parsed-tokens record, and the full nested layer dump that ' +
         '`get_design_soul` returns — payload is roughly 5× smaller. ' +
         '\n\n' +
-        'WHEN TO CALL — at the start of an authoring session, or before emitting ' +
-        'CSS where you want to pre-check which literals will be auto-substituted. ' +
-        'Cache the result for the rest of the session; tokens don\'t change between ' +
-        'add_section / update_slide calls. For surgical substitution checks: scan ' +
-        '`tokens[]` for entries whose `value` matches the literal you\'re about to ' +
-        'emit; if found, prefer `var(--<token.name>)` directly. ' +
+        'WHEN TO CALL — at the start of an authoring session to inspect the soul\'s ' +
+        'color/spacing/typography palette. Tokens are referenced from IR by SEMANTIC ' +
+        'role (e.g. background: "accent" → `--color-accent-primary`); this tool lets ' +
+        'you see the underlying values for design intent. Cache the result for the rest ' +
+        'of the session; tokens don\'t change between add_slide / add_section calls. ' +
         '\n\n' +
         'WHEN TO USE `get_design_soul` INSTEAD — when you also need layout recipes, ' +
         'the style guide narrative, or the utility-CSS class library. This tool is ' +
@@ -112,8 +110,7 @@ export function registerGetDesignTokensTool(
  * Scoped to the `:root {}` block only — print-mode overrides
  * (`[data-pengui-medium="print"] {}`) are intentionally skipped because
  * they are derived from the same soul and would double-list the same
- * conceptual tokens with different values, which is misleading for the
- * agent's substitution-check use case.
+ * conceptual tokens with different values.
  */
 function parseTokens(css: string): TokenEntry[] {
   const rootMatch = css.match(/:root\s*\{([\s\S]*?)\}/);
