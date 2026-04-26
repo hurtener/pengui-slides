@@ -184,6 +184,18 @@ export class TokenComplianceCheck implements Stage1Check {
         return;
       }
 
+      // First pass: harvest locally-declared custom properties so the
+      // compiler can introduce derived tokens (e.g. --color-text-default
+      // inside the slide-root :root block) without token-compliance
+      // flagging downstream var() references as unknown. Soul tokens
+      // remain the source of truth — these locals are intermediate
+      // indirection, not new design choices.
+      root.walkDecls((decl) => {
+        if (decl.prop.startsWith('--')) {
+          allowedTokens.add(decl.prop);
+        }
+      });
+
       root.walkDecls((decl) => {
         if (decl.prop.startsWith('--')) return;
 

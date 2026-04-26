@@ -56,22 +56,35 @@ export function registerAddSectionTool(server: McpServer, container: ServiceCont
     {
       title: 'Add Section',
       description:
+        '**Read `pengui://schema/slide-ir` first** for the full IR node grammar — sections share the slide IR ' +
+        'and the schema is the source of truth for what `section_ir` accepts. ' +
+        '\n\n' +
         'Append a section (content block) to a continuous-document print deck. ' +
         'Only valid for decks with `authoring_model: "document"` — for slide decks, call `add_slide`; ' +
         'a mismatch returns `WRONG_AUTHORING_MODEL` naming the right verb. ' +
         '\n\n' +
-        'INPUT — `section_ir` is a structured tree of nodes (hero, prose, image, callout, two_column). ' +
-        'The compiler produces a single canonical `<section class="pengui-section pengui-{kind}">` fragment ' +
-        'using the deck\'s Design Soul tokens; agents do not write HTML, CSS, or hex literals. Token ' +
-        'references are SEMANTIC (e.g. `background: "accent"` → `var(--color-accent-primary)`). ' +
-        'Fetch `pengui://schema/slide-ir` for the node grammar — sections share the slide IR. ' +
+        'INPUT — `section_ir` is a structured tree of nodes. The compiler produces a single canonical ' +
+        '`<section class="pengui-section pengui-{kind}">` fragment using the deck\'s Design Soul tokens; ' +
+        'agents do not write HTML, CSS, or hex literals (token references are SEMANTIC, ' +
+        'e.g. `background: "accent"` → `var(--color-accent-primary)`). ' +
         '\n\n' +
+        'NODE TYPES (cheat sheet — full grammar in `pengui://schema/slide-ir`):\n' +
+        '  • `hero` — { title: RichText, eyebrow?: RichText, subtitle?: RichText, align? }\n' +
+        '  • `prose` — { body: RichText, align? }\n' +
+        '  • `image` — { asset_id: string, alt?: string, caption?: RichText, fit? }\n' +
+        '  • `callout` — { kind: note|warning|tip|important, title?: RichText, body: RichText }\n' +
+        '  • `two_column` — { ratio?: 1:1|1:2|2:1, gap?, left: leaf[], right: leaf[] } (left/right cannot nest two_column)\n' +
+        '  • RichText is `[{ text, bold?, italic?, code?, link? }, ...]` — runs concatenate verbatim, INCLUDE spaces inside text.\n' +
+        '\n' +
         'IMAGES — image nodes reference assets by id (`asset_id: "uuid"`). Upload binaries via ' +
-        '`upload_asset` first, then pass the returned id. ' +
+        '`upload_asset` first, then pass the returned id. Provide `alt` for accessibility (empty string marks decorative). ' +
         '\n\n' +
         'KIND DEFAULTS — keep-together kinds (figure, chart, diagram, callout, quote, image) get ' +
         'break-inside: avoid. Full-page kinds (cover, chapter_header) get min-height: 100vh + ' +
         'break-after: page. Use `break_hints` to override per section. ' +
+        '\n\n' +
+        'VALIDATION — Stage 1 (lint) runs per fragment on add. To pre-flight Stage 2 (composed-document ' +
+        'render-truth) across the whole deck, call `validate_deck_for_export` before exporting. ' +
         '\n\n' +
         'RETURNS — `{ section_id, position, kind, section_count, validation }`. The section is ' +
         'stored with both `ir` (source of truth) and `html` (compiled fragment for the App + composer).',

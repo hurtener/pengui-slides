@@ -76,9 +76,16 @@ describe('CalloutNodeSchema', () => {
     }
   });
 
-  it('accepts an optional title', () => {
-    const node = { type: 'callout', kind: 'note', title: 'Heads up', body: rt('Body text.') };
+  it('accepts an optional title as RichText', () => {
+    const node = { type: 'callout', kind: 'note' as const, title: rt('Heads up'), body: rt('Body text.') };
     expect(CalloutNodeSchema.parse(node)).toMatchObject(node);
+  });
+
+  it('normalises a string title into RichText (back-compat with v4.5–v4.6 callouts)', () => {
+    const parsed = CalloutNodeSchema.parse({
+      type: 'callout', kind: 'note', title: 'Heads up', body: rt('Body text.'),
+    });
+    expect(parsed.title).toEqual([{ text: 'Heads up' }]);
   });
 
   it('rejects unknown kind', () => {

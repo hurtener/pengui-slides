@@ -54,11 +54,23 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
     {
       title: 'Add Slide',
       description:
+        '**Read `pengui://schema/slide-ir` first** for the full IR node grammar — the schema enumerates every required and optional field, run flag, and ratio enum, and is the source of truth for what `slide_ir` accepts. ' +
+        '\n\n' +
         'Add a new slide to a slide-model deck. ONLY applies to decks with authoringModel="slides" (slides_16_9, plus legacy print decks created with authoringModel="slides"). For document-model print decks (v3 default), use add_section instead — the tool returns a WRONG_AUTHORING_MODEL error naming add_section. ' +
         '\n\n' +
-        'INPUT — `slide_ir` is a structured tree of nodes (hero, prose, image, callout, two_column). The compiler produces HTML deterministically using the deck\'s Design Soul tokens, so agents do not write CSS or hex literals — token references are SEMANTIC (e.g. background: "accent" → var(--color-accent-primary)). Fetch `pengui://schema/slide-ir` for the full node grammar and field shapes. ' +
+        'INPUT — `slide_ir` is a structured tree of nodes. The compiler produces HTML deterministically using the deck\'s Design Soul tokens; agents never write CSS or hex literals (token references are SEMANTIC, e.g. background: "accent" → var(--color-accent-primary)). ' +
         '\n\n' +
-        'IMAGES — image nodes reference assets by id (e.g. `asset_id: "uuid"`). Upload binaries with `upload_asset` first, then pass the returned id. ' +
+        'NODE TYPES (cheat sheet — full grammar in `pengui://schema/slide-ir`):\n' +
+        '  • `hero` — { title: RichText, eyebrow?: RichText, subtitle?: RichText, align? }\n' +
+        '  • `prose` — { body: RichText, align? }\n' +
+        '  • `image` — { asset_id: string, alt?: string, caption?: RichText, fit? }\n' +
+        '  • `callout` — { kind: note|warning|tip|important, title?: RichText, body: RichText }\n' +
+        '  • `two_column` — { ratio?: 1:1|1:2|2:1, gap?, left: leaf[], right: leaf[] } (left/right cannot nest two_column)\n' +
+        '  • RichText is `[{ text, bold?, italic?, code?, link? }, ...]` — runs concatenate verbatim, INCLUDE spaces inside text.\n' +
+        '\n' +
+        'IMAGES — image nodes reference assets by id (`asset_id: "uuid"`). Upload binaries with `upload_asset` first, then pass the returned id. Provide `alt` for accessibility (empty string marks decorative). ' +
+        '\n\n' +
+        'VALIDATION — defaults to `lint` (fast Stage 1). Pass `validation_depth: "full"` to also run Stage 2 (Playwright render-truth: contrast, overflow, legibility) so issues surface here instead of at export. To pre-flight an entire deck, call `validate_deck_for_export`. ' +
         '\n\n' +
         'RETURNS — `{ slide_id, position, slide_count, source_kind: "authored_ir", validation, validation_delta }`. The slide is stored with both `ir` (source of truth) and `html` (compiled snapshot for App/exporters).',
       inputSchema: z.object({
@@ -66,9 +78,17 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
         slide_ir: SlideIRSchema.describe('Structured IR tree describing the slide content.'),
         metadata: metadataSchema.describe('Slide metadata.'),
         position: z.number().nullish().describe('Zero-based position to insert the slide. Appends to end if omitted.'),
+        validation_depth: z
+          .enum(['lint', 'full'])
+          .nullish()
+          .describe(
+            'How thoroughly to validate the compiled HTML. "lint" (default) is fast static analysis; ' +
+              '"full" additionally runs Stage 2 (Playwright render — contrast, overflow, legibility, orphan headings) ' +
+              'so contrast/overflow issues surface here instead of at export. "full" adds ~1–3 s per slide.',
+          ),
       }),
     },
-    async ({ deck_id, slide_ir, metadata, position }) => {
+    async ({ deck_id, slide_ir, metadata, position, validation_depth }) => {
       try {
         const slide = await container.deckService.addSlide({
           deckId: deck_id,
@@ -93,7 +113,7 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
         const validation = await container.validationService.validateSlide(
           slide.html,
           sId,
-          'lint',
+          validation_depth ?? 'lint',
           deck.format,
         );
 

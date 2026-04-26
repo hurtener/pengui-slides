@@ -363,6 +363,68 @@ async function main() {
     );
   }
 
+  // 10b. v4.7: validate_deck_for_export pre-flight (slides deck).
+  const preflight = await client.callTool({
+    name: 'validate_deck_for_export',
+    arguments: { deck_id: slidesDeckId },
+  });
+  const preflightP = payload(preflight);
+  check(
+    'validate_deck_for_export returns per-slide items + ready_for_export',
+    Array.isArray(preflightP?.items)
+      && preflightP.items.length >= 1
+      && typeof preflightP.ready_for_export === 'boolean'
+      && preflightP.authoring_model === 'slides',
+    `items=${preflightP?.items?.length} ready=${preflightP?.ready_for_export} blocking=${preflightP?.blocking_count}`,
+  );
+  check(
+    'validate_deck_for_export items carry per-issue detail (not just error_count)',
+    preflightP?.items?.every((it) => Array.isArray(it.validation?.issues)),
+  );
+
+  // 10c. v4.7: image alt text + callout RichText title both compile cleanly.
+  const v47Slide = await client.callTool({
+    name: 'add_slide',
+    arguments: {
+      deck_id: slidesDeckId,
+      slide_ir: {
+        background: 'canvas',
+        layout: 'default',
+        body: [
+          {
+            type: 'callout',
+            kind: 'tip',
+            // RichText title — would have failed silently in v4.6 (string-only)
+            title: [{ text: 'Pro tip' }, { text: ' (italic)', italic: true }],
+            body: [{ text: 'Body' }],
+          },
+        ],
+      },
+      metadata: { title: 'v4.7', type: 'content', narrative: 'v47 features' },
+    },
+  });
+  check(
+    'add_slide accepts RichText callout title',
+    !v47Slide.isError && payload(v47Slide)?.slide_id != null,
+  );
+
+  // 10d. v4.7: validation_depth=full opt-in surfaces Stage 2 issues at add time.
+  const fullValidate = await client.callTool({
+    name: 'add_slide',
+    arguments: {
+      deck_id: slidesDeckId,
+      slide_ir: { background: 'canvas', layout: 'centered', body: [{ type: 'hero', title: [{ text: 'Stage2' }] }] },
+      metadata: { title: 'S2', type: 'content', narrative: 's2' },
+      validation_depth: 'full',
+    },
+  });
+  const fullP = payload(fullValidate);
+  check(
+    'add_slide validation_depth=full ran Stage 2 (stage2Skipped=false)',
+    !fullValidate.isError && fullP?.validation?.stage2Skipped === false,
+    `stage2ElapsedMs=${fullP?.validation?.stage2ElapsedMs}`,
+  );
+
   // 11. get_session returns build_info
   const sessionRes = await client.callTool({ name: 'get_session', arguments: {} });
   const buildInfo = payload(sessionRes)?.build_info;

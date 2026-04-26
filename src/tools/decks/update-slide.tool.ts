@@ -55,9 +55,13 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
       description:
         "Update a slide's IR tree and/or metadata. When `slide_ir` is provided, the slide's HTML is recompiled from the new IR using the deck's Design Soul + format geometry, and re-validated. " +
         '\n\n' +
-        'INPUT — `slide_ir` is the structured tree (hero/prose/image/callout/two_column nodes). Token references are SEMANTIC (e.g. background: "accent"), so the same IR re-renders cleanly when the soul changes. Fetch `pengui://schema/slide-ir` for the node grammar. ' +
+        '**Read `pengui://schema/slide-ir`** for the node grammar before authoring `slide_ir`. ' +
+        '\n\n' +
+        'INPUT — `slide_ir` is the structured tree (hero/prose/image/callout/two_column nodes). Token references are SEMANTIC (e.g. background: "accent"), so the same IR re-renders cleanly when the soul changes. ' +
         '\n\n' +
         'PARTIAL UPDATES — omit `slide_ir` to update only metadata. Omit `metadata` to replace only the IR. Both may be set together. ' +
+        '\n\n' +
+        'VALIDATION — defaults to `lint`. Pass `validation_depth: "full"` to also run Stage 2 (Playwright render-truth) so contrast/overflow/legibility issues surface here instead of at export. ' +
         '\n\n' +
         'RETURNS — `{ slide_id, source_kind, validation?, validation_delta? }`. Validation runs only when content changes (IR or metadata).',
       inputSchema: z.object({
@@ -65,9 +69,15 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
         slide_id: z.string().describe('The slide to update.'),
         slide_ir: SlideIRSchema.nullish().describe('New structured IR tree. Omit to keep existing IR.'),
         metadata: partialMetadataSchema.describe('Partial metadata fields to update.'),
+        validation_depth: z
+          .enum(['lint', 'full'])
+          .nullish()
+          .describe(
+            'Validation depth. "lint" (default) is fast static analysis; "full" runs Stage 2 (Playwright render) so contrast/overflow/legibility issues surface here instead of at export. ~1–3 s extra.',
+          ),
       }),
     },
-    async ({ deck_id, slide_id, slide_ir, metadata }) => {
+    async ({ deck_id, slide_id, slide_ir, metadata, validation_depth }) => {
       try {
         const previousSlide = await container.deckService.getSlide(slide_id);
         const previousValidation = previousSlide.lastValidation ?? null;
@@ -112,7 +122,7 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
         if (shouldRevalidate) {
           const deck = await container.deckService.getDeckSummary(deck_id);
           const sId = soulId(deck.soulId as string);
-          validation = await container.validationService.validateSlide(slide.html, sId, 'lint', deck.format);
+          validation = await container.validationService.validateSlide(slide.html, sId, validation_depth ?? 'lint', deck.format);
 
           await container.deckService.updateSlide({
             deckId: deck_id,

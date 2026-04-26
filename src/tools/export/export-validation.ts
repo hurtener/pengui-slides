@@ -31,8 +31,17 @@ export async function validateSlidesForExport(
   const failedSlides: Array<{
     slide_id: string;
     title: string;
+    position: number;
     error_count: number;
     warning_count: number;
+    issues: Array<{
+      id: string;
+      rule: string;
+      severity: string;
+      stage: string;
+      message: string;
+      fixSuggestion?: string;
+    }>;
   }> = [];
 
   for (const slide of slides) {
@@ -50,11 +59,21 @@ export async function validateSlidesForExport(
     });
 
     if (!validation.passed) {
+      const errorIssues = validation.issues.filter((i) => i.severity === 'error');
       failedSlides.push({
         slide_id: slide.id as string,
         title: slide.metadata.title,
+        position: slide.position,
         error_count: validation.errorCount,
         warning_count: validation.warningCount,
+        issues: errorIssues.slice(0, 20).map((i) => ({
+          id: i.id,
+          rule: i.rule,
+          severity: i.severity,
+          stage: i.stage,
+          message: i.message,
+          ...(i.fixSuggestion ? { fixSuggestion: i.fixSuggestion } : {}),
+        })),
       });
     }
   }
@@ -62,7 +81,9 @@ export async function validateSlidesForExport(
   if (failedSlides.length > 0) {
     throw new PenguiError(
       ErrorCode.VALIDATION_HARD_ERROR,
-      'Cannot export deck because one or more slides failed full validation.',
+      `Cannot export deck: ${failedSlides.length}/${slides.length} slide(s) failed full validation. ` +
+        `See \`failed_slides[].issues\` for the specific Stage 1/Stage 2 errors and how to fix them. ` +
+        `Tip: call \`validate_deck_for_export\` to preview these errors without attempting an export.`,
       {
         deckId,
         failed_slides: failedSlides,
@@ -133,17 +154,48 @@ export async function validateSectionsForExport(
 
   if (!validation.passed) {
     const hardIssues = validation.issues.filter((i) => i.severity === 'error');
+    // Group issues by section index so the agent can see which section
+    // emitted each error rather than chasing through a flat list.
+    const failedSections = new Map<
+      number,
+      Array<{ id: string; rule: string; severity: string; stage: string; message: string; fixSuggestion?: string }>
+    >();
+    for (const issue of hardIssues) {
+      const match = issue.id.match(/^sec-(\d+):/);
+      const idx = match ? Number(match[1]) - 1 : -1;
+      if (!failedSections.has(idx)) failedSections.set(idx, []);
+      failedSections.get(idx)!.push({
+        id: match ? issue.id.slice(match[0].length) : issue.id,
+        rule: issue.rule,
+        severity: issue.severity,
+        stage: issue.stage,
+        message: issue.message,
+        ...(issue.fixSuggestion ? { fixSuggestion: issue.fixSuggestion } : {}),
+      });
+    }
+
     throw new PenguiError(
       ErrorCode.VALIDATION_HARD_ERROR,
-      'Cannot export document because one or more sections failed validation.',
+      `Cannot export document: ${hardIssues.length} validation error(s) across ${failedSections.size} section(s). ` +
+        `See \`failed_sections[].issues\` for the specific Stage 1/Stage 2 errors and how to fix them. ` +
+        `Tip: call \`validate_deck_for_export\` to preview these errors without attempting an export.`,
       {
         deckId: deck.id,
         error_count: hardIssues.length,
-        issues: hardIssues.slice(0, 20).map((i) => ({
-          id: i.id,
-          rule: i.rule,
-          message: i.message,
-        })),
+        failed_sections: Array.from(failedSections.entries()).map(([idx, issues]) => {
+          const section = idx >= 0 && idx < sections.length ? sections[idx] : null;
+          return {
+            ...(section
+              ? {
+                  section_id: section.id as string,
+                  position: section.position,
+                  kind: section.kind,
+                  title: section.metadata.title,
+                }
+              : {}),
+            issues: issues.slice(0, 20),
+          };
+        }),
       },
     );
   }

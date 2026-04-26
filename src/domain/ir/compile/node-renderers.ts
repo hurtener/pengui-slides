@@ -20,7 +20,7 @@ import type {
   SlideNode,
   TwoColumnNode,
 } from '../nodes.js';
-import { escapeAttr, escapeHtml } from './escape.js';
+import { escapeAttr } from './escape.js';
 import { renderRichText } from './rich-text-renderer.js';
 
 export function renderNode(node: SlideNode): string {
@@ -58,10 +58,14 @@ function renderProse(node: ProseNode): string {
 
 function renderImage(node: ImageNode): string {
   const fit = node.fit ?? 'contain';
+  // Author-supplied alt wins; caption is the fallback. Empty string is a
+  // valid intentional value (decorative image — screen readers skip it).
   const altText =
-    node.caption && node.caption.length > 0
-      ? node.caption.map((r) => r.text).join('')
-      : '';
+    typeof node.alt === 'string'
+      ? node.alt
+      : node.caption && node.caption.length > 0
+        ? node.caption.map((r) => r.text).join('')
+        : '';
   const captionHtml =
     node.caption && node.caption.length > 0
       ? `<figcaption class="pengui-image-caption">${renderRichText(node.caption)}</figcaption>`
@@ -75,8 +79,8 @@ function renderImage(node: ImageNode): string {
 }
 
 function renderCallout(node: CalloutNode): string {
-  const titleHtml = node.title
-    ? `<p class="pengui-callout-title">${escapeHtml(node.title)}</p>`
+  const titleHtml = node.title && node.title.length > 0
+    ? `<p class="pengui-callout-title">${renderRichText(node.title)}</p>`
     : '';
   return (
     `<aside class="pengui-callout pengui-callout-${node.kind}">` +

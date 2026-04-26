@@ -44,6 +44,7 @@ import {
   registerValidateSlideIRTool,
   registerValidateSectionIRTool,
 } from './validation/validate-slide-ir.tool.js';
+import { registerValidateDeckForExportTool } from './validation/validate-deck-for-export.tool.js';
 
 // Asset tools
 import { registerUploadAssetTool } from './assets/upload-asset.tool.js';
@@ -120,6 +121,7 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerValidateSectionTool(server, container);
   registerValidateSlideIRTool(server);
   registerValidateSectionIRTool(server);
+  registerValidateDeckForExportTool(server, container);
 
   // Export tools
   registerRenderPreviewTool(server, container);

@@ -39,7 +39,7 @@ export const NODE_CSS = `
   font-weight: var(--weight-bold);
   line-height: var(--line-height-heading);
   letter-spacing: var(--letter-spacing-heading);
-  color: var(--color-text-primary);
+  color: var(--color-text-default);
 }
 .pengui-hero-subtitle {
   margin: 0;
@@ -47,7 +47,7 @@ export const NODE_CSS = `
   font-size: var(--text-h3);
   font-weight: var(--weight-normal);
   line-height: var(--line-height-body);
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
 }
 
 .pengui-prose {
@@ -55,7 +55,7 @@ export const NODE_CSS = `
   font-family: var(--font-body);
   font-size: var(--text-body);
   line-height: var(--line-height-body);
-  color: var(--color-text-primary);
+  color: var(--color-text-default);
 }
 .pengui-prose strong { font-weight: var(--weight-bold); }
 .pengui-prose em { font-style: italic; }
@@ -88,7 +88,7 @@ export const NODE_CSS = `
   margin: 0;
   font-family: var(--font-body);
   font-size: var(--text-caption);
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
 }
 
 .pengui-callout {
@@ -107,13 +107,13 @@ export const NODE_CSS = `
   font-weight: var(--weight-bold);
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-heading);
-  color: var(--color-text-primary);
+  color: var(--color-text-default);
 }
 .pengui-callout-body {
   font-family: var(--font-body);
   font-size: var(--text-body);
   line-height: var(--line-height-body);
-  color: var(--color-text-primary);
+  color: var(--color-text-default);
 }
 .pengui-callout-note { border-left-color: var(--color-info); }
 .pengui-callout-warning { border-left-color: var(--color-warning); }
@@ -122,7 +122,7 @@ export const NODE_CSS = `
 
 .pengui-two-column {
   display: grid;
-  align-items: start;
+  align-items: stretch;
 }
 .pengui-two-column-1-1 { grid-template-columns: 1fr 1fr; }
 .pengui-two-column-1-2 { grid-template-columns: 1fr 2fr; }
@@ -136,6 +136,7 @@ export const NODE_CSS = `
   flex-direction: column;
   gap: var(--space-md);
   min-width: 0;
+  justify-content: center;
 }
 `;
 
@@ -151,12 +152,16 @@ export const NODE_CSS = `
  *  the safe-area-check Stage 1 lint. */
 export function buildSlideRootCss(widthPx: number, heightPx: number, safeAreaInsetPx: number): string {
   return `
-:root { --space-safe-area: ${safeAreaInsetPx}px; }
+:root {
+  --space-safe-area: ${safeAreaInsetPx}px;
+  --color-text-default: var(--color-text-primary);
+  --color-text-muted: var(--color-text-secondary);
+}
 html, body { margin: 0; padding: 0; }
 * { box-sizing: border-box; }
 body {
   font-family: var(--font-body);
-  color: var(--color-text-primary);
+  color: var(--color-text-default);
   background: var(--color-canvas);
 }
 .slide {
@@ -169,19 +174,23 @@ body {
   flex-direction: column;
   gap: var(--space-lg);
   background: var(--color-canvas);
+  justify-content: center;
 }
 .slide.pengui-bg-canvas { background: var(--color-canvas); }
 .slide.pengui-bg-surface { background: var(--color-surface); }
 .slide.pengui-bg-surface-alt { background: var(--color-surface-alt); }
-.slide.pengui-bg-accent { background: var(--color-accent-primary); }
+.slide.pengui-bg-accent {
+  background: var(--color-accent-primary);
+  --color-text-default: var(--color-text-inverse);
+  --color-text-muted: var(--color-text-inverse);
+}
 .slide.pengui-layout-centered {
   align-items: center;
-  justify-content: center;
   text-align: center;
 }
-.slide.pengui-layout-split > .pengui-two-column {
+.slide > .pengui-two-column {
   flex: 1 1 auto;
-  height: 100%;
+  min-height: 0;
 }
 `;
 }

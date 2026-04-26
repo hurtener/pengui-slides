@@ -121,9 +121,9 @@ describe('renderNodeList — per-node HTML emitters', () => {
     );
   });
 
-  it('callout emits kind class and optional title', () => {
+  it('callout emits kind class and optional title (RichText)', () => {
     const html = renderNodeList([
-      { type: 'callout', kind: 'warning', title: 'Watch out', body: rt('Body') },
+      { type: 'callout', kind: 'warning', title: rt('Watch out'), body: rt('Body') },
     ]);
     expect(html).toContain('<aside class="pengui-callout pengui-callout-warning">');
     expect(html).toContain('<p class="pengui-callout-title">Watch out</p>');

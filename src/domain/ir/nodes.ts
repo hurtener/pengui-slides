@@ -74,6 +74,9 @@ export const ImageNodeSchema = z
     type: z.literal('image'),
     asset_id: z.string().min(1),
     caption: RichTextSchema.optional(),
+    /** Accessibility text. Empty string marks the image as decorative.
+     *  Falls back to caption text when omitted. */
+    alt: z.string().optional(),
     fit: z.enum(['contain', 'cover']).optional(),
   })
   .strict();
@@ -83,7 +86,15 @@ export const CalloutNodeSchema = z
   .object({
     type: z.literal('callout'),
     kind: z.enum(['note', 'warning', 'tip', 'important']),
-    title: z.string().optional(),
+    // Accept either RichText (preferred — symmetric with HeroNode.title) or
+    // a plain string for ergonomic authoring. Strings are normalised to a
+    // single-run RichText so downstream code only ever sees the array form.
+    title: z
+      .preprocess(
+        (val) => (typeof val === 'string' ? [{ text: val }] : val),
+        RichTextSchema.optional(),
+      )
+      .optional(),
     body: RichTextSchema,
   })
   .strict();

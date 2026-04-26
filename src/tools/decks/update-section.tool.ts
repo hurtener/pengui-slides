@@ -59,10 +59,11 @@ export function registerUpdateSectionTool(server: McpServer, container: ServiceC
         'Update any combination of a section\'s IR tree, kind, break hints, or metadata. ' +
         'Only valid for document-model decks. All fields are optional — pass only what you want to change. ' +
         '\n\n' +
+        '**Read `pengui://schema/slide-ir`** for the node grammar before authoring `section_ir` — sections share the slide IR. ' +
+        '\n\n' +
         'INPUT — `section_ir` is the structured tree (hero/prose/image/callout/two_column nodes). ' +
         'When provided, the HTML fragment is recompiled from the new IR. Token references are SEMANTIC ' +
         '(e.g. background: "accent"); the same IR re-renders cleanly when the soul changes. ' +
-        'Fetch `pengui://schema/slide-ir` for the node grammar — sections share the slide IR. ' +
         '\n\n' +
         'KIND CHANGES — passing `kind` alone (without `section_ir`) recompiles the existing IR with ' +
         'the new wrapper class, so the stored fragment always carries the right `pengui-{kind}` class. ' +
@@ -70,6 +71,9 @@ export function registerUpdateSectionTool(server: McpServer, container: ServiceC
         'PARTIAL UPDATES — omit `section_ir` to keep current IR. Omit `metadata` to keep current ' +
         'metadata. break_hints / metadata are MERGED, not replaced; pass null on a field to leave ' +
         'it unchanged. ' +
+        '\n\n' +
+        'VALIDATION — Stage 1 (lint) runs per fragment on update. To pre-flight Stage 2 (composed-document ' +
+        'render-truth) across the whole deck, call `validate_deck_for_export` before exporting. ' +
         '\n\n' +
         'RETURNS — `{ section_id, kind, position, title, validation }`.',
       inputSchema: z.object({
