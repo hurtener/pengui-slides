@@ -46,6 +46,10 @@ import {
 } from './validation/validate-slide-ir.tool.js';
 import { registerValidateDeckForExportTool } from './validation/validate-deck-for-export.tool.js';
 
+// Resource-access tools (v4.7) — wrap MCP resources for clients that only consume tools
+import { registerListResourcesTool } from './resources/list-resources.tool.js';
+import { registerGetResourceTool } from './resources/get-resource.tool.js';
+
 // Asset tools
 import { registerUploadAssetTool } from './assets/upload-asset.tool.js';
 import { registerListAssetsTool } from './assets/list-assets.tool.js';
@@ -122,6 +126,10 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerValidateSlideIRTool(server);
   registerValidateSectionIRTool(server);
   registerValidateDeckForExportTool(server, container);
+
+  // Resource-access tools (v4.7)
+  registerListResourcesTool(server);
+  registerGetResourceTool(server);
 
   // Export tools
   registerRenderPreviewTool(server, container);

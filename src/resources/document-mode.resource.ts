@@ -9,6 +9,7 @@
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerResourceEntry } from './registry.js';
 
 const RESOURCE_URI = 'pengui://docs/document-mode';
 
@@ -197,7 +198,8 @@ fragment with the image and caption inside. The composer wraps it with
 and inserts it into the continuous document. Chromium paginates around it.
 
 Fetch \`pengui://schema/slide-ir\` for the full IR node grammar — sections share
-the same node union (hero / prose / image / callout / two_column).
+the same node union (hero / heading / prose / list / image / callout / quote /
+table / divider / two_column).
 
 ---
 
@@ -217,23 +219,12 @@ Still supported via \`authoringModel: 'slides'\` on \`create_deck\`. Not recomme
 `;
 
 export function registerDocumentModeResource(server: McpServer): void {
-  server.registerResource(
-    'document-mode',
-    RESOURCE_URI,
-    {
-      title: 'Document Mode — Continuous-Document Authoring Guide',
-      description:
-        'Guide for authoring print decks as continuous flowing documents (Sections) in Pengui Slides v3.',
-      mimeType: 'text/markdown',
-    },
-    async (uri) => ({
-      contents: [
-        {
-          uri: uri.href,
-          mimeType: 'text/markdown',
-          text: CONTENT,
-        },
-      ],
-    }),
-  );
+  registerResourceEntry(server, {
+    uri: RESOURCE_URI,
+    name: 'document-mode',
+    mimeType: 'text/markdown',
+    description:
+      'Guide for authoring print decks as continuous flowing documents (Sections) in Pengui Slides v3.',
+    getText: () => CONTENT,
+  });
 }

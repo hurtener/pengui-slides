@@ -4,6 +4,11 @@ import {
   ProseNodeSchema,
   ImageNodeSchema,
   CalloutNodeSchema,
+  HeadingNodeSchema,
+  ListNodeSchema,
+  DividerNodeSchema,
+  QuoteNodeSchema,
+  TableNodeSchema,
   TwoColumnNodeSchema,
   SlideNodeSchema,
   LeafSlideNodeSchema,
@@ -147,9 +152,9 @@ describe('SlideNodeSchema (top-level union)', () => {
     expect(() => SlideNodeSchema.parse({ type: 'metric_grid', items: [] })).toThrow();
   });
 
-  it('SLIDE_NODE_TYPES enumerates exactly the 5 v4.5 types', () => {
+  it('SLIDE_NODE_TYPES enumerates the v4.7 catalog', () => {
     expect([...SLIDE_NODE_TYPES].sort()).toEqual(
-      ['callout', 'hero', 'image', 'prose', 'two_column'].sort(),
+      ['callout', 'divider', 'heading', 'hero', 'image', 'list', 'prose', 'quote', 'table', 'two_column'].sort(),
     );
   });
 });
@@ -162,4 +167,76 @@ describe('LeafSlideNodeSchema', () => {
   it('rejects two_column at the leaf level', () => {
     expect(() => LeafSlideNodeSchema.parse({ type: 'two_column', left: [], right: [] })).toThrow();
   });
+
+  it('accepts the new v4.7 leaves (heading, list, divider, quote, table)', () => {
+    const samples = [
+      { type: 'heading', level: 2, text: rt('H') },
+      { type: 'list', style: 'bullet', items: [rt('a')] },
+      { type: 'divider' },
+      { type: 'quote', body: rt('q') },
+      { type: 'table', rows: [[rt('a'), rt('b')]] },
+    ];
+    for (const s of samples) {
+      expect(() => LeafSlideNodeSchema.parse(s)).not.toThrow();
+    }
+  });
+});
+
+describe('HeadingNodeSchema', () => {
+  it('accepts levels 1–6', () => {
+    for (const level of [1, 2, 3, 4, 5, 6] as const) {
+      expect(() => HeadingNodeSchema.parse({ type: 'heading', level, text: rt('H') })).not.toThrow();
+    }
+  });
+  it('rejects level 0 and 7', () => {
+    expect(() => HeadingNodeSchema.parse({ type: 'heading', level: 0, text: rt('x') })).toThrow();
+    expect(() => HeadingNodeSchema.parse({ type: 'heading', level: 7, text: rt('x') })).toThrow();
+  });
+});
+
+describe('ListNodeSchema', () => {
+  it('accepts each style', () => {
+    for (const style of ['bullet', 'numbered', 'checklist'] as const) {
+      expect(() => ListNodeSchema.parse({ type: 'list', style, items: [rt('a')] })).not.toThrow();
+    }
+  });
+  it('rejects empty items', () => {
+    expect(() => ListNodeSchema.parse({ type: 'list', style: 'bullet', items: [] })).toThrow();
+  });
+});
+
+describe('DividerNodeSchema', () => {
+  it('accepts with and without spacing', () => {
+    expect(() => DividerNodeSchema.parse({ type: 'divider' })).not.toThrow();
+    expect(() => DividerNodeSchema.parse({ type: 'divider', spacing: 'lg' })).not.toThrow();
+  });
+});
+
+describe('QuoteNodeSchema', () => {
+  it('accepts body alone or body + attribution', () => {
+    expect(() => QuoteNodeSchema.parse({ type: 'quote', body: rt('q') })).not.toThrow();
+    expect(() =>
+      QuoteNodeSchema.parse({ type: 'quote', body: rt('q'), attribution: rt('— author') }),
+    ).not.toThrow();
+  });
+});
+
+describe('TableNodeSchema', () => {
+  it('accepts headers + matching rows', () => {
+    expect(() =>
+      TableNodeSchema.parse({
+        type: 'table',
+        headers: [rt('A'), rt('B')],
+        rows: [[rt('1'), rt('2')], [rt('3'), rt('4')]],
+      }),
+    ).not.toThrow();
+  });
+  it('accepts rows without headers', () => {
+    expect(() => TableNodeSchema.parse({ type: 'table', rows: [[rt('a')]] })).not.toThrow();
+  });
+  it('rejects empty rows', () => {
+    expect(() => TableNodeSchema.parse({ type: 'table', rows: [] })).toThrow();
+  });
+  // Row-vs-headers length mismatch is enforced at render time (renderTable
+  // pads short rows), not in the Zod schema — see nodes.ts comment.
 });

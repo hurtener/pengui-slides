@@ -62,9 +62,14 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
         '\n\n' +
         'NODE TYPES (cheat sheet — full grammar in `pengui://schema/slide-ir`):\n' +
         '  • `hero` — { title: RichText, eyebrow?: RichText, subtitle?: RichText, align? }\n' +
+        '  • `heading` — { level: 1–6, text: RichText, align? }\n' +
         '  • `prose` — { body: RichText, align? }\n' +
+        '  • `list` — { style: bullet|numbered|checklist, items: RichText[] }\n' +
         '  • `image` — { asset_id: string, alt?: string, caption?: RichText, fit? }\n' +
         '  • `callout` — { kind: note|warning|tip|important, title?: RichText, body: RichText }\n' +
+        '  • `quote` — { body: RichText, attribution?: RichText }\n' +
+        '  • `table` — { headers?: RichText[], rows: RichText[][], caption?: RichText }\n' +
+        '  • `divider` — { spacing?: sm|md|lg }\n' +
         '  • `two_column` — { ratio?: 1:1|1:2|2:1, gap?, left: leaf[], right: leaf[] } (left/right cannot nest two_column)\n' +
         '  • RichText is `[{ text, bold?, italic?, code?, link? }, ...]` — runs concatenate verbatim, INCLUDE spaces inside text.\n' +
         '\n' +

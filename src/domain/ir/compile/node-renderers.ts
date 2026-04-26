@@ -13,11 +13,16 @@
 
 import type {
   CalloutNode,
+  DividerNode,
+  HeadingNode,
   HeroNode,
   ImageNode,
   LeafSlideNode,
+  ListNode,
   ProseNode,
+  QuoteNode,
   SlideNode,
+  TableNode,
   TwoColumnNode,
 } from '../nodes.js';
 import { escapeAttr } from './escape.js';
@@ -33,6 +38,16 @@ export function renderNode(node: SlideNode): string {
       return renderImage(node);
     case 'callout':
       return renderCallout(node);
+    case 'heading':
+      return renderHeading(node);
+    case 'list':
+      return renderList(node);
+    case 'divider':
+      return renderDivider(node);
+    case 'quote':
+      return renderQuote(node);
+    case 'table':
+      return renderTable(node);
     case 'two_column':
       return renderTwoColumn(node);
   }
@@ -88,6 +103,71 @@ function renderCallout(node: CalloutNode): string {
     `<div class="pengui-callout-body">${renderRichText(node.body)}</div>` +
     `</aside>`
   );
+}
+
+function renderHeading(node: HeadingNode): string {
+  const align = node.align ?? 'left';
+  const tag = `h${node.level}`;
+  return `<${tag} class="pengui-heading pengui-heading-${node.level} pengui-align-${align}">${renderRichText(node.text)}</${tag}>`;
+}
+
+function renderList(node: ListNode): string {
+  const tag = node.style === 'numbered' ? 'ol' : 'ul';
+  const items = node.items
+    .map((item) => `<li class="pengui-list-item">${renderRichText(item)}</li>`)
+    .join('');
+  return `<${tag} class="pengui-list pengui-list-${node.style}">${items}</${tag}>`;
+}
+
+function renderDivider(node: DividerNode): string {
+  const spacing = node.spacing ?? 'md';
+  return `<hr class="pengui-divider pengui-divider-${spacing}" />`;
+}
+
+function renderQuote(node: QuoteNode): string {
+  const attribution =
+    node.attribution && node.attribution.length > 0
+      ? `<cite class="pengui-quote-attribution">${renderRichText(node.attribution)}</cite>`
+      : '';
+  return (
+    `<blockquote class="pengui-quote">` +
+    `<p class="pengui-quote-body">${renderRichText(node.body)}</p>` +
+    attribution +
+    `</blockquote>`
+  );
+}
+
+function renderTable(node: TableNode): string {
+  // Render-time consistency check (the schema can't .refine inside a
+  // discriminatedUnion). Defer the diagnostic to validation rather than
+  // throwing — agents see it as a normal Stage 1 issue.
+  // For now, pad short rows with empty cells so the HTML stays well-formed.
+  const headers = node.headers ?? null;
+  const expectedCols = headers
+    ? headers.length
+    : Math.max(...node.rows.map((r) => r.length));
+
+  const captionHtml =
+    node.caption && node.caption.length > 0
+      ? `<caption class="pengui-table-caption">${renderRichText(node.caption)}</caption>`
+      : '';
+
+  const headHtml = headers
+    ? `<thead><tr>${headers.map((h) => `<th class="pengui-table-th" scope="col">${renderRichText(h)}</th>`).join('')}</tr></thead>`
+    : '';
+
+  const bodyHtml = `<tbody>${node.rows
+    .map((row) => {
+      const cells: string[] = [];
+      for (let i = 0; i < expectedCols; i++) {
+        const cell = row[i];
+        cells.push(`<td class="pengui-table-td">${cell ? renderRichText(cell) : ''}</td>`);
+      }
+      return `<tr>${cells.join('')}</tr>`;
+    })
+    .join('')}</tbody>`;
+
+  return `<table class="pengui-table">${captionHtml}${headHtml}${bodyHtml}</table>`;
 }
 
 function renderTwoColumn(node: TwoColumnNode): string {

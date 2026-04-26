@@ -105,7 +105,8 @@ export function replaceNodeAtPath<T extends SlideIR | SectionIR>(
       throw new PenguiError(
         ErrorCode.INVALID_INPUT,
         'Replacement node inside two_column.left/right must be a leaf node ' +
-          '(hero | prose | image | callout). v4.5+ disallows nested two_column.',
+          '(hero, heading, prose, list, image, callout, quote, table, divider). ' +
+          'Nested two_column is not allowed.',
         { path: [...path], issues: leafCheck.error.issues },
       );
     }

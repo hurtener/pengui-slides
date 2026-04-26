@@ -130,6 +130,63 @@ describe('renderNodeList — per-node HTML emitters', () => {
     expect(html).toContain('<div class="pengui-callout-body">Body</div>');
   });
 
+  it('heading emits the right tag + level class for each level', () => {
+    for (const level of [1, 2, 3, 4, 5, 6] as const) {
+      const html = renderNodeList([{ type: 'heading', level, text: rt('H') }]);
+      expect(html).toContain(`<h${level} class="pengui-heading pengui-heading-${level}`);
+      expect(html).toContain(`</h${level}>`);
+    }
+  });
+
+  it('list emits ul for bullet/checklist and ol for numbered', () => {
+    expect(renderNodeList([{ type: 'list', style: 'bullet', items: [rt('a')] }])).toMatch(
+      /<ul class="pengui-list pengui-list-bullet">/,
+    );
+    expect(renderNodeList([{ type: 'list', style: 'numbered', items: [rt('a')] }])).toMatch(
+      /<ol class="pengui-list pengui-list-numbered">/,
+    );
+    expect(renderNodeList([{ type: 'list', style: 'checklist', items: [rt('a')] }])).toMatch(
+      /<ul class="pengui-list pengui-list-checklist">/,
+    );
+  });
+
+  it('divider emits hr with spacing class', () => {
+    expect(renderNodeList([{ type: 'divider' }])).toContain('pengui-divider-md');
+    expect(renderNodeList([{ type: 'divider', spacing: 'lg' }])).toContain('pengui-divider-lg');
+  });
+
+  it('quote emits body + optional attribution', () => {
+    const noAttr = renderNodeList([{ type: 'quote', body: rt('Q') }]);
+    expect(noAttr).toContain('<blockquote class="pengui-quote">');
+    expect(noAttr).toContain('<p class="pengui-quote-body">Q</p>');
+    expect(noAttr).not.toContain('pengui-quote-attribution');
+
+    const withAttr = renderNodeList([
+      { type: 'quote', body: rt('Q'), attribution: rt('Author') },
+    ]);
+    expect(withAttr).toContain('<cite class="pengui-quote-attribution">Author</cite>');
+  });
+
+  it('table emits caption, thead/th, tbody, and pads short rows', () => {
+    const html = renderNodeList([
+      {
+        type: 'table',
+        caption: rt('Cap'),
+        headers: [rt('A'), rt('B'), rt('C')],
+        rows: [
+          [rt('1'), rt('2'), rt('3')],
+          [rt('4'), rt('5')], // short — should be padded
+        ],
+      },
+    ]);
+    expect(html).toContain('<table class="pengui-table">');
+    expect(html).toContain('<caption class="pengui-table-caption">Cap</caption>');
+    expect(html).toContain('<th class="pengui-table-th" scope="col">A</th>');
+    // 6 td cells total (2 rows × 3 cols), and the 6th is empty
+    expect((html.match(/<td class="pengui-table-td">/g) ?? []).length).toBe(6);
+    expect(html).toContain('<td class="pengui-table-td"></td>');
+  });
+
   it('two_column emits ratio + gap classes and renders both columns', () => {
     const html = renderNodeList([
       {

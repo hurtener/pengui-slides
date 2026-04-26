@@ -425,6 +425,76 @@ async function main() {
     `stage2ElapsedMs=${fullP?.validation?.stage2ElapsedMs}`,
   );
 
+  // 10e. v4.7 (this commit): the expanded node catalog renders end-to-end.
+  const v47Catalog = await client.callTool({
+    name: 'add_slide',
+    arguments: {
+      deck_id: slidesDeckId,
+      slide_ir: {
+        background: 'canvas',
+        layout: 'default',
+        body: [
+          { type: 'heading', level: 2, text: [{ text: 'New nodes' }] },
+          { type: 'list', style: 'bullet', items: [[{ text: 'one' }], [{ text: 'two' }]] },
+          { type: 'divider', spacing: 'lg' },
+          { type: 'quote', body: [{ text: 'Be lean.' }], attribution: [{ text: 'Pengui' }] },
+          { type: 'table', headers: [[{ text: 'A' }], [{ text: 'B' }]], rows: [[[{ text: '1' }], [{ text: '2' }]]] },
+        ],
+      },
+      metadata: { title: 'Catalog', type: 'content', narrative: 'v47 nodes' },
+    },
+  });
+  const v47CatalogP = payload(v47Catalog);
+  check(
+    'v4.7 catalog (heading, list, divider, quote, table) compiles cleanly',
+    !v47Catalog.isError
+      && v47CatalogP?.slide_id != null
+      && v47CatalogP?.validation?.passed === true,
+    `errors=${v47CatalogP?.validation?.errorCount}`,
+  );
+  // Inspect the compiled HTML for the new tag classes.
+  const v47Got = await client.callTool({
+    name: 'get_slide',
+    arguments: { deck_id: slidesDeckId, slide_id: v47CatalogP.slide_id },
+  });
+  const v47Html = payload(v47Got)?.html ?? '';
+  check(
+    'v4.7 nodes emit pengui-* classes for each new type',
+    v47Html.includes('pengui-heading-2')
+      && v47Html.includes('pengui-list-bullet')
+      && v47Html.includes('pengui-divider')
+      && v47Html.includes('pengui-quote')
+      && v47Html.includes('pengui-table'),
+  );
+
+  // 10f. v4.7: resource-access tools (list_resources, get_resource).
+  const listResources = await client.callTool({ name: 'list_resources', arguments: {} });
+  const listResourcesP = payload(listResources);
+  check(
+    'list_resources returns the registered pengui:// resources',
+    Array.isArray(listResourcesP?.resources)
+      && listResourcesP.resources.some((r) => r.uri === 'pengui://schema/slide-ir'),
+    `count=${listResourcesP?.resources?.length}`,
+  );
+  const getResource = await client.callTool({
+    name: 'get_resource',
+    arguments: { uri: 'pengui://schema/slide-ir' },
+  });
+  const getResourceP = payload(getResource);
+  check(
+    'get_resource fetches the slide-ir schema content',
+    typeof getResourceP?.text === 'string' && getResourceP.text.includes('node_types'),
+    `mimeType=${getResourceP?.mimeType}`,
+  );
+  const missingResource = await client.callTool({
+    name: 'get_resource',
+    arguments: { uri: 'pengui://does/not/exist' },
+  });
+  check(
+    'get_resource returns RESOURCE_NOT_FOUND for unknown URIs',
+    missingResource.isError && payload(missingResource)?.code === 'RESOURCE_NOT_FOUND',
+  );
+
   // 11. get_session returns build_info
   const sessionRes = await client.callTool({ name: 'get_session', arguments: {} });
   const buildInfo = payload(sessionRes)?.build_info;

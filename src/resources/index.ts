@@ -12,6 +12,7 @@ import { registerPrintModeResource } from './print-mode.resource.js';
 import { registerDocumentModeResource } from './document-mode.resource.js';
 import { registerCollaborationResource } from './collaboration.resource.js';
 import { registerSlideIRSchemaResource } from './slide-ir.resource.js';
+import { registerResourceEntry } from './registry.js';
 
 /* ------------------------------------------------------------------ */
 /*  Content                                                           */
@@ -28,7 +29,7 @@ Design Soul tokens. Two authoring models live inside it; pick the right one FIRS
 
 | \`authoringModel\` | Default for | You author | Exports |
 |-------------------|-------------|------------|---------|
-| \`"slides"\` | \`slides_16_9\` (and legacy print, opt-in) | A \`slide_ir\` tree (hero / prose / image / callout / two_column nodes) per slide. The server compiles to a 1920×1080 (or print-sized) HTML page using soul tokens. | \`export_pptx\`, \`export_pdf\`, \`export_html\`, \`export_google_slides\`, \`render_preview\` |
+| \`"slides"\` | \`slides_16_9\` (and legacy print, opt-in) | A \`slide_ir\` tree (hero / heading / prose / list / image / callout / quote / table / divider / two_column nodes) per slide. The server compiles to a 1920×1080 (or print-sized) HTML page using soul tokens. | \`export_pptx\`, \`export_pdf\`, \`export_html\`, \`export_google_slides\`, \`render_preview\` |
 | \`"document"\` | \`print_a4_portrait\`, \`print_letter_portrait\` (v3 default) | A \`section_ir\` tree per content block. The server compiles to a single \`<section class="pengui-section pengui-{kind}">\` fragment. The exporter composes sections into one flowing HTML document and lets Chromium paginate. | \`export_pdf\` only |
 
 \`create_deck\` picks the default model from the \`format\` argument; pass
@@ -42,7 +43,7 @@ slide verbs or section verbs.
 |---------|-----------|
 | **Design Soul** | A complete visual identity (colors, typography, spacing, shapes, depth, components, motion). Generates ~73 CSS custom-property tokens, 6 slide recipes, and 11 print recipes. Shared across both authoring models. |
 | **Deck** | An ordered collection of slides **or** sections tied to one Design Soul, with a \`format\` and an \`authoringModel\`. |
-| **SlideIR / SectionIR** | The agent-authored source of truth. A tree of nodes (hero, prose, image, callout, two_column) referencing soul tokens by SEMANTIC role (\`background: "accent"\` → \`var(--color-accent-primary)\`). Fetch \`pengui://schema/slide-ir\` for the grammar. |
+| **SlideIR / SectionIR** | The agent-authored source of truth. A tree of nodes (hero, heading, prose, list, image, callout, quote, table, divider, two_column) referencing soul tokens by SEMANTIC role (\`background: "accent"\` → \`var(--color-accent-primary)\`). Fetch \`pengui://schema/slide-ir\` for the grammar. |
 | **Slide / Section HTML** | The COMPILED snapshot. Stored alongside the IR for the App, exporters, and validators. Do NOT edit \`html\` directly — mutate the IR and let the server recompile. |
 | **Asset** | An uploaded image (PNG, SVG, JPEG). Referenced from IR by id (\`asset_id: "uuid"\`); the server resolves to data URIs at render/export time. |
 | **Recipe** | A validated layout template (HTML). Inspirational reference only — agents author via IR, not by copying recipe HTML. v4.6+ will add IR-native recipes. |
@@ -785,59 +786,45 @@ export function registerAllResources(server: McpServer): void {
   registerDocumentModeResource(server);
   registerCollaborationResource(server);
   registerSlideIRSchemaResource(server);
-  server.registerResource('overview', 'pengui://docs/overview', {
+  const md = 'text/markdown';
+  registerResourceEntry(server, {
+    uri: 'pengui://docs/overview', name: 'overview', mimeType: md,
     description: 'High-level overview of Pengui Slides: concepts, workflow, and key rules.',
-    mimeType: 'text/markdown',
-  }, () => ({
-    contents: [{ uri: 'pengui://docs/overview', mimeType: 'text/markdown', text: OVERVIEW }],
-  }));
-
-  server.registerResource('slide-format', 'pengui://docs/slide-format', {
+    getText: () => OVERVIEW,
+  });
+  registerResourceEntry(server, {
+    uri: 'pengui://docs/slide-format', name: 'slide-format', mimeType: md,
     description: 'Complete slide HTML format reference: canonical structure, mandatory elements, common mistakes.',
-    mimeType: 'text/markdown',
-  }, () => ({
-    contents: [{ uri: 'pengui://docs/slide-format', mimeType: 'text/markdown', text: SLIDE_FORMAT }],
-  }));
-
-  server.registerResource('design-souls', 'pengui://docs/design-souls', {
+    getText: () => SLIDE_FORMAT,
+  });
+  registerResourceEntry(server, {
+    uri: 'pengui://docs/design-souls', name: 'design-souls', mimeType: md,
     description: 'Design Soul layer schemas: all 7 layers, their fields, and the CSS tokens each generates.',
-    mimeType: 'text/markdown',
-  }, () => ({
-    contents: [{ uri: 'pengui://docs/design-souls', mimeType: 'text/markdown', text: DESIGN_SOULS }],
-  }));
-
-  server.registerResource('validation', 'pengui://docs/validation', {
+    getText: () => DESIGN_SOULS,
+  });
+  registerResourceEntry(server, {
+    uri: 'pengui://docs/validation', name: 'validation', mimeType: md,
     description: 'Validation pipeline: all stage 1 and stage 2 checks, scoring weights, tips for score 1.0.',
-    mimeType: 'text/markdown',
-  }, () => ({
-    contents: [{ uri: 'pengui://docs/validation', mimeType: 'text/markdown', text: VALIDATION }],
-  }));
-
-  server.registerResource('assets', 'pengui://docs/assets', {
+    getText: () => VALIDATION,
+  });
+  registerResourceEntry(server, {
+    uri: 'pengui://docs/assets', name: 'assets', mimeType: md,
     description: 'Asset system: upload images, get asset://UUID refs, how resolution works at render time.',
-    mimeType: 'text/markdown',
-  }, () => ({
-    contents: [{ uri: 'pengui://docs/assets', mimeType: 'text/markdown', text: ASSETS }],
-  }));
-
-  server.registerResource('css-utilities', 'pengui://docs/css-utilities', {
+    getText: () => ASSETS,
+  });
+  registerResourceEntry(server, {
+    uri: 'pengui://docs/css-utilities', name: 'css-utilities', mimeType: md,
     description: 'All ~38 utility CSS classes generated for a Design Soul: layout, cards, typography, backgrounds, components, spacing.',
-    mimeType: 'text/markdown',
-  }, () => ({
-    contents: [{ uri: 'pengui://docs/css-utilities', mimeType: 'text/markdown', text: CSS_UTILITIES }],
-  }));
-
-  server.registerResource('recipes', 'pengui://docs/recipes', {
+    getText: () => CSS_UTILITIES,
+  });
+  registerResourceEntry(server, {
+    uri: 'pengui://docs/recipes', name: 'recipes', mimeType: md,
     description: 'The 6 built-in layout recipes: title-slide, two-column, metrics, features-grid, closing-cta, blank-themed.',
-    mimeType: 'text/markdown',
-  }, () => ({
-    contents: [{ uri: 'pengui://docs/recipes', mimeType: 'text/markdown', text: RECIPES }],
-  }));
-
-  server.registerResource('workflows', 'pengui://docs/workflows', {
+    getText: () => RECIPES,
+  });
+  registerResourceEntry(server, {
+    uri: 'pengui://docs/workflows', name: 'workflows', mimeType: md,
     description: 'Step-by-step workflows: create a presentation, add images, iterate on slides, create custom recipes.',
-    mimeType: 'text/markdown',
-  }, () => ({
-    contents: [{ uri: 'pengui://docs/workflows', mimeType: 'text/markdown', text: WORKFLOWS }],
-  }));
+    getText: () => WORKFLOWS,
+  });
 }

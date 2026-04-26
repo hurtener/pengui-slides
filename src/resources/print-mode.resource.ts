@@ -8,6 +8,7 @@
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerResourceEntry } from './registry.js';
 
 const RESOURCE_URI = 'pengui://docs/print-mode';
 
@@ -153,24 +154,14 @@ When a slide's \`@slide-meta\` type is \`content_diagram\` or \`content_chart\`,
 `;
 
 export function registerPrintModeResource(server: McpServer): void {
-  server.registerResource(
-    'print-mode',
-    RESOURCE_URI,
-    {
-      description:
-        'Print-mode authoring guide: when to use print, A4/Letter geometry rules, ' +
-        'the 11-recipe index, print typography scale, page-chrome directive schema, ' +
-        'diagram-legibility validator rules, and the print document workflow.',
-      mimeType: 'text/markdown',
-    },
-    () => ({
-      contents: [
-        {
-          uri: RESOURCE_URI,
-          mimeType: 'text/markdown',
-          text: CONTENT,
-        },
-      ],
-    }),
-  );
+  registerResourceEntry(server, {
+    uri: RESOURCE_URI,
+    name: 'print-mode',
+    mimeType: 'text/markdown',
+    description:
+      'Print-mode authoring guide: when to use print, A4/Letter geometry rules, ' +
+      'the 11-recipe index, print typography scale, page-chrome directive schema, ' +
+      'diagram-legibility validator rules, and the print document workflow.',
+    getText: () => CONTENT,
+  });
 }

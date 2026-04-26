@@ -100,12 +100,71 @@ export const CalloutNodeSchema = z
   .strict();
 export type CalloutNode = z.infer<typeof CalloutNodeSchema>;
 
+// ── v4.7 leaf nodes ──────────────────────────────────────────────
+
+export const HeadingNodeSchema = z
+  .object({
+    type: z.literal('heading'),
+    /** Semantic level. h1 is reserved for hero/cover titles in practice;
+     *  agents typically use h2–h4 for content slide section headers. */
+    level: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6)]),
+    text: RichTextSchema,
+    align: z.enum(['left', 'center', 'right']).optional(),
+  })
+  .strict();
+export type HeadingNode = z.infer<typeof HeadingNodeSchema>;
+
+export const ListNodeSchema = z
+  .object({
+    type: z.literal('list'),
+    style: z.enum(['bullet', 'numbered', 'checklist']),
+    items: z.array(RichTextSchema).min(1),
+  })
+  .strict();
+export type ListNode = z.infer<typeof ListNodeSchema>;
+
+export const DividerNodeSchema = z
+  .object({
+    type: z.literal('divider'),
+    spacing: z.enum(['sm', 'md', 'lg']).optional(),
+  })
+  .strict();
+export type DividerNode = z.infer<typeof DividerNodeSchema>;
+
+export const QuoteNodeSchema = z
+  .object({
+    type: z.literal('quote'),
+    body: RichTextSchema,
+    attribution: RichTextSchema.optional(),
+  })
+  .strict();
+export type QuoteNode = z.infer<typeof QuoteNodeSchema>;
+
+export const TableNodeSchema = z
+  .object({
+    type: z.literal('table'),
+    headers: z.array(RichTextSchema).optional(),
+    rows: z.array(z.array(RichTextSchema)).min(1),
+    /** Optional caption rendered above the table for context / a11y. */
+    caption: RichTextSchema.optional(),
+  })
+  .strict();
+export type TableNode = z.infer<typeof TableNodeSchema>;
+// Note: row-length-vs-headers consistency is enforced at render time
+// (renderTable throws via PenguiError) rather than in the Zod schema —
+// .refine() returns ZodEffects which discriminatedUnion does not accept.
+
 // Leaf-only union — used inside two_column to prevent recursion.
 export const LeafSlideNodeSchema = z.discriminatedUnion('type', [
   HeroNodeSchema,
   ProseNodeSchema,
   ImageNodeSchema,
   CalloutNodeSchema,
+  HeadingNodeSchema,
+  ListNodeSchema,
+  DividerNodeSchema,
+  QuoteNodeSchema,
+  TableNodeSchema,
 ]);
 export type LeafSlideNode = z.infer<typeof LeafSlideNodeSchema>;
 
@@ -129,17 +188,27 @@ export const SlideNodeSchema = z.discriminatedUnion('type', [
   ProseNodeSchema,
   ImageNodeSchema,
   CalloutNodeSchema,
+  HeadingNodeSchema,
+  ListNodeSchema,
+  DividerNodeSchema,
+  QuoteNodeSchema,
+  TableNodeSchema,
   TwoColumnNodeSchema,
 ]);
 export type SlideNode = z.infer<typeof SlideNodeSchema>;
 
-/** All node type names registered in v4.5. Useful for tests, docs, and
- *  resource enumeration (pengui://schema/slide-ir). */
+/** All node type names registered in the IR catalog. Useful for tests,
+ *  docs, and resource enumeration (pengui://schema/slide-ir). */
 export const SLIDE_NODE_TYPES = [
   'hero',
   'prose',
   'image',
   'callout',
+  'heading',
+  'list',
+  'divider',
+  'quote',
+  'table',
   'two_column',
 ] as const;
 export type SlideNodeType = (typeof SLIDE_NODE_TYPES)[number];

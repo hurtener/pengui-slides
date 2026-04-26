@@ -7,6 +7,7 @@
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerResourceEntry } from './registry.js';
 
 const RESOURCE_URI = 'pengui://docs/collaboration';
 
@@ -178,23 +179,12 @@ v4 is additive on top of v3 — nothing you learned before needs to be unlearned
 `;
 
 export function registerCollaborationResource(server: McpServer): void {
-  server.registerResource(
-    'collaboration',
-    RESOURCE_URI,
-    {
-      title: 'Collaboration Surface — v4 Guide',
-      description:
-        'How v4 collaboration works: slugs, sessions, comments, app-only tools, and the between-turn feedback loop.',
-      mimeType: 'text/markdown',
-    },
-    async (uri) => ({
-      contents: [
-        {
-          uri: uri.href,
-          mimeType: 'text/markdown',
-          text: CONTENT,
-        },
-      ],
-    }),
-  );
+  registerResourceEntry(server, {
+    uri: RESOURCE_URI,
+    name: 'collaboration',
+    mimeType: 'text/markdown',
+    description:
+      'How v4 collaboration works: slugs, sessions, comments, app-only tools, and the between-turn feedback loop.',
+    getText: () => CONTENT,
+  });
 }
