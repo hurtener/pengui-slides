@@ -49,7 +49,8 @@ import type { Logger } from '../../infrastructure/index.js';
 import { RevisionTracker } from './revision-tracker.js';
 import { SlugIndex } from '../_shared/slug-index.js';
 import type { SoulService } from '../souls/soul-service.js';
-import { compileSlideIRToHtml } from '../ir/index.js';
+import { compileSlideIRToHtml, replaceNodeAtPath, type IRPath } from '../ir/index.js';
+import type { SlideNode } from '../ir/index.js';
 import { MetadataEmbedder } from '../metadata/metadata-embedder.js';
 
 export class DeckService {
@@ -469,6 +470,104 @@ export class DeckService {
       throw new SlideNotFoundError(id);
     }
     return slide;
+  }
+
+  // ── apply_slide_node_edit (v4.6) ────────────────────────────────
+
+  /**
+   * Replace a single node inside a slide's IR tree at the given path,
+   * then recompile + revalidate. Lets the agent / App make targeted
+   * edits without resubmitting the full body. The slide must be
+   * authored_ir; legacy_html slides have no IR to mutate.
+   *
+   * Path semantics: `["body", i, ...]` — see `replaceNodeAtPath` for
+   * the full grammar. Throws INVALID_INPUT for malformed paths or for
+   * replacements that violate the leaf-only rule inside two_column.
+   */
+  async applySlideNodeEdit(input: {
+    deckId: string;
+    slideId: string;
+    path: IRPath;
+    newNode: SlideNode;
+  }): Promise<Slide> {
+    const sid = slideId(input.slideId);
+    const existing = await this.slideStore.get(sid);
+    if (!existing) {
+      throw new SlideNotFoundError(input.slideId);
+    }
+    if (existing.sourceKind !== 'authored_ir' || !existing.ir) {
+      throw new SlideNotFoundError(
+        `Slide "${input.slideId}" has no IR (sourceKind=${existing.sourceKind}); apply_slide_node_edit only works on IR-authored slides.`,
+      );
+    }
+    const nextIR = replaceNodeAtPath(existing.ir, input.path, input.newNode);
+    return this.updateSlide({
+      deckId: input.deckId,
+      slideId: input.slideId,
+      ir: nextIR,
+    });
+  }
+
+  // ── Recompile slides for a soul (v4.6) ──────────────────────────
+
+  /**
+   * Recompile every IR-authored slide that lives in a deck linked to
+   * `soulId`. Used by `apply_token_override` to propagate a token change
+   * through every existing slide so the App's preview / exports reflect
+   * the new value. Only authored_ir slides are touched — legacy_html
+   * slides keep their stored HTML unchanged.
+   *
+   * Returns counts so the caller can report how much work happened.
+   * Failures are collected, not thrown — one bad slide should not abort
+   * the whole token override.
+   */
+  async recompileSlidesForSoul(soulIdArg: import('../../types/common.js').SoulId): Promise<{
+    recompiledCount: number;
+    skippedCount: number;
+    failures: Array<{ slideId: string; deckId: string; error: string }>;
+  }> {
+    const allDecks = await this.deckStore.list();
+    const affectedDecks = allDecks.filter(
+      (d) => (d.soulId as string) === (soulIdArg as string)
+        && DeckService.resolveAuthoringModel(d) === 'slides',
+    );
+
+    let recompiledCount = 0;
+    let skippedCount = 0;
+    const failures: Array<{ slideId: string; deckId: string; error: string }> = [];
+
+    for (const deck of affectedDecks) {
+      const slides = await this.slideStore.getByDeck(deck.id);
+      for (const slide of slides) {
+        if (slide.sourceKind !== 'authored_ir' || !slide.ir) {
+          skippedCount += 1;
+          continue;
+        }
+        try {
+          await this.updateSlide({
+            deckId: deck.id as string,
+            slideId: slide.id as string,
+            ir: slide.ir,
+          });
+          recompiledCount += 1;
+        } catch (err) {
+          failures.push({
+            slideId: slide.id as string,
+            deckId: deck.id as string,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
+
+    this.logger.info('Recompiled slides for soul token change', {
+      soulId: soulIdArg as string,
+      recompiledCount,
+      skippedCount,
+      failureCount: failures.length,
+    });
+
+    return { recompiledCount, skippedCount, failures };
   }
 
   // ── Remove Slide ─────────────────────────────────────────────────

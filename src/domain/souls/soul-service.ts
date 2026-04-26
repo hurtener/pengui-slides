@@ -298,7 +298,10 @@ export class SoulService {
       );
     }
 
-    // 4. Create recipe
+    // 4. Create recipe. v4.6: capture the SlideIR alongside the
+    //    compiled HTML when the slide is IR-authored, so consumers can
+    //    pass `recipe.ir` to `apply_recipe` / `add_slide` to instantiate
+    //    a copy. Pre-v4.5 slides without IR fall back to HTML-only.
     const recipe: LayoutRecipe = {
       id: generateTemplateId(),
       soulId,
@@ -309,6 +312,7 @@ export class SoulService {
       source: 'user-saved',
       medium: 'slides',   // user-saved templates default to slides; print templates are built-in
       html: slide.html,
+      ...(slide.sourceKind === 'authored_ir' && slide.ir ? { ir: slide.ir } : {}),
       createdAt: this.clock.now(),
       savedFromSlideId: slideId,
     };

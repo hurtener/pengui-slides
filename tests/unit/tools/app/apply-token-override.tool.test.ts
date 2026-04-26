@@ -31,6 +31,11 @@ describe('registerApplyTokenOverrideTool', () => {
         resolveRefOrThrow: vi.fn().mockResolvedValue('soul-1'),
         applyTokenOverride: vi.fn().mockResolvedValue(updatedSoul),
       },
+      deckService: {
+        recompileSlidesForSoul: vi
+          .fn()
+          .mockResolvedValue({ recompiledCount: 3, skippedCount: 1, failures: [] }),
+      },
     };
 
     registerApplyTokenOverrideTool(server as never, container as never);
@@ -50,6 +55,9 @@ describe('registerApplyTokenOverrideTool', () => {
     expect(content.token_name).toBe('accentPrimary');
     expect(content.new_value).toBe('#ff0000');
     expect(content.allowed_fonts).toEqual(['Inter']);
+    const recompile = content.recompile as Record<string, unknown>;
+    expect(recompile.slides_updated).toBe(3);
+    expect(recompile.slides_skipped).toBe(1);
 
     expect(container.soulService.resolveRefOrThrow).toHaveBeenCalledWith('my-soul');
     expect(container.soulService.applyTokenOverride).toHaveBeenCalledWith(
@@ -58,6 +66,7 @@ describe('registerApplyTokenOverrideTool', () => {
       'accentPrimary',
       '#ff0000',
     );
+    expect(container.deckService.recompileSlidesForSoul).toHaveBeenCalledWith('soul-1');
   });
 
   it('returns error response when soul is not found', async () => {

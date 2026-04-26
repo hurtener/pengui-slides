@@ -31,6 +31,7 @@ export function registerGetSlideTool(server: McpServer, container: ServiceContai
 
         return textResponse({
           html: slide.html,
+          ir: slide.ir,
           source_kind: slide.sourceKind,
           document: slide.document,
           translation_issues: slide.translationIssues,

@@ -32,6 +32,7 @@ export const SECTION_MUTATING_TOOL_NAMES = [
   'update_section',
   'remove_section',
   'reorder_sections',
+  'apply_section_node_edit',
 ] as const;
 
 export type SectionMutatingToolName = (typeof SECTION_MUTATING_TOOL_NAMES)[number];

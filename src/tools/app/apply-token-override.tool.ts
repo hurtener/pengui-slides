@@ -4,12 +4,14 @@
  * App-only tool (visibility: ['app']). Lets the MCP App live-edit individual
  * design token values on a soul without going through the full re-register flow.
  *
- * The soul is updated in place; if it is already approved, recipes are also
- * regenerated so that NEW slides / sections pick up the change. Existing
- * slides retain their compiled HTML (with the old soul tokens baked into
- * the embedded `:root` block); they need an `update_slide` (with the
- * unchanged IR) to recompile against the new token values. v4.6+ will add
- * automatic recompile-on-token-override for IR slides.
+ * v4.6: After updating the soul, automatically recompiles every IR-authored
+ * slide in every deck linked to that soul. The compiled HTML stored on each
+ * slide is refreshed with the new token values, so the App preview and
+ * downstream exports pick up the change without manual `update_slide` calls.
+ *
+ * Sections are NOT recompiled here. Section HTML uses `var(--*)` references
+ * that the document composer resolves against the current soul at render
+ * time, so a token change is automatically visible at next preview/export.
  */
 
 import { z } from 'zod';
@@ -29,9 +31,17 @@ export function registerApplyTokenOverrideTool(server: McpServer, container: Ser
       description:
         'Live-edit a single design token on a soul. Regenerates CSS tokens, utility CSS, ' +
         'and the style guide immediately. If the soul is approved, layout recipes are also ' +
-        'regenerated so NEW slides pick up the change. Existing slides keep their compiled ' +
-        'HTML (with the old soul tokens baked in); call update_slide with the unchanged IR ' +
-        'to recompile against the new tokens. Returns the updated soul summary.',
+        'regenerated. ' +
+        '\n\n' +
+        'v4.6: every IR-authored slide in every deck linked to this soul is automatically ' +
+        'recompiled against the new tokens, so the App preview and downstream exports pick up ' +
+        'the change without follow-up `update_slide` calls. Pre-v4.5 slides ' +
+        '(sourceKind != "authored_ir") are skipped — call update_slide manually if you need ' +
+        'them refreshed. Sections are not recompiled (the document composer resolves ' +
+        'var() references against the current soul at render time). ' +
+        '\n\n' +
+        'Returns the updated soul summary plus `recompile: { slides_updated, slides_skipped, ' +
+        'failures[] }`.',
       inputSchema: z.object({
         soul_ref: z.string().describe('Soul UUID or slug.'),
         layer: z
@@ -59,6 +69,10 @@ export function registerApplyTokenOverrideTool(server: McpServer, container: Ser
           value,
         );
 
+        // v4.6: cascade-recompile every IR slide that uses this soul so
+        // the stored compiled HTML reflects the new token value.
+        const slideRecompile = await container.deckService.recompileSlidesForSoul(soulId);
+
         return structuredResponse(
           {
             soul_id: updated.id,
@@ -71,8 +85,13 @@ export function registerApplyTokenOverrideTool(server: McpServer, container: Ser
             css_tokens_preview: updated.cssTokens.slice(0, 500),
             allowed_fonts: updated.allowedFonts,
             updated_at: updated.updatedAt,
+            recompile: {
+              slides_updated: slideRecompile.recompiledCount,
+              slides_skipped: slideRecompile.skippedCount,
+              failures: slideRecompile.failures,
+            },
           },
-          `Token "${layer}.${token_name}" updated on soul "${updated.name}"`,
+          `Token "${layer}.${token_name}" updated; recompiled ${slideRecompile.recompiledCount} slide(s)`,
         );
       } catch (error) {
         return handleToolError(error);

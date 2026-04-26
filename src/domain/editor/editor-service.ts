@@ -259,6 +259,7 @@ export class EditorService {
         slideId: finalSelectedSlide.id as string,
         position: finalSelectedSlide.position,
         html: finalSelectedSlide.html,
+        ir: finalSelectedSlide.ir ?? null,
         sourceKind: finalSelectedSlide.sourceKind,
         document: selectedDocument,
         translationIssues: finalSelectedSlide.translationIssues,

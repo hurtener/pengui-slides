@@ -33,7 +33,8 @@ import type { Logger } from '../../infrastructure/index.js';
 import { DeckService } from '../decks/deck-service.js';
 import { RevisionTracker } from '../decks/revision-tracker.js';
 import { embedSectionMeta } from './section-meta-embedder.js';
-import { compileSectionIRToHtml } from '../ir/index.js';
+import { compileSectionIRToHtml, replaceNodeAtPath, type IRPath } from '../ir/index.js';
+import type { SlideNode } from '../ir/index.js';
 
 export class DocumentService {
   private readonly deckStore: IDeckStore;
@@ -342,6 +343,32 @@ export class DocumentService {
       throw new SectionNotFoundError(id);
     }
     return section;
+  }
+
+  // ── apply_section_node_edit (v4.6) ───────────────────────────────
+
+  /**
+   * Replace a single node inside a section's IR tree at the given path,
+   * then recompile + revalidate. Mirror of DeckService.applySlideNodeEdit.
+   */
+  async applySectionNodeEdit(input: {
+    deckId: string;
+    sectionId: string;
+    path: IRPath;
+    newNode: SlideNode;
+  }): Promise<Section> {
+    const sid = sectionId(input.sectionId);
+    const existing = await this.sectionStore.get(sid);
+    if (!existing) {
+      throw new SectionNotFoundError(input.sectionId);
+    }
+    const nextIR = replaceNodeAtPath(existing.ir, input.path, input.newNode);
+    const result = await this.updateSection({
+      deckId: input.deckId,
+      sectionId: input.sectionId,
+      ir: nextIR,
+    });
+    return result.section;
   }
 
   // ── Remove Section ───────────────────────────────────────────────

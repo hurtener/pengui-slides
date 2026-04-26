@@ -221,6 +221,17 @@ export interface LayoutRecipe {
    */
   medium: FormatMedium;
   html: string;
+  /**
+   * v4.6: the SlideIR tree the agent can pass to `add_slide` /
+   * `apply_recipe` to instantiate this recipe. Present on user-saved
+   * recipes captured from IR-authored slides and on any built-in recipe
+   * authored as IR. Absent on built-in HTML-only recipes that pre-date
+   * v4.6 — those remain visual references only.
+   *
+   * Stored as `unknown` here to avoid a circular type import; consumers
+   * that need typed access cast through `SlideIR` from `domain/ir`.
+   */
+  ir?: unknown;
   createdAt: ISOTimestamp;
   savedFromSlideId?: SlideId;
 }

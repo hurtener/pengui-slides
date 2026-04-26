@@ -87,6 +87,16 @@ slide verbs or section verbs.
   \`validate_section_ir\` give Zod-level shape errors without storage side effects.
 - **Images flow by id.** Upload via \`upload_asset\`, get an asset id, reference
   it from an IR \`image\` node's \`asset_id\` field.
+- **(v4.6) For targeted edits, use \`apply_slide_node_edit\` /
+  \`apply_section_node_edit\`.** Replace one node by structural path
+  (e.g. \`["body", 0]\` or \`["body", 2, "right", 1]\`) without resubmitting
+  the full IR. Cheaper than full updates for small fixes.
+- **(v4.6) Reuse layouts via \`apply_recipe\`.** Recipes captured from
+  IR-authored slides carry \`ir\`; \`apply_recipe { deck_id, recipe_id }\`
+  instantiates the recipe IR as a new slide.
+- **(v4.6) Token overrides cascade.** \`apply_token_override\` recompiles
+  every IR slide on every deck linked to the soul, so the App preview and
+  exports update automatically.
 
 ## Where to go next
 

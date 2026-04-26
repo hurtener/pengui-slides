@@ -30,6 +30,7 @@ export function registerGetSectionTool(server: McpServer, container: ServiceCont
             deck_id: section.deckId,
             position: section.position,
             kind: section.kind,
+            ir: section.ir,
             html: section.html,
             break_hints: section.breakHints,
             metadata: section.metadata,

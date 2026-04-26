@@ -239,10 +239,75 @@ async function main() {
     wrongModel.isError && payload(wrongModel)?.code === 'WRONG_AUTHORING_MODEL',
   );
 
+  // 9b. v4.6: apply_slide_node_edit replaces one node in-place.
+  const editedSlide = await client.callTool({
+    name: 'apply_slide_node_edit',
+    arguments: {
+      deck_id: slidesDeckId,
+      slide_id: slideId,
+      path: ['body', 0],
+      new_node: { type: 'hero', title: [{ text: 'Edited heading' }] },
+    },
+  });
+  if (editedSlide.isError) {
+    console.error('apply_slide_node_edit errored:', JSON.stringify(payload(editedSlide), null, 2));
+  }
+  const editedP = payload(editedSlide);
+  check(
+    'apply_slide_node_edit returns the patched slide_id',
+    editedP?.slide_id === slideId,
+  );
+  // Confirm the edit propagated to slide.html.
+  const refetched = await client.callTool({ name: 'get_slide', arguments: { deck_id: slidesDeckId, slide_id: slideId } });
+  const refetchedHtml = payload(refetched)?.html ?? '';
+  check(
+    'apply_slide_node_edit recompiled slide.html with the new content',
+    refetchedHtml.includes('Edited heading'),
+  );
+
+  // 9c. v4.6: apply_section_node_edit replaces a section IR node in-place.
+  const editedSection = await client.callTool({
+    name: 'apply_section_node_edit',
+    arguments: {
+      deck_id: deckId,
+      section_id: sectionId,
+      path: ['body', 0],
+      new_node: { type: 'prose', body: [{ text: 'Edited section body' }] },
+    },
+  });
+  const editedSecP = payload(editedSection);
+  check(
+    'apply_section_node_edit returns the patched section_id',
+    editedSecP?.section_id === sectionId,
+  );
+
+  // 9d. v4.6: apply_token_override cascades a recompile to existing IR slides.
+  const tokenOverride = await client.callTool({
+    name: 'apply_token_override',
+    arguments: { soul_ref: soulId, layer: 'color', token_name: 'accentPrimary', value: '#aa5500' },
+  });
+  if (tokenOverride.isError) {
+    console.error('apply_token_override errored:', JSON.stringify(payload(tokenOverride), null, 2));
+  }
+  const tokenP = payload(tokenOverride);
+  check(
+    'apply_token_override returns recompile counts',
+    typeof tokenP?.recompile?.slides_updated === 'number'
+      && tokenP.recompile.slides_updated >= 1,
+    `slides_updated=${tokenP?.recompile?.slides_updated}`,
+  );
+  const afterOverride = await client.callTool({ name: 'get_slide', arguments: { slide_id: slideId } });
+  const afterHtml = payload(afterOverride)?.html ?? '';
+  check(
+    'token override propagated to slide.html (--color-accent-primary updated)',
+    afterHtml.includes('--color-accent-primary: #aa5500'),
+  );
+
   // 10. Section-mutation contract: every section-mutating tool populates
   //     structuredContent with section_id or section_count.
   const SECTION_MUTATING_TOOL_NAMES = [
     'add_section', 'update_section', 'remove_section', 'reorder_sections',
+    'apply_section_node_edit',
   ];
   function satisfiesContract(structuredContent) {
     if (!structuredContent || typeof structuredContent !== 'object') return false;
@@ -268,6 +333,15 @@ async function main() {
   tracked.update_section = await client.callTool({
     name: 'update_section',
     arguments: { deck_id: contractDeckId, section_id: sec1Id, section_ir: PROSE_IR('A2') },
+  });
+  tracked.apply_section_node_edit = await client.callTool({
+    name: 'apply_section_node_edit',
+    arguments: {
+      deck_id: contractDeckId,
+      section_id: sec1Id,
+      path: ['body', 0],
+      new_node: { type: 'prose', body: [{ text: 'A3' }] },
+    },
   });
   const list = await client.callTool({ name: 'list_sections', arguments: { deck_id: contractDeckId } });
   const orderIds = (payload(list)?.sections ?? []).map((s) => s.id).reverse();

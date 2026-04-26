@@ -63,3 +63,5 @@ export {
   type CompileSlideIRInput,
   type CompileSectionIRInput,
 } from './compile/index.js';
+
+export { replaceNodeAtPath, type IRPath } from './operations/replace-node.js';

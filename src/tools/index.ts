@@ -33,6 +33,9 @@ import { registerRemoveSectionTool } from './decks/remove-section.tool.js';
 import { registerReorderSectionsTool } from './decks/reorder-sections.tool.js';
 import { registerListSectionsTool } from './decks/list-sections.tool.js';
 import { registerUpdateDocumentMetaTool } from './decks/update-document-meta.tool.js';
+import { registerApplySlideNodeEditTool } from './decks/apply-slide-node-edit.tool.js';
+import { registerApplySectionNodeEditTool } from './decks/apply-section-node-edit.tool.js';
+import { registerApplyRecipeTool } from './decks/apply-recipe.tool.js';
 
 // Validation tools
 import { registerValidateSlideTool } from './validation/validate-slide.tool.js';
@@ -93,6 +96,8 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerReorderSlidesTool(server, container);
   registerGetDeckSummaryTool(server, container);
   registerListDecksTool(server, container);
+  registerApplySlideNodeEditTool(server, container);
+  registerApplyRecipeTool(server, container);
 
   // Document (continuous-document mode) tools
   registerAddSectionTool(server, container);
@@ -102,6 +107,7 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerReorderSectionsTool(server, container);
   registerListSectionsTool(server, container);
   registerUpdateDocumentMetaTool(server, container);
+  registerApplySectionNodeEditTool(server, container);
 
   // Asset tools
   registerUploadAssetTool(server, container);
