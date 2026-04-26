@@ -740,8 +740,9 @@ Step 2 — Common fixes (most legacy lints don't apply to IR slides — the
   - "schema validation: unknown node type" → fetch
     pengui://schema/slide-ir for the current node grammar
   - "two_column.left/right contains nested two_column" → flatten;
-    v4.5 explicitly disallows recursion inside two_column
-  - "rich text run has both bold and italic" → split into separate runs
+    nested two_column is explicitly disallowed
+  - (v4.7+) bold + italic + code + strike STACK on a single RichText run
+    — no longer split into separate runs
 Step 3 — Resubmit via update_slide. Or use validate_slide_ir for a
          schema-only pre-flight check (no storage side effects).
 \`\`\`
