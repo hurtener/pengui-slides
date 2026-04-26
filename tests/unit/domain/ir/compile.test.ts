@@ -253,10 +253,9 @@ describe('compileSectionIRToHtml', () => {
     expect(html).toContain('pengui-bg-surface');
   });
 
-  it('inlines the per-node CSS so out-of-context preview still styles correctly', () => {
+  it('does NOT inline a <style> block — section-structural forbids it; node CSS is registered once by DocumentComposer', () => {
     const html = compileSectionIRToHtml({ ir, kind: 'prose' });
-    expect(html).toContain('<style>');
-    expect(html).toContain('pengui-hero-title');
+    expect(html).not.toContain('<style');
   });
 
   it('renders the IR body inside the root section', () => {

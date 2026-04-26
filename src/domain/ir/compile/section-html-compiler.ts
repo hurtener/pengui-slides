@@ -2,14 +2,17 @@
  * compileSectionIRToHtml — turn a SectionIR into a section fragment.
  *
  * Emitted shape: a single root <section> carrying pengui-section, the
- * kind class, layout / background classes, and an inline <style> block
- * with the per-node pengui-* CSS so previewing a single section out of
- * context still looks right. The IR-rendered nodes follow inside the
- * section element.
+ * kind class, and layout / background classes, followed by the IR-rendered
+ * nodes inside the section element. NO <style> block is emitted in the
+ * fragment — section-structural Stage 1 forbids standalone <style> tags
+ * in section fragments because the per-node pengui-* stylesheet is
+ * registered exactly once at the document level by DocumentComposer
+ * (see buildNodeStylesBlock) and the soul tokens are injected on the
+ * same envelope.
  *
- * The fragment is composed into a full document by DocumentComposer at
- * render / export time; that step injects the soul cssTokens at the
- * document root, applies print page-chrome, and resolves asset refs.
+ * Single-section previews go through DocumentComposer too, so the node
+ * stylesheet still wraps the fragment automatically — there is no need
+ * to inline NODE_CSS per section.
  *
  * The @section-meta comment is NOT emitted here. The tool layer owns
  * the SectionMetadata struct and runs embedSectionMeta on the compiled
@@ -18,7 +21,6 @@
 
 import type { SectionIR } from '../slide-ir.js';
 import { renderNodeList } from './node-renderers.js';
-import { NODE_CSS } from './layout-css.js';
 
 export interface CompileSectionIRInput {
   ir: SectionIR;
@@ -39,7 +41,6 @@ export function compileSectionIRToHtml({ ir, kind }: CompileSectionIRInput): str
 
   return (
     `<section class="pengui-section ${kindClass} ${layoutClass} ${backgroundClass}">` +
-    `<style>${NODE_CSS}</style>` +
     body +
     `</section>`
   );

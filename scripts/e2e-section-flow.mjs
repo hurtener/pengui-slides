@@ -296,7 +296,7 @@ async function main() {
       && tokenP.recompile.slides_updated >= 1,
     `slides_updated=${tokenP?.recompile?.slides_updated}`,
   );
-  const afterOverride = await client.callTool({ name: 'get_slide', arguments: { slide_id: slideId } });
+  const afterOverride = await client.callTool({ name: 'get_slide', arguments: { deck_id: slidesDeckId, slide_id: slideId } });
   const afterHtml = payload(afterOverride)?.html ?? '';
   check(
     'token override propagated to slide.html (--color-accent-primary updated)',

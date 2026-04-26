@@ -78,7 +78,7 @@ describe('token override propagation (v4.6)', () => {
     // wire section recompiles into apply_token_override.
     const before = await container.documentService.getSection(sectionId);
     expect(before.html).not.toContain('#228be6');
-    expect(before.html).toContain('var(--');
+    expect(before.html).not.toContain('#aa5500');
 
     await container.soulService.applyTokenOverride(soulIdStr as never, 'color', 'accentPrimary', '#aa5500');
 

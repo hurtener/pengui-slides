@@ -58,6 +58,7 @@ import { ALL_SECTION_KINDS } from '../../types/section.js';
 import type { Deck, DocumentMeta } from '../../types/deck.js';
 import type { DesignSoul } from '../../types/design-soul.js';
 import type { FormatGeometry } from '../../types/format.js';
+import { NODE_CSS } from '../ir/compile/layout-css.js';
 
 // ── Module-relative template root ────────────────────────────────
 //
@@ -347,6 +348,7 @@ export class DocumentComposer {
     const title = escapeHtml(deck.title || 'Document');
     const soulTokensBlock = this.buildSoulTokensBlock(soul);
     const printBaseBlock = this.buildPrintBaseBlock(geometry, documentMeta);
+    const nodeStylesBlock = this.buildNodeStylesBlock();
     const blockStylesBlock = this.buildBlockStylesBlock(plans, documentMeta);
     const chromeBlock = this.buildChromeBlock(plans, deck, documentMeta);
 
@@ -359,6 +361,7 @@ export class DocumentComposer {
   <title>${title}</title>
   ${soulTokensBlock}
   ${printBaseBlock}
+  ${nodeStylesBlock}
   ${blockStylesBlock}
   ${chromeBlock}
 </head>
@@ -528,6 +531,15 @@ ${mainBody}
   private buildSoulTokensBlock(soul: DesignSoul): string {
     const css = stripRedundantRootWrapper(soul.cssTokens ?? '');
     return `<style id="pengui-soul-tokens">${css}</style>`;
+  }
+
+  /**
+   * Per-node pengui-* stylesheet — soul-neutral, var()-driven. Registered
+   * once at the document level so section fragments stay <style>-tag-free
+   * (section-structural rule). Mirrors what slide-mode embeds inline.
+   */
+  private buildNodeStylesBlock(): string {
+    return `<style id="pengui-node-styles">${NODE_CSS}</style>`;
   }
 
   /** @page size + margins + universal break rules. */
