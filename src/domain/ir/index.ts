@@ -14,10 +14,12 @@
 export {
   TextRunSchema,
   RichTextSchema,
+  TextColorSchema,
   rt,
   richTextToPlain,
   type TextRun,
   type RichText,
+  type TextColor,
 } from './rich-text.js';
 
 export {

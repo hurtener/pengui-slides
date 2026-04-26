@@ -66,6 +66,24 @@ describe('renderRichText', () => {
       renderRichText(rt({ text: 'q', link: 'https://x.test/?q=%22a%22' })),
     ).toContain('href="https://x.test/?q=%22a%22"');
   });
+
+  it('wraps a colored run with <span class="pengui-text-{role}">', () => {
+    expect(renderRichText(rt({ text: '$2.5M', color: 'accent' }))).toBe(
+      '<span class="pengui-text-accent">$2.5M</span>',
+    );
+  });
+
+  it('color hyphenates the underscore variants (accent_alt → accent-alt)', () => {
+    expect(renderRichText(rt({ text: 'x', color: 'accent_alt' }))).toBe(
+      '<span class="pengui-text-accent-alt">x</span>',
+    );
+  });
+
+  it('color composes with bold + link (color wraps outermost)', () => {
+    expect(
+      renderRichText(rt({ text: 'go', bold: true, link: 'https://x.test', color: 'success' })),
+    ).toBe('<span class="pengui-text-success"><a href="https://x.test"><strong>go</strong></a></span>');
+  });
 });
 
 describe('renderNodeList — per-node HTML emitters', () => {

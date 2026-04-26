@@ -18,6 +18,18 @@ export const NODE_CSS = `
 .pengui-align-center { text-align: center; }
 .pengui-align-right { text-align: right; }
 
+/* Inline text-color overrides — applied via <span class="pengui-text-*">
+ * around a single RichText run. All semantic, all soul-token-driven. */
+.pengui-text-accent { color: var(--color-accent-primary); }
+.pengui-text-accent-alt { color: var(--color-accent-secondary); }
+.pengui-text-accent-warm { color: var(--color-accent-warm); }
+.pengui-text-success { color: var(--color-success); }
+.pengui-text-warning { color: var(--color-warning); }
+.pengui-text-error { color: var(--color-error); }
+.pengui-text-info { color: var(--color-info); }
+.pengui-text-muted { color: var(--color-text-muted); }
+.pengui-text-inverse { color: var(--color-text-inverse); }
+
 .pengui-hero {
   display: flex;
   flex-direction: column;

@@ -22,6 +22,22 @@
 
 import * as z from 'zod';
 
+/** Semantic text-color roles available to inline runs. Resolved by the
+ *  compiler to a soul token (var(--color-*)) at render time. Default
+ *  (omitted) inherits the cascade-aware --color-text-default. */
+export const TextColorSchema = z.enum([
+  'accent',
+  'accent_alt',
+  'accent_warm',
+  'success',
+  'warning',
+  'error',
+  'info',
+  'muted',
+  'inverse',
+]);
+export type TextColor = z.infer<typeof TextColorSchema>;
+
 export const TextRunSchema = z
   .object({
     text: z.string(),
@@ -29,6 +45,10 @@ export const TextRunSchema = z
     italic: z.boolean().optional(),
     code: z.boolean().optional(),
     link: z.string().url().optional(),
+    /** Override the inherited text color for this run only. Semantic role
+     *  (e.g. "accent" → var(--color-accent-primary)); the agent never
+     *  writes hex. Independent flag — composes with bold/italic/link. */
+    color: TextColorSchema.optional(),
   })
   .strict();
 

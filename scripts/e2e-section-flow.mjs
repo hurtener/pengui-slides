@@ -467,6 +467,46 @@ async function main() {
       && v47Html.includes('pengui-table'),
   );
 
+  // 10ef. v4.7: inline text color in RichText runs.
+  const colorSlide = await client.callTool({
+    name: 'add_slide',
+    arguments: {
+      deck_id: slidesDeckId,
+      slide_ir: {
+        background: 'canvas',
+        layout: 'default',
+        body: [
+          { type: 'hero', title: [
+            { text: 'Revenue grew ' },
+            { text: '$2.5M', bold: true, color: 'accent' },
+            { text: ' last quarter' },
+          ] },
+          { type: 'prose', body: [
+            { text: 'Status: ' },
+            { text: 'on track', color: 'success' },
+            { text: ' for Q4 targets.' },
+          ] },
+        ],
+      },
+      metadata: { title: 'Color', type: 'content', narrative: 'inline color' },
+    },
+  });
+  const colorSlideP = payload(colorSlide);
+  check(
+    'add_slide accepts inline text color (accent + success)',
+    !colorSlide.isError && colorSlideP?.slide_id != null,
+  );
+  const colorGet = await client.callTool({
+    name: 'get_slide',
+    arguments: { deck_id: slidesDeckId, slide_id: colorSlideP.slide_id },
+  });
+  const colorHtml = payload(colorGet)?.html ?? '';
+  check(
+    'inline color emits pengui-text-accent + pengui-text-success spans',
+    colorHtml.includes('<span class="pengui-text-accent">')
+      && colorHtml.includes('<span class="pengui-text-success">'),
+  );
+
   // 10f. v4.7: resource-access tools (list_resources, get_resource).
   const listResources = await client.callTool({ name: 'list_resources', arguments: {} });
   const listResourcesP = payload(listResources);

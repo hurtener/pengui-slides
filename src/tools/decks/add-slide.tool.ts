@@ -71,7 +71,7 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
         '  • `table` — { headers?: RichText[], rows: RichText[][], caption?: RichText }\n' +
         '  • `divider` — { spacing?: sm|md|lg }\n' +
         '  • `two_column` — { ratio?: 1:1|1:2|2:1, gap?, left: leaf[], right: leaf[] } (left/right cannot nest two_column)\n' +
-        '  • RichText is `[{ text, bold?, italic?, code?, link? }, ...]` — runs concatenate verbatim, INCLUDE spaces inside text.\n' +
+        '  • RichText is `[{ text, bold?, italic?, code?, link?, color? }, ...]` — runs concatenate verbatim, INCLUDE spaces inside text. `color` accepts SEMANTIC roles (accent | accent_alt | accent_warm | success | warning | error | info | muted | inverse); omit to inherit the cascade-aware default.\n' +
         '\n' +
         'IMAGES — image nodes reference assets by id (`asset_id: "uuid"`). Upload binaries with `upload_asset` first, then pass the returned id. Provide `alt` for accessibility (empty string marks decorative). ' +
         '\n\n' +

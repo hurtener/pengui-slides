@@ -26,6 +26,15 @@ describe('TextRunSchema', () => {
     expect(() => TextRunSchema.parse({ text: 'x', link: 'not-a-url' })).toThrow();
   });
 
+  it('accepts a semantic color override', () => {
+    const r = TextRunSchema.parse({ text: 'hi', color: 'accent' });
+    expect(r.color).toBe('accent');
+  });
+
+  it('rejects literal hex colors (semantic-only)', () => {
+    expect(() => TextRunSchema.parse({ text: 'h', color: '#ff0000' })).toThrow();
+  });
+
   it('rejects unknown fields (strict mode catches typos)', () => {
     expect(() => TextRunSchema.parse({ text: 'h', strong: true })).toThrow();
   });
