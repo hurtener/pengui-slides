@@ -35,6 +35,26 @@ describe('TextRunSchema', () => {
     expect(() => TextRunSchema.parse({ text: 'h', color: '#ff0000' })).toThrow();
   });
 
+  it('accepts strike, sup, sub flags', () => {
+    expect(TextRunSchema.parse({ text: 'h', strike: true }).strike).toBe(true);
+    expect(TextRunSchema.parse({ text: 'h', sup: true }).sup).toBe(true);
+    expect(TextRunSchema.parse({ text: 'h', sub: true }).sub).toBe(true);
+  });
+
+  it('accepts every formatting flag stacked on a single run', () => {
+    const r = TextRunSchema.parse({
+      text: 'x',
+      bold: true,
+      italic: true,
+      code: true,
+      strike: true,
+      sup: true,
+      color: 'accent',
+      link: 'https://example.com',
+    });
+    expect(r.bold && r.italic && r.code && r.strike && r.sup).toBe(true);
+  });
+
   it('rejects unknown fields (strict mode catches typos)', () => {
     expect(() => TextRunSchema.parse({ text: 'h', strong: true })).toThrow();
   });

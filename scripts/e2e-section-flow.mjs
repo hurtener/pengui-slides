@@ -467,6 +467,48 @@ async function main() {
       && v47Html.includes('pengui-table'),
   );
 
+  // 10eg. v4.7: RichText flag stacking (bold + italic + code) and new flags (strike, sup, sub).
+  const stackSlide = await client.callTool({
+    name: 'add_slide',
+    arguments: {
+      deck_id: slidesDeckId,
+      slide_ir: {
+        background: 'canvas',
+        layout: 'default',
+        body: [
+          { type: 'prose', body: [
+            { text: 'old: ' },
+            { text: '$5/mo', strike: true, color: 'muted' },
+            { text: '  new: ' },
+            { text: '$3/mo', bold: true, italic: true, color: 'success' },
+            { text: '  H' },
+            { text: '2', sub: true },
+            { text: 'O at 25°C' },
+            { text: '2', sup: true },
+          ] },
+        ],
+      },
+      metadata: { title: 'Stack', type: 'content', narrative: 'flag stacking' },
+    },
+  });
+  const stackSlideP = payload(stackSlide);
+  check(
+    'add_slide accepts stacked flags + strike + sup + sub',
+    !stackSlide.isError && stackSlideP?.slide_id != null,
+  );
+  const stackGet = await client.callTool({
+    name: 'get_slide',
+    arguments: { deck_id: slidesDeckId, slide_id: stackSlideP.slide_id },
+  });
+  const stackHtml = payload(stackGet)?.html ?? '';
+  check(
+    'stacked bold+italic nests as <strong><em>; <s>, <sub>, <sup> all emit',
+    stackHtml.includes('<strong><em>')
+      && stackHtml.includes('<s>$5/mo</s>')
+      && stackHtml.includes('<sub>2</sub>')
+      && stackHtml.includes('<sup>2</sup>'),
+  );
+
   // 10ef. v4.7: inline text color in RichText runs.
   const colorSlide = await client.callTool({
     name: 'add_slide',

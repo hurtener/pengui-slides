@@ -5,14 +5,19 @@
  *
  * Modeled as an array of text runs: each run is a string with optional
  * inline formatting flags. Compiles to HTML via `<strong>`, `<em>`,
- * `<code>`, and `<a href>` wrappers around span text. Empty array is
- * valid and renders as empty content.
+ * `<code>`, `<s>`, `<sup>`, `<sub>`, `<a href>`, and `<span>` wrappers
+ * around the text. Empty array is valid and renders as empty content.
  *
- * Deliberate non-features in v4.5:
- *   - No nested formatting (a run is bold OR italic OR code; a run that
- *     needs both can be split or — later — extended to allow stacking).
+ * Stacking (v4.7+): bold / italic / code / strike are INDEPENDENT and
+ * compose freely (e.g. `bold + italic + code` renders as
+ * `<strong><em><code>...</code></em></strong>`). sup / sub are mutually
+ * exclusive at render time — sup wins when both are set.
+ *
+ * Deliberate non-features:
  *   - No block-level elements inside RichText (no paragraphs, lists,
  *     headings); those are separate IR nodes.
+ *   - No underline (anti-pattern in slide design — looks like a link).
+ *   - No background highlight (use the `callout` or `quote` node instead).
  *   - No mention/citation/footnote inline forms; those land later as
  *     dedicated runs when the doc-mode features need them.
  *
@@ -44,10 +49,19 @@ export const TextRunSchema = z
     bold: z.boolean().optional(),
     italic: z.boolean().optional(),
     code: z.boolean().optional(),
+    /** Strikethrough — common in revisions, before/after comparisons,
+     *  deprecated terms. Stacks with bold/italic/code/color/link. */
+    strike: z.boolean().optional(),
+    /** Superscript — footnotes (¹²³), exponents (m²), ordinals (1ˢᵗ).
+     *  Mutually exclusive with `sub` at render time (sup wins). */
+    sup: z.boolean().optional(),
+    /** Subscript — chemical formulas (H₂O), index variables (xᵢ).
+     *  Mutually exclusive with `sup`. */
+    sub: z.boolean().optional(),
     link: z.string().url().optional(),
     /** Override the inherited text color for this run only. Semantic role
      *  (e.g. "accent" → var(--color-accent-primary)); the agent never
-     *  writes hex. Independent flag — composes with bold/italic/link. */
+     *  writes hex. Independent flag — composes with everything else. */
     color: TextColorSchema.optional(),
   })
   .strict();

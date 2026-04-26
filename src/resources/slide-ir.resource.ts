@@ -44,12 +44,13 @@ export function registerSlideIRSchemaResource(server: McpServer): void {
           'Image nodes reference uploaded assets by id (`asset_id: "uuid"`). Upload binaries ' +
             'with `upload_asset` first. Provide `alt` for accessibility (empty string marks decorative).',
           'two_column.left and two_column.right hold LEAF nodes only (no nested two_column).',
-          'Rich text runs allow at most one of bold / italic / code, plus an independent link, ' +
-            'plus an optional independent `color` (SEMANTIC role: accent | accent_alt | ' +
-            'accent_warm | success | warning | error | info | muted | inverse). Omit `color` ' +
-            'to inherit the cascade-aware default text color (which auto-swaps to inverse on ' +
-            'dark backgrounds). Runs concatenate verbatim — INCLUDE spaces inside text rather ' +
-            'than relying on inter-run whitespace.',
+          'Rich text runs (v4.7+): bold / italic / code / strike STACK freely on a single ' +
+            'run (no longer mutually exclusive). sup / sub are mutually exclusive at render ' +
+            'time — sup wins when both are set. link is independent. `color` is independent ' +
+            '(SEMANTIC role: accent | accent_alt | accent_warm | success | warning | error | ' +
+            'info | muted | inverse). Omit `color` to inherit the cascade-aware default text ' +
+            'color (which auto-swaps to inverse on dark backgrounds). Runs concatenate ' +
+            'verbatim — INCLUDE spaces inside text rather than relying on inter-run whitespace.',
           'Table rows must have the same column count as `headers` when headers are provided. ' +
             'Short rows are padded with empty cells at render time and may surface as a ' +
             'validation warning.',

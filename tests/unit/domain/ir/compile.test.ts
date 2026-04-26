@@ -84,6 +84,45 @@ describe('renderRichText', () => {
       renderRichText(rt({ text: 'go', bold: true, link: 'https://x.test', color: 'success' })),
     ).toBe('<span class="pengui-text-success"><a href="https://x.test"><strong>go</strong></a></span>');
   });
+
+  it('emits <s> for strike and stacks with bold (v4.7 stacking)', () => {
+    expect(renderRichText(rt({ text: 'old', strike: true }))).toBe('<s>old</s>');
+    expect(renderRichText(rt({ text: 'x', bold: true, strike: true }))).toBe(
+      '<strong><s>x</s></strong>',
+    );
+  });
+
+  it('stacks bold + italic + code as nested tags (was silently dropped pre-v4.7)', () => {
+    expect(renderRichText(rt({ text: 'x', bold: true, italic: true }))).toBe(
+      '<strong><em>x</em></strong>',
+    );
+    expect(renderRichText(rt({ text: 'x', bold: true, italic: true, code: true }))).toBe(
+      '<strong><em><code>x</code></em></strong>',
+    );
+  });
+
+  it('emits <sup> / <sub>; sup wins when both are set', () => {
+    expect(renderRichText(rt({ text: '2', sup: true }))).toBe('<sup>2</sup>');
+    expect(renderRichText(rt({ text: '2', sub: true }))).toBe('<sub>2</sub>');
+    // Mutually exclusive at render — sup wins.
+    expect(renderRichText(rt({ text: '2', sup: true, sub: true }))).toBe('<sup>2</sup>');
+  });
+
+  it('full stack composes as: span > a > sup > strong > em > s > code > text', () => {
+    const html = renderRichText(rt({
+      text: 'x',
+      code: true,
+      strike: true,
+      italic: true,
+      bold: true,
+      sup: true,
+      link: 'https://x.test',
+      color: 'accent',
+    }));
+    expect(html).toBe(
+      '<span class="pengui-text-accent"><a href="https://x.test"><sup><strong><em><s><code>x</code></s></em></strong></sup></a></span>',
+    );
+  });
 });
 
 describe('renderNodeList — per-node HTML emitters', () => {

@@ -1,17 +1,25 @@
 /**
  * Render a RichText (array of text runs) to escaped inline HTML.
  *
- * Run grammar: a run carries at most one formatting flag (bold OR italic
- * OR code). The `link` flag is independent — a run can be both linked
- * and bold (link wraps outside the format tag). The `color` flag is
- * also independent and wraps the entire run in a span.pengui-text-{color}
- * — see layout-css.ts for the color → soul-token mapping. Compose order:
+ * v4.7+ stacking: bold / italic / code / strike are independent and
+ * compose freely. sup / sub are mutually exclusive at render time —
+ * sup wins when both are set. link and color are independent wrappers.
+ *
+ * Compose order (innermost → outermost):
  *
  *   <span class="pengui-text-{color}">
  *     <a href="...">
- *       <strong> | <em> | <code>
- *         text
- *       </format>
+ *       <sup> | <sub>
+ *         <strong>
+ *           <em>
+ *             <s>
+ *               <code>
+ *                 text
+ *               </code>
+ *             </s>
+ *           </em>
+ *         </strong>
+ *       </sup>
  *     </a>
  *   </span>
  *
@@ -27,9 +35,13 @@ export function renderRichText(text: RichText): string {
 
 function renderRun(run: RichText[number]): string {
   let inner = escapeHtml(run.text);
+  if (run.code) inner = `<code>${inner}</code>`;
+  if (run.strike) inner = `<s>${inner}</s>`;
+  if (run.italic) inner = `<em>${inner}</em>`;
   if (run.bold) inner = `<strong>${inner}</strong>`;
-  else if (run.italic) inner = `<em>${inner}</em>`;
-  else if (run.code) inner = `<code>${inner}</code>`;
+  // sup / sub are mutually exclusive — sup wins when both are passed.
+  if (run.sup) inner = `<sup>${inner}</sup>`;
+  else if (run.sub) inner = `<sub>${inner}</sub>`;
   if (run.link) inner = `<a href="${escapeAttr(run.link)}">${inner}</a>`;
   if (run.color) inner = `<span class="pengui-text-${run.color.replace(/_/g, '-')}">${inner}</span>`;
   return inner;
