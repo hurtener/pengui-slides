@@ -44,6 +44,13 @@ interface TextElementInfo {
   backgroundColor: string;
   fontSize: number;
   fontWeight: number;
+  /** True when the element (or any ancestor) carries a `pengui-text-{role}`
+   *  class — i.e. the agent explicitly chose this color via a RichText
+   *  `color:` flag. False when the color came from the default cascade. */
+  deliberateColor: boolean;
+  /** The semantic role from the pengui-text-{role} class, when applicable.
+   *  Used to suggest concrete alternatives in the fix message. */
+  deliberateColorRole: string | null;
 }
 
 export class ContrastChecker implements Stage2Check {
@@ -89,6 +96,20 @@ export class ContrastChecker implements Stage2Check {
           bg = 'rgb(255, 255, 255)';
         }
 
+        // Walk self + ancestors to detect a `pengui-text-{role}` class —
+        // these are emitted by the RichText renderer ONLY when the agent
+        // sets `color:` explicitly on a run, so their presence means the
+        // contrast trade-off is intentional.
+        let deliberateRole: string | null = null;
+        for (let cur: Element | null = el; cur && !deliberateRole; cur = cur.parentElement) {
+          for (const cls of Array.from(cur.classList)) {
+            if (cls.startsWith('pengui-text-')) {
+              deliberateRole = cls.slice('pengui-text-'.length);
+              break;
+            }
+          }
+        }
+
         results.push({
           selector: el.tagName.toLowerCase() + (el.className ? '.' + String(el.className).split(/\s+/).join('.') : ''),
           text: textContent.slice(0, 50),
@@ -96,6 +117,8 @@ export class ContrastChecker implements Stage2Check {
           backgroundColor: bg,
           fontSize,
           fontWeight,
+          deliberateColor: deliberateRole !== null,
+          deliberateColorRole: deliberateRole,
         });
       }
 
@@ -116,16 +139,34 @@ export class ContrastChecker implements Stage2Check {
       const requiredRatio = isLargeText ? 3.0 : 4.5;
 
       if (ratio < requiredRatio) {
+        // Severity model:
+        //  - Default-cascade text below WCAG = ERROR (the slide may be
+        //    unreadable by accident, blocks export).
+        //  - Explicitly colored runs (`<span class="pengui-text-{role}">`)
+        //    below WCAG = WARNING (the agent chose the role; this is a
+        //    design trade-off, not a structural failure). Surface the
+        //    diagnostic so the agent can decide, but don't block.
+        const severity: 'error' | 'warning' = el.deliberateColor ? 'warning' : 'error';
+
+        const baseMessage = `Text "${el.text}" has insufficient contrast ratio ${ratio.toFixed(2)}:1 (requires ${requiredRatio}:1 for ${isLargeText ? 'large' : 'normal'} text).`;
+        const message = el.deliberateColor
+          ? `${baseMessage} The color was chosen explicitly via \`color: '${el.deliberateColorRole}'\` — this is a deliberate trade-off, not blocking.`
+          : baseMessage;
+
+        const fixSuggestion = el.deliberateColor
+          ? `If you want to keep the colored emphasis, increasing font size to >=24px (or >=18.66px with bold) lowers the required ratio to 3:1. Otherwise drop the \`color\` flag (default text color is contrast-safe by design) or try a higher-contrast role: \`success\` and \`error\` are usually darker than \`accent\` / \`accent_warm\` on warm canvases.`
+          : `Increase the contrast between text color (${el.color}) and background (${el.backgroundColor}). If this is body text, the default cascade should already be safe — check whether a parent class is overriding the text color.`;
+
         issues.push({
           id: `${this.id}-${issues.length}`,
           stage: 'stage2_render',
-          severity: 'error',
+          severity,
           rule: this.id,
-          message: `Text "${el.text}" has insufficient contrast ratio ${ratio.toFixed(2)}:1 (requires ${requiredRatio}:1 for ${isLargeText ? 'large' : 'normal'} text).`,
+          message,
           element: el.selector,
           expected: `>= ${requiredRatio}:1`,
           actual: `${ratio.toFixed(2)}:1`,
-          fixSuggestion: `Increase the contrast between text color (${el.color}) and background (${el.backgroundColor}).`,
+          fixSuggestion,
         });
       }
     }

@@ -41,7 +41,10 @@ export const NODE_CSS = `
   font-size: var(--text-label);
   font-weight: var(--weight-medium);
   letter-spacing: var(--letter-spacing-heading);
-  color: var(--color-accent-primary);
+  /* Use the cascade-aware muted token by default — accent-on-canvas fails
+     contrast on warm/low-contrast souls. Agents who want accent eyebrows
+     can wrap the eyebrow run in a color flag (any semantic role). */
+  color: var(--color-text-muted);
   text-transform: uppercase;
 }
 .pengui-hero-title {
