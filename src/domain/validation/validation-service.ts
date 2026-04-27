@@ -189,7 +189,15 @@ export class ValidationService {
       stage2Skipped = false;
       let browser: import('playwright').Browser | undefined;
 
-      try {
+      // Hard ceiling on the entire Stage 2 path. Without this, a Playwright
+      // cold-start (or a missing Chromium binary on the user's machine) can
+      // hang well past the MCP client's 4-minute timeout — the request
+      // never returns, the client reports the server as crashed. 60s is
+      // generous: a warm slide validation finishes in <2s; a cold start
+      // with download finishes in <30s; anything past 60s is broken.
+      const STAGE2_TIMEOUT_MS = 60_000;
+
+      const stage2Work = (async () => {
         // Dynamic import to avoid loading Playwright for lint-only runs
         const pw = await import('playwright');
         browser = await pw.chromium.launch({ headless: this.config.headless });
@@ -214,22 +222,54 @@ export class ValidationService {
         });
 
         await context.close();
+      })();
+
+      try {
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutHandle = setTimeout(
+            () => reject(new Error(`Stage 2 timed out after ${STAGE2_TIMEOUT_MS}ms`)),
+            STAGE2_TIMEOUT_MS,
+          );
+        });
+        try {
+          await Promise.race([stage2Work, timeoutPromise]);
+        } finally {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+        }
       } catch (err) {
+        const isTimeout = err instanceof Error && err.message.startsWith('Stage 2 timed out');
         this.logger.error('Stage 2 validation failed', {
           error: err instanceof Error ? err.message : String(err),
+          timeout: isTimeout,
         });
-        // Stage 2 failure is not fatal; report it as an issue
+        // Stage 2 failure is not fatal; report it as an issue with a
+        // specific, actionable message for the most common cause (missing
+        // Chromium binary).
         allIssues.push({
           id: 'stage2-runtime-error',
           stage: 'stage2_render',
           severity: 'warning',
           rule: 'stage2-runner',
-          message: `Stage 2 validation failed: ${err instanceof Error ? err.message : String(err)}`,
-          fixSuggestion: 'Ensure Playwright is installed and the HTML is valid.',
+          message: isTimeout
+            ? `Stage 2 (Playwright render-truth) timed out after ${STAGE2_TIMEOUT_MS / 1000}s. ` +
+                'Most common cause: Chromium binary is not installed in this environment.'
+            : `Stage 2 validation failed: ${err instanceof Error ? err.message : String(err)}`,
+          fixSuggestion:
+            'Run `npx playwright install chromium` once in the server\'s working directory ' +
+            'to install the browser binary, then retry. If the timeout persists, fall back ' +
+            'to validation_depth: "lint" (the default) — Stage 1 still catches token / ' +
+            'structure / safe-area issues.',
         });
       } finally {
         if (browser) {
-          await browser.close();
+          // Defensive: kill the browser even if Stage 2 work above hung.
+          // close() can itself hang if the launch was incomplete, so we
+          // race with a short kill timeout.
+          await Promise.race([
+            browser.close().catch(() => undefined),
+            new Promise<void>((resolve) => setTimeout(resolve, 5_000)),
+          ]);
         }
       }
     }
