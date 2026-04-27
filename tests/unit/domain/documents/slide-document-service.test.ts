@@ -163,4 +163,181 @@ describe('SlideDocumentService', () => {
     expect(result.issues.some((issue) => issue.code === 'unsupported-root-pseudo-before-visual')).toBe(true);
     expect(result.document?.elements.some((element) => element.exportDisposition === 'background')).toBe(true);
   }, 10000);
+
+  it('collapses a heading with an inline pengui-text-* span into one multi-run text element', async () => {
+    const container = createContainer(loadConfig({ logLevel: 'error' }));
+    containers.push(container);
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    .slide { width: 1920px; height: 1080px; position: relative; background: #fff; padding: 48px; }
+    h1 { font-family: Inter, sans-serif; font-size: 64px; color: #111; margin: 0; }
+    .pengui-text-accent-warm { color: #fd7e14; }
+  </style>
+</head>
+<body>
+  <div class="slide">
+    <h1 data-edit-id="hero-title">The Art of <span class="pengui-text-accent-warm">Coffee Brewing</span></h1>
+  </div>
+</body>
+</html>`;
+
+    const result = await container.slideDocumentService.compileSlideHtml(html, 'rev-mixed');
+
+    expect(result.document).not.toBeNull();
+    const textElements = result.document?.elements.filter((element) => element.kind === 'text') ?? [];
+    expect(textElements).toHaveLength(1);
+    const heading = textElements[0];
+    expect(heading.kind).toBe('text');
+    if (heading.kind !== 'text') return;
+    expect(heading.text).toBe('The Art of Coffee Brewing');
+    expect(heading.paragraphs).toHaveLength(1);
+    expect(heading.paragraphs[0].runs.length).toBeGreaterThanOrEqual(2);
+    const colors = heading.paragraphs[0].runs.map((run) => run.color);
+    expect(colors).toContain('rgb(17, 17, 17)');
+    expect(colors).toContain('rgb(253, 126, 20)');
+  }, 12000);
+
+  it('emits <hr> as a line shape (not a rectangle)', async () => {
+    const container = createContainer(loadConfig({ logLevel: 'error' }));
+    containers.push(container);
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    .slide { width: 1920px; height: 1080px; position: relative; background: #fff; padding: 48px; }
+    hr { border: 0; border-top: 1px solid #ddd; margin: 24px 0; width: 100%; }
+  </style>
+</head>
+<body>
+  <div class="slide">
+    <hr />
+  </div>
+</body>
+</html>`;
+
+    const result = await container.slideDocumentService.compileSlideHtml(html, 'rev-hr');
+
+    expect(result.document).not.toBeNull();
+    const shapes = result.document?.elements.filter((element) => element.kind === 'shape') ?? [];
+    expect(shapes.length).toBeGreaterThan(0);
+    const hrShape = shapes.find((shape) => shape.kind === 'shape' && shape.shapeType === 'line');
+    expect(hrShape).toBeDefined();
+  }, 12000);
+
+  it('emits ordered list items as numbered bullets and unordered as bullet bullets', async () => {
+    const container = createContainer(loadConfig({ logLevel: 'error' }));
+    containers.push(container);
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    .slide { width: 1920px; height: 1080px; position: relative; background: #fff; padding: 48px; }
+    ul, ol { font-family: Inter, sans-serif; font-size: 18px; }
+  </style>
+</head>
+<body>
+  <div class="slide">
+    <ul><li>Bullet one</li><li>Bullet two</li></ul>
+    <ol><li>Step one</li><li>Step two</li></ol>
+  </div>
+</body>
+</html>`;
+
+    const result = await container.slideDocumentService.compileSlideHtml(html, 'rev-list-types');
+
+    expect(result.document).not.toBeNull();
+    const items = (result.document?.elements ?? []).filter((el) => el.kind === 'text');
+    const bulletItems = items.filter((el) => el.kind === 'text' && el.text.startsWith('Bullet'));
+    const numberedItems = items.filter((el) => el.kind === 'text' && el.text.startsWith('Step'));
+    expect(bulletItems).toHaveLength(2);
+    expect(numberedItems).toHaveLength(2);
+    for (const item of bulletItems) {
+      if (item.kind !== 'text') continue;
+      expect(item.paragraphs[0].bullet?.type).toBe('bullet');
+    }
+    for (const item of numberedItems) {
+      if (item.kind !== 'text') continue;
+      expect(item.paragraphs[0].bullet?.type).toBe('number');
+    }
+  }, 12000);
+
+  it('captures href on inline anchors as run.link', async () => {
+    const container = createContainer(loadConfig({ logLevel: 'error' }));
+    containers.push(container);
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    .slide { width: 1920px; height: 1080px; position: relative; background: #fff; padding: 48px; }
+    p { font-family: Inter, sans-serif; font-size: 18px; }
+    a { color: #228be6; text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="slide">
+    <p>See the <a href="https://example.com/docs">documentation</a> for details.</p>
+  </div>
+</body>
+</html>`;
+
+    const result = await container.slideDocumentService.compileSlideHtml(html, 'rev-link');
+
+    expect(result.document).not.toBeNull();
+    const para = (result.document?.elements ?? []).find((el) => el.kind === 'text');
+    expect(para?.kind).toBe('text');
+    if (para?.kind !== 'text') return;
+    const linkRun = para.paragraphs[0].runs.find((run) => run.link);
+    expect(linkRun).toBeDefined();
+    expect(linkRun?.link).toBe('https://example.com/docs');
+    expect(linkRun?.text).toContain('documentation');
+  }, 12000);
+
+  it('does not duplicate cell-internal inline color spans as floating text elements', async () => {
+    const container = createContainer(loadConfig({ logLevel: 'error' }));
+    containers.push(container);
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    .slide { width: 1920px; height: 1080px; position: relative; background: #fff; padding: 48px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { padding: 8px 16px; border-bottom: 1px solid #ddd; }
+    .pengui-text-error { color: #fa5252; }
+  </style>
+</head>
+<body>
+  <div class="slide">
+    <table>
+      <thead><tr><th>Step</th><th>Time</th></tr></thead>
+      <tbody>
+        <tr><td>Bloom</td><td>30s <span class="pengui-text-error">(critical)</span></td></tr>
+        <tr><td>Pour</td><td>2:30</td></tr>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>`;
+
+    const result = await container.slideDocumentService.compileSlideHtml(html, 'rev-table');
+
+    expect(result.document).not.toBeNull();
+    const tables = result.document?.elements.filter((element) => element.kind === 'table') ?? [];
+    expect(tables).toHaveLength(1);
+    // The cell-internal span must NOT have been emitted as a separate text leaf.
+    const textElements = result.document?.elements.filter((element) => element.kind === 'text') ?? [];
+    const stray = textElements.find((el) => el.kind === 'text' && el.text.includes('critical'));
+    expect(stray).toBeUndefined();
+  }, 12000);
 });

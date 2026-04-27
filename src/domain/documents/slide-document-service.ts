@@ -6,6 +6,7 @@ import type {
   SlideExportDisposition,
   SlideTranslationIssue,
 } from '../../types/slide-document.js';
+import { CURRENT_COMPILER_REVISION } from '../../types/slide-document.js';
 import { HtmlSlideDocumentCompiler } from './html-slide-document-compiler.js';
 import { SlideDocumentRenderer } from './slide-document-renderer.js';
 import type { AssetService } from '../assets/asset-service.js';
@@ -44,6 +45,12 @@ export class SlideDocumentService {
     return Boolean(
       slide.document
       && slide.document.sourceRevisionHash === slide.metadata.revisionHash
+      // Treat documents missing the compilerRevision stamp as legacy and
+      // force a recompile; otherwise verify the stamp matches the current
+      // compiler. Without this, slides cached before a compiler bump keep
+      // serving stale element graphs (e.g. inner <strong>/<span> shown as
+      // separate text leaves instead of multi-run paragraphs).
+      && (slide.document.compilerRevision ?? 1) >= CURRENT_COMPILER_REVISION
       && (slide.sourceKind === 'document_v1' || slide.sourceKind === 'authored_ir'),
     );
   }

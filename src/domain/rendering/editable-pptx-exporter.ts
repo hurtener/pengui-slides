@@ -124,7 +124,7 @@ export class EditablePptxExporter {
     }
 
     const arrayBuffer = await pptx.write({ outputType: 'nodebuffer' }) as Buffer;
-    const data = Buffer.from(arrayBuffer);
+    const data = await this.patchContentTypes(Buffer.from(arrayBuffer));
     const filename = this.sanitizeFilename(deckTitle) + '.pptx';
 
     this.logger.info('Editable PPTX export complete', {
@@ -249,6 +249,12 @@ export class EditablePptxExporter {
   }
 
   private toPptxShapeElement(element: SlideShapeElement): SlideShapeElement {
+    // Line shapes (`<hr>` rules) are explicitly chosen for native PPTX line
+    // rendering — don't morph them into thin top-border rectangles even
+    // though their computed borderStyle matches the legacy heuristic.
+    if (element.shapeType === 'line') {
+      return element;
+    }
     const borderStyle = element.style.borderStyle?.trim() ?? '';
     const outlineWeight = element.style.borderWidth ?? 0;
     const topBorderOnly = borderStyle === 'solid none none'
@@ -369,14 +375,30 @@ export class EditablePptxExporter {
             ...(paragraphIndex > 0 && runIndex === 0 ? { breakLine: true } : {}),
             ...(paragraph.bullet && runIndex === 0
               ? {
-                  bullet: {
-                    type: paragraph.bullet.type ?? 'bullet',
-                    ...(paragraph.bullet.characterCode ? { characterCode: paragraph.bullet.characterCode } : {}),
-                    indent: this.scaledPt(
-                      paragraph.bullet.indent ?? 14 + ((paragraph.bullet.level ?? 0) * 10),
-                      document,
-                    ),
-                  },
+                  // pptxgenjs 3.12.0 quirk: when `bullet.type` is set to a
+                  // truthy non-'number' string (`'bullet'`), the library's
+                  // if/else-if chain silently emits no bullet glyph at all
+                  // (pptxgen.cjs.js:5846-5876). Workaround: only pass
+                  // `type: 'number'` for ordered lists; for unordered lists
+                  // omit `type` and pass an explicit `characterCode`
+                  // (defaulting to U+2022 BULLET) so the `else if
+                  // (characterCode)` branch fires and a `<a:buChar/>`
+                  // actually lands in the slide XML.
+                  bullet: paragraph.bullet.type === 'number'
+                    ? {
+                        type: 'number' as const,
+                        indent: this.scaledPt(
+                          paragraph.bullet.indent ?? 14 + ((paragraph.bullet.level ?? 0) * 10),
+                          document,
+                        ),
+                      }
+                    : {
+                        characterCode: paragraph.bullet.characterCode ?? '2022',
+                        indent: this.scaledPt(
+                          paragraph.bullet.indent ?? 14 + ((paragraph.bullet.level ?? 0) * 10),
+                          document,
+                        ),
+                      },
                 }
               : {}),
             ...(paragraph.spaceBefore !== undefined ? { paraSpaceBefore: this.scaledPt(paragraph.spaceBefore, document) } : {}),
@@ -391,6 +413,7 @@ export class EditablePptxExporter {
             ...(run.bold !== undefined ? { bold: run.bold } : {}),
             ...(run.italic !== undefined ? { italic: run.italic } : {}),
             ...(run.underline ? { underline: { style: 'sng' } } : {}),
+            ...(run.link ? { hyperlink: { url: run.link } } : {}),
           },
         });
       });
@@ -412,11 +435,53 @@ export class EditablePptxExporter {
     };
   }
 
-  private toTableRows(element: SlideTableElement): Array<Array<{ text: string }>> {
+  private toTableRows(element: SlideTableElement): Array<Array<Record<string, unknown>>> {
     return Array.from({ length: element.rows }, (_, rowIndex) => (
-      Array.from({ length: element.columns }, (_, columnIndex) => (
-        { text: element.cells.find((cell) => cell.row === rowIndex && cell.column === columnIndex)?.text ?? '' }
-      ))
+      Array.from({ length: element.columns }, (_, columnIndex) => {
+        const cell = element.cells.find((c) => c.row === rowIndex && c.column === columnIndex);
+        if (!cell) return { text: '' };
+        // Per-cell options — fill (for header-row bg), font/weight/align —
+        // come from the cell's computed style. Without this every cell
+        // defaults to the table-level fill and the header-row chrome is
+        // lost on export.
+        const cellFillHex = cssColorToHex(cell.style?.backgroundColor);
+        const cellFillTransparent = cell.style?.backgroundColor
+          ? isTransparent(cell.style.backgroundColor)
+          : true;
+        const cellColorHex = cell.style?.color ? cssColorToHex(cell.style.color) : undefined;
+        const rawAlign = cell.style?.textAlign as string | undefined;
+        const align = !rawAlign || rawAlign === 'start' || rawAlign === 'justify'
+          ? rawAlign === 'justify' ? 'left' : undefined
+          : rawAlign;
+        const cellOptions: Record<string, unknown> = {
+          ...(cellFillHex && !cellFillTransparent ? { fill: { color: cellFillHex } } : {}),
+          ...(cellColorHex && (!cell.runs || cell.runs.length === 0) ? { color: cellColorHex } : {}),
+          ...(cell.style?.fontFamily ? { fontFace: sanitizeFontFamily(cell.style.fontFamily) } : {}),
+          ...(cell.style?.fontWeight !== undefined ? { bold: cell.style.fontWeight >= 600 } : {}),
+          ...(align ? { align } : {}),
+          valign: 'mid',
+        };
+        // When the compiler captured per-run formatting (e.g. an inline
+        // accent-colored span on a first-column label), forward the runs
+        // into pptxgenjs's table cell so the colors survive in PPTX.
+        if (cell.runs && cell.runs.length > 0) {
+          return {
+            text: cell.runs.map((run) => ({
+              text: run.text,
+              options: {
+                ...(run.color ? { color: cssColorToHex(run.color) ?? run.color } : {}),
+                ...(run.fontFamily ? { fontFace: sanitizeFontFamily(run.fontFamily) } : {}),
+                ...(run.bold ? { bold: true } : {}),
+                ...(run.italic ? { italic: true } : {}),
+                ...(run.underline ? { underline: { style: 'sng' } } : {}),
+                ...(run.link ? { hyperlink: { url: run.link } } : {}),
+              },
+            })),
+            options: cellOptions,
+          };
+        }
+        return { text: cell.text, options: cellOptions };
+      })
     ));
   }
 
@@ -436,7 +501,10 @@ export class EditablePptxExporter {
         pt: this.scaledPt(defaultCell?.style?.borderWidth ?? element.style.borderWidth ?? 1, document),
         color: cssColorToHex(defaultCell?.style?.borderColor ?? element.style.borderColor, backdrop) ?? 'D9D9D9',
       },
-      fill: cssColorToHex(defaultCell?.style?.backgroundColor ?? element.style.backgroundColor, backdrop),
+      // No table-wide `fill` — `toTableRows` threads each cell's own
+      // backgroundColor as the cell's `fill`, so a table-level fill would
+      // bleed through cells that should be transparent (e.g. the data
+      // rows under a header row that has its own surface bg).
       color: cssColorToHex(defaultCell?.style?.color ?? element.style.color, backdrop),
       fontFace: sanitizeFontFamily(defaultCell?.style?.fontFamily ?? element.style.fontFamily),
       fontSize: defaultCell?.style?.fontSize !== undefined
@@ -493,4 +561,146 @@ export class EditablePptxExporter {
       .substring(0, 100)
       || 'presentation';
   }
+
+  /**
+   * Repairs two known pptxgenjs 3.12.0 bugs that make PowerPoint flag the
+   * exported deck with "found a problem with content":
+   *
+   *   1. [Content_Types].xml generator iterates slides instead of
+   *      slide-masters, so an N-slide deck declares Override entries for
+   *      `slideMaster1.xml` … `slideMasterN.xml` even though only
+   *      `slideMaster1.xml` actually exists. (pptxgen.cjs.js:6332)
+   *      Fix: keep only Overrides whose PartName resolves to a real file.
+   *
+   *   2. The text-body builder emits a fresh `<a:pPr>` per run inside
+   *      `<a:p>` (pptxgen.cjs.js:6230). OOXML allows ONE pPr per paragraph;
+   *      multi-run paragraphs ("The Art of " + "Coffee Brewing" with
+   *      different colors) end up with N copies of identical pPr blocks.
+   *      Fix: collapse duplicates per `<a:p>`, keeping the first pPr.
+   *
+   * Once upstream ships a fix, these post-process steps can be deleted.
+   */
+  private async patchContentTypes(buffer: Buffer): Promise<Buffer> {
+    const { default: JSZip } = await import('jszip');
+    const zip = await JSZip.loadAsync(buffer);
+    let modified = false;
+
+    // 1. [Content_Types] — drop Overrides whose PartName isn't in the zip.
+    const ctEntry = zip.file('[Content_Types].xml');
+    if (ctEntry) {
+      const original = await ctEntry.async('string');
+      const present = new Set<string>(
+        Object.keys(zip.files)
+          .filter((name) => !zip.files[name].dir)
+          .map((name) => '/' + name),
+      );
+      const patched = original.replace(
+        /<Override\b[^>]*\bPartName="([^"]+)"[^>]*\/>/g,
+        (match, partName: string) => (present.has(partName) ? match : ''),
+      );
+      if (patched !== original) {
+        zip.file('[Content_Types].xml', patched);
+        modified = true;
+      }
+    }
+
+    // 2. Slide XMLs — dedupe pPr siblings inside each <a:p>.
+    const slidePaths = Object.keys(zip.files).filter(
+      (name) => name.startsWith('ppt/slides/slide') && name.endsWith('.xml'),
+    );
+    for (const path of slidePaths) {
+      const entry = zip.file(path);
+      if (!entry) continue;
+      const original = await entry.async('string');
+      const patched = renumberCNvPrIds(stripLineShapeFill(stripDuplicateParagraphProps(original)));
+      if (patched !== original) {
+        zip.file(path, patched);
+        modified = true;
+      }
+    }
+
+    if (!modified) {
+      return buffer;
+    }
+    const out = await zip.generateAsync({ type: 'nodebuffer' });
+    return Buffer.from(out);
+  }
+}
+
+/**
+ * Within each `<a:p>...</a:p>` block, keep only the first `<a:pPr>` (whether
+ * self-closing or with nested content) and remove the rest. pptxgenjs emits
+ * pPr per run, but OOXML allows just one per paragraph.
+ */
+function stripDuplicateParagraphProps(xml: string): string {
+  return xml.replace(/<a:p\b[^>]*>[\s\S]*?<\/a:p>/g, (paragraph) => {
+    let seen = false;
+    return paragraph.replace(
+      /<a:pPr\b(?:[^>]*\/>|[^>]*>[\s\S]*?<\/a:pPr>)/g,
+      (block) => {
+        if (seen) return '';
+        seen = true;
+        return block;
+      },
+    );
+  });
+}
+
+/**
+ * Renumber `<p:cNvPr id="N">` so every id within a slide is unique. pptxgenjs
+ * 3.12.0 uses a per-shape-type id counter, so when a slide mixes regular
+ * shapes (incremented in one counter) with `addTable` (incremented in
+ * another), they collide. PowerPoint flags duplicate ids as "found a problem
+ * with content".
+ */
+function renumberCNvPrIds(xml: string): string {
+  let next = 2; // id=1 is conventionally the group nvGrpSpPr; skip it
+  let isFirst = true;
+  return xml.replace(/<p:cNvPr\s+id="(\d+)"/g, (_match) => {
+    if (isFirst) {
+      isFirst = false;
+      return '<p:cNvPr id="1"';
+    }
+    const id = next++;
+    return `<p:cNvPr id="${id}"`;
+  });
+}
+
+/**
+ * Line shapes (`<a:prstGeom prst="line"/>`) must not carry an `<a:solidFill>`
+ * inside their `<p:spPr>` — that element describes a closed shape's interior
+ * fill, which is meaningless on a line and triggers PowerPoint's "found a
+ * problem with content" prompt. The valid stroke is in `<a:ln>` only.
+ * pptxgenjs emits a transparent solidFill placeholder; strip it for lines.
+ */
+function stripLineShapeFill(xml: string): string {
+  return xml.replace(/<p:sp>[\s\S]*?<\/p:sp>/g, (sp) => {
+    if (!/<a:prstGeom\s+prst="line"/.test(sp)) return sp;
+    return sp.replace(
+      /<p:spPr>([\s\S]*?)<\/p:spPr>/,
+      (_full, inner: string) => {
+        // Only strip <a:solidFill> that is a DIRECT child of <p:spPr>; leave
+        // the one nested inside <a:ln> intact (that's the line's stroke).
+        let depth = 0;
+        let cleaned = '';
+        const tokens = inner.split(/(<a:ln\b[^>]*>|<\/a:ln>|<a:solidFill\b[^>]*\/?>|<\/a:solidFill>)/);
+        let skipping = false;
+        for (const tok of tokens) {
+          if (/^<a:ln\b/.test(tok)) depth += 1;
+          else if (/^<\/a:ln>/.test(tok)) depth -= 1;
+          if (depth === 0 && /^<a:solidFill\b/.test(tok)) {
+            skipping = !/\/>$/.test(tok); // self-closing already done
+            if (/\/>$/.test(tok)) continue;
+            continue;
+          }
+          if (skipping) {
+            if (/^<\/a:solidFill>/.test(tok)) skipping = false;
+            continue;
+          }
+          cleaned += tok;
+        }
+        return `<p:spPr>${cleaned}</p:spPr>`;
+      },
+    );
+  });
 }

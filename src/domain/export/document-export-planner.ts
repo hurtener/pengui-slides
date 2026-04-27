@@ -348,6 +348,16 @@ export class DocumentExportPlanner {
     }
 
     if (element.kind === 'shape') {
+      // PPTX-native line shapes (`<hr>` rules) carry computed borderStyle
+      // like "solid none none none" — that's not a "complex border", it's
+      // the natural one-side rule we explicitly chose to render natively.
+      // Skip the heuristic checks for them.
+      if (element.shapeType === 'line') {
+        if (hasBackgroundImage) {
+          return 'background-image-shape';
+        }
+        return undefined;
+      }
       if (hasBackgroundImage) {
         return 'background-image-shape';
       }
@@ -371,11 +381,26 @@ export class DocumentExportPlanner {
       ) {
         return 'decorative-card-chrome';
       }
+      // Only treat the border as "complex" when more than one DISTINCT
+      // non-none style is used. The previous string-equality check
+      // ("solid none none") only matched top-only borders and routed
+      // legitimate single-side rules — `pengui-quote` border-left,
+      // `pengui-callout` border-left — to a background image instead of
+      // letting them render as native shapes.
       const borderStyle = element.style.borderStyle?.trim() ?? '';
-      if (borderStyle.includes(' ') && borderStyle !== 'solid none none') {
+      const styleParts = borderStyle.split(/\s+/).filter(Boolean);
+      const distinctNonNone = new Set(styleParts.filter((style) => style !== 'none'));
+      if (distinctNonNone.size > 1) {
         return 'complex-border-style';
       }
-      if (colorTokenCount(element.style.borderColor) > 1) {
+      // Skip the multi-color check when there's only ONE side with a visible
+      // border style: the other sides' colors don't render (they're `none`),
+      // so the computed borderColor reading multiple values is a serialization
+      // artifact, not a true multi-color border.
+      const visibleSideCount = styleParts.length === 0
+        ? 0
+        : styleParts.filter((style) => style !== 'none').length;
+      if (visibleSideCount > 1 && colorTokenCount(element.style.borderColor) > 1) {
         return 'multi-color-border';
       }
     }

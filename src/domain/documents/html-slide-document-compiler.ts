@@ -12,8 +12,10 @@ import type {
   SlideTableCell,
   SlideTableElement,
   SlideTextElement,
+  SlideTextRun,
   SlideTranslationIssue,
 } from '../../types/slide-document.js';
+import { CURRENT_COMPILER_REVISION } from '../../types/slide-document.js';
 
 interface ExtractedDocumentPayload {
   width: number;
@@ -60,6 +62,7 @@ export class HtmlSlideDocumentCompiler {
     return {
       document: {
         version: '1',
+        compilerRevision: CURRENT_COMPILER_REVISION,
         sourceRevisionHash,
         width: payload.width,
         height: payload.height,
@@ -105,6 +108,97 @@ export class HtmlSlideDocumentCompiler {
 
         const elements: SlideElement[] = [];
         const tableHandled = new Set<Element>();
+        // Marks descendants of a mixed-content text leaf so the walk loop
+        // doesn't re-emit them as separate elements. Without this, a heading
+        // like `<h1>The Art of <span class="pengui-text-accent-warm">Coffee</span></h1>`
+        // would be split: the heading falls through (mixed content => not a
+        // text leaf under the strict rule), the inner span is later picked
+        // up as a text leaf on its own, and "The Art of " is dropped.
+        const formattingHandled = new Set<Element>();
+        // Tags the IR renderer (rich-text-renderer.ts) emits as inline
+        // formatting around RichText runs. STRONG/B/EM/I/CODE/S/U/SUP/SUB are
+        // always treated as inline; SPAN qualifies only when it carries a
+        // pengui-text-* class (the IR color marker) so we don't collapse
+        // styled badges; A qualifies only when it has no visual chrome.
+        // Shared run-collector used by both the mixed-content text-leaf path
+        // (hero/heading/prose/list-item) and the table-cell extractor.
+        // Walks the element's child nodes recursively and produces SlideTextRun
+        // objects that preserve color, bold, italic, underline, and link.
+        type RunFmt = {
+          color?: string;
+          fontFamily?: string;
+          fontSize?: number;
+          bold?: boolean;
+          italic?: boolean;
+          underline?: boolean;
+        };
+        const collectRunsFor = (root: HTMLElement, baseFmt: RunFmt): SlideTextRun[] => {
+          const walk = (node: Node, fmt: RunFmt, link?: string): SlideTextRun[] => {
+            if (node.nodeType === Node.TEXT_NODE) {
+              const text = (node.textContent ?? '').replace(/\r\n/g, '\n');
+              if (text.length === 0) return [];
+              return [{
+                text,
+                color: fmt.color,
+                fontFamily: fmt.fontFamily,
+                fontSize: fmt.fontSize,
+                ...(fmt.bold ? { bold: true } : {}),
+                ...(fmt.italic ? { italic: true } : {}),
+                ...(fmt.underline ? { underline: true } : {}),
+                ...(link ? { link } : {}),
+              }];
+            }
+            if (!(node instanceof HTMLElement)) return [];
+            const cs = window.getComputedStyle(node);
+            const tag = node.tagName.toUpperCase();
+            const childFmt: RunFmt = {
+              color: cs.color || fmt.color,
+              fontFamily: trimFontFamily(cs.fontFamily) || fmt.fontFamily,
+              fontSize: toNumber(cs.fontSize) ?? fmt.fontSize,
+              bold: fmt.bold || (toNumber(cs.fontWeight) ?? 400) >= 600
+                || tag === 'STRONG' || tag === 'B',
+              italic: fmt.italic || cs.fontStyle === 'italic'
+                || tag === 'EM' || tag === 'I',
+              underline: fmt.underline || tag === 'U'
+                || (cs.textDecorationLine?.includes('underline') ?? false),
+            };
+            const childLink = tag === 'A' ? (node.getAttribute('href') ?? link) : link;
+            const out: SlideTextRun[] = [];
+            for (const grand of Array.from(node.childNodes)) {
+              out.push(...walk(grand, childFmt, childLink));
+            }
+            return out;
+          };
+          const out: SlideTextRun[] = [];
+          for (const child of Array.from(root.childNodes)) {
+            out.push(...walk(child, baseFmt));
+          }
+          return out;
+        };
+
+        const isInlineFormattingChild = (child: HTMLElement): boolean => {
+          const tag = child.tagName.toUpperCase();
+          if (
+            tag === 'STRONG' || tag === 'B' || tag === 'EM' || tag === 'I'
+            || tag === 'CODE' || tag === 'S' || tag === 'U' || tag === 'SUP' || tag === 'SUB'
+          ) {
+            return true;
+          }
+          if (tag === 'SPAN') {
+            return Array.from(child.classList).some((cls) => cls.startsWith('pengui-text-'));
+          }
+          if (tag === 'A') {
+            const cs = window.getComputedStyle(child);
+            const hasBg = !!cs.backgroundColor
+              && cs.backgroundColor !== 'transparent'
+              && cs.backgroundColor !== 'rgba(0, 0, 0, 0)'
+              && cs.backgroundColor !== 'rgba(0,0,0,0)';
+            const hasBorder = (Number.parseFloat(cs.borderWidth) || 0) > 0;
+            const hasShadow = !!cs.boxShadow && cs.boxShadow !== 'none';
+            return !hasBg && !hasBorder && !hasShadow;
+          }
+          return false;
+        };
         const selectorFor = (tagName: string, className: string): string => {
           const classes = String(className || '')
             .trim()
@@ -163,7 +257,10 @@ export class HtmlSlideDocumentCompiler {
             .join('');
         };
 
-        const isBulletLike = (value: string): boolean => /^[•◦▪▸▹▶▷‣·\-–—]+$/.test(value.trim());
+        // Includes ✓ (U+2713) so checklist `::before` markers — emitted by
+        // `pengui-list-checklist` — are stripped from text and rendered as a
+        // PPTX bullet character instead of literal text.
+        const isBulletLike = (value: string): boolean => /^[•◦▪▸▹▶▷‣·\-–—✓]+$/.test(value.trim());
 
         const nextRotation = (transform: string): number => {
           if (!transform || transform === 'none') {
@@ -527,13 +624,38 @@ export class HtmlSlideDocumentCompiler {
             return;
           }
 
+          if (formattingHandled.has(element)) {
+            return;
+          }
+
           const computed = window.getComputedStyle(element);
           const rect = element.getBoundingClientRect();
           if (!isVisible(computed, rect)) {
             return;
           }
 
+          // <hr> renders as a 1-2px horizontal rule via border-top. The
+          // generic shape branch would emit it as a 'rectangle' (or
+          // roundRectangle if it has a radius) which PowerPoint draws as a
+          // filled box — visually wrong. Use the native PPTX line shape.
+          if (tagName === 'HR') {
+            const base = createBase(element, 'shape', computed, rect, index) as Omit<SlideShapeElement, 'shapeType'>;
+            elements.push({
+              ...base,
+              kind: 'shape',
+              shapeType: 'line',
+            });
+            return;
+          }
+
           if (tagName === 'TABLE') {
+            // Mark every descendant — not just cells. Without this, an inline
+            // run inside a cell (e.g. `<span class="pengui-text-accent">`)
+            // gets walked separately as a text leaf and emits a duplicate
+            // floating text element on top of the table cell.
+            for (const desc of Array.from(element.querySelectorAll('*'))) {
+              tableHandled.add(desc);
+            }
             const rows = Array.from(element.querySelectorAll('tr'));
             const cells: SlideTableCell[] = [];
 
@@ -542,10 +664,19 @@ export class HtmlSlideDocumentCompiler {
                 if (!(cellEl instanceof HTMLElement)) return;
                 tableHandled.add(cellEl);
                 const cellStyle = window.getComputedStyle(cellEl);
+                const cellBaseFmt: RunFmt = {
+                  color: cellStyle.color,
+                  fontFamily: trimFontFamily(cellStyle.fontFamily),
+                  fontSize: toNumber(cellStyle.fontSize),
+                  bold: (toNumber(cellStyle.fontWeight) ?? 400) >= 600,
+                  italic: cellStyle.fontStyle === 'italic',
+                };
+                const cellRuns = collectRunsFor(cellEl, cellBaseFmt);
                 cells.push({
                   row: rowIndex,
                   column: columnIndex,
                   text: cellEl.innerText.trim(),
+                  ...(cellRuns.length > 0 ? { runs: cellRuns } : {}),
                   style: {
                     backgroundColor: cellStyle.backgroundColor,
                     color: cellStyle.color,
@@ -561,7 +692,24 @@ export class HtmlSlideDocumentCompiler {
               });
             });
 
-            const base = createBase(element, 'table', computed, rect, index) as Omit<SlideTableElement, 'rows' | 'columns' | 'cells'>;
+            // The `<table>` bounding rect INCLUDES its `<caption>` because
+            // caption is a child element. If we leave it as-is, the exporter
+            // emits the table at the caption's top edge AND emits the
+            // caption text on top of the same y → overlap. Shrink the
+            // table's bbox to the inner row area before constructing base.
+            const captionElForBbox = element.querySelector(':scope > caption');
+            const tbody = element.querySelector(':scope > tbody');
+            const thead = element.querySelector(':scope > thead');
+            const innerStart = thead instanceof HTMLElement
+              ? thead.getBoundingClientRect().top
+              : tbody instanceof HTMLElement
+                ? tbody.getBoundingClientRect().top
+                : rect.top;
+            const tableInnerRect = (captionElForBbox instanceof HTMLElement) && innerStart > rect.top
+              ? new DOMRect(rect.left, innerStart, rect.width, rect.bottom - innerStart)
+              : rect;
+
+            const base = createBase(element, 'table', computed, tableInnerRect, index) as Omit<SlideTableElement, 'rows' | 'columns' | 'cells'>;
             elements.push({
               ...base,
               kind: 'table',
@@ -569,6 +717,44 @@ export class HtmlSlideDocumentCompiler {
               columns: rows[0] ? rows[0].children.length : 0,
               cells,
             });
+
+            // Emit `<caption>` (if any) as its own native text element so the
+            // exporter renders it as a separate text shape above/below the
+            // table — pptxgenjs has no native table caption.
+            const captionEl = element.querySelector(':scope > caption');
+            if (captionEl instanceof HTMLElement) {
+              const capStyle = window.getComputedStyle(captionEl);
+              const capRect = captionEl.getBoundingClientRect();
+              if (isVisible(capStyle, capRect)) {
+                const capBaseFmt: RunFmt = {
+                  color: capStyle.color,
+                  fontFamily: trimFontFamily(capStyle.fontFamily),
+                  fontSize: toNumber(capStyle.fontSize),
+                  bold: (toNumber(capStyle.fontWeight) ?? 400) >= 600,
+                  italic: capStyle.fontStyle === 'italic',
+                };
+                const capRuns = collectRunsFor(captionEl, capBaseFmt);
+                const capText = (captionEl.textContent ?? '').replace(/\r\n/g, '\n');
+                const capBase = createBase(captionEl, 'text', capStyle, capRect, index + 0.5) as Omit<SlideTextElement, 'text' | 'paragraphs' | 'editId'>;
+                elements.push({
+                  ...capBase,
+                  kind: 'text',
+                  text: capText,
+                  paragraphs: [{
+                    text: capText,
+                    runs: capRuns.length > 0 ? capRuns : [{
+                      text: capText,
+                      color: capBaseFmt.color,
+                      fontFamily: capBaseFmt.fontFamily,
+                      fontSize: capBaseFmt.fontSize,
+                      ...(capBaseFmt.bold ? { bold: true } : {}),
+                      ...(capBaseFmt.italic ? { italic: true } : {}),
+                    }],
+                  }],
+                  editId: captionEl.getAttribute('data-edit-id') || undefined,
+                });
+              }
+            }
             return;
           }
 
@@ -577,42 +763,189 @@ export class HtmlSlideDocumentCompiler {
             .map((node) => node.textContent ?? '')
             .join('')
             .trim();
-          const hasElementChildren = Array.from(element.children).some((child) => child instanceof HTMLElement);
-          const isTextLeaf = directText.length > 0 && !hasElementChildren;
+          const childElementsRaw = Array.from(element.children).filter(
+            (child): child is HTMLElement => child instanceof HTMLElement,
+          );
+          const hasElementChildren = childElementsRaw.length > 0;
+          const allChildrenAreInlineFormatting = hasElementChildren
+            && childElementsRaw.every((child) => isInlineFormattingChild(child));
+          // A text leaf is either:
+          //   - the strict case: only direct text, no element children
+          //   - the mixed-content case: any text content + only inline-formatting
+          //     children (the IR renderer's RichText output, e.g.
+          //     `<h1>The Art of <span class="pengui-text-accent-warm">Coffee</span></h1>`)
+          const totalText = (element.textContent ?? '').trim();
+          const isTextLeaf = (directText.length > 0 && !hasElementChildren)
+            || (totalText.length > 0 && allChildrenAreInlineFormatting);
 
           if (isTextLeaf) {
             const beforeText = parsePseudoContent(window.getComputedStyle(element, '::before').content) ?? '';
             const afterText = parsePseudoContent(window.getComputedStyle(element, '::after').content) ?? '';
             const isListItem = tagName === 'LI';
             const bulletText = isListItem && isBulletLike(beforeText) ? beforeText.trim() : '';
-            const combinedText = `${bulletText ? '' : beforeText}${element.innerText.replace(/\r\n/g, '\n')}${afterText}`;
+            // Numbered when the LI's parent is an <ol>. PPTX paragraph
+            // bullets accept type='bullet' or 'number' — without this the
+            // exporter falls back to bullet glyphs even on `<ol>` items.
+            const listParent = isListItem ? element.parentElement : null;
+            const listKind: 'bullet' | 'number' = listParent && listParent.tagName.toUpperCase() === 'OL'
+              ? 'number'
+              : 'bullet';
+
+            // Mark every descendant element as handled — we're collapsing
+            // them all into runs of this text element. Without this,
+            // descendant <span class="pengui-text-*"> would later be picked
+            // up as their own text leaves and rendered on top.
+            for (const desc of Array.from(element.querySelectorAll('*'))) {
+              formattingHandled.add(desc);
+            }
+
+            type RunFmt = {
+              color?: string;
+              fontFamily?: string;
+              fontSize?: number;
+              bold?: boolean;
+              italic?: boolean;
+              underline?: boolean;
+            };
+
+            const baseFmt: RunFmt = {
+              color: computed.color,
+              fontFamily: trimFontFamily(computed.fontFamily),
+              fontSize: toNumber(computed.fontSize),
+              bold: (toNumber(computed.fontWeight) ?? 400) >= 600,
+              italic: computed.fontStyle === 'italic',
+            };
+
+            const collectRuns = (node: Node, fmt: RunFmt, link?: string): SlideTextRun[] => {
+              if (node.nodeType === Node.TEXT_NODE) {
+                const text = (node.textContent ?? '').replace(/\r\n/g, '\n');
+                if (text.length === 0) return [];
+                return [{
+                  text,
+                  color: fmt.color,
+                  fontFamily: fmt.fontFamily,
+                  fontSize: fmt.fontSize,
+                  ...(fmt.bold ? { bold: true } : {}),
+                  ...(fmt.italic ? { italic: true } : {}),
+                  ...(fmt.underline ? { underline: true } : {}),
+                  ...(link ? { link } : {}),
+                }];
+              }
+              if (!(node instanceof HTMLElement)) return [];
+              const childComputed = window.getComputedStyle(node);
+              const childTag = node.tagName.toUpperCase();
+              const childFmt: RunFmt = {
+                color: childComputed.color || fmt.color,
+                fontFamily: trimFontFamily(childComputed.fontFamily) || fmt.fontFamily,
+                fontSize: toNumber(childComputed.fontSize) ?? fmt.fontSize,
+                bold: fmt.bold || (toNumber(childComputed.fontWeight) ?? 400) >= 600
+                  || childTag === 'STRONG' || childTag === 'B',
+                italic: fmt.italic || childComputed.fontStyle === 'italic'
+                  || childTag === 'EM' || childTag === 'I',
+                underline: fmt.underline || childTag === 'U'
+                  || (childComputed.textDecorationLine?.includes('underline') ?? false),
+              };
+              // Capture href when the inline element is an anchor. Inner
+              // <a><strong>…</strong></a> propagates the link down to the
+              // text-node base case via the `link` parameter.
+              const childLink = childTag === 'A'
+                ? (node.getAttribute('href') ?? link)
+                : link;
+              const out: SlideTextRun[] = [];
+              for (const grand of Array.from(node.childNodes)) {
+                out.push(...collectRuns(grand, childFmt, childLink));
+              }
+              return out;
+            };
+
+            const innerRuns: SlideTextRun[] = [];
+            if (!hasElementChildren) {
+              // Strict text leaf: preserve old innerText behavior so we keep
+              // any whitespace-collapsing CSS picks up.
+              innerRuns.push({
+                text: element.innerText.replace(/\r\n/g, '\n'),
+                color: baseFmt.color,
+                fontFamily: baseFmt.fontFamily,
+                fontSize: baseFmt.fontSize,
+                ...(baseFmt.bold ? { bold: true } : {}),
+                ...(baseFmt.italic ? { italic: true } : {}),
+              });
+            } else {
+              for (const child of Array.from(element.childNodes)) {
+                innerRuns.push(...collectRuns(child, baseFmt));
+              }
+            }
+
+            const allRuns: SlideTextRun[] = [];
+            if (!bulletText && beforeText) {
+              allRuns.push({
+                text: beforeText,
+                color: baseFmt.color,
+                fontFamily: baseFmt.fontFamily,
+                fontSize: baseFmt.fontSize,
+              });
+            }
+            allRuns.push(...innerRuns);
+            if (afterText) {
+              allRuns.push({
+                text: afterText,
+                color: baseFmt.color,
+                fontFamily: baseFmt.fontFamily,
+                fontSize: baseFmt.fontSize,
+              });
+            }
+
+            const combinedText = allRuns.map((r) => r.text).join('');
             const base = createBase(element, 'text', computed, rect, index, {
               allowTextualPseudo: true,
             }) as Omit<SlideTextElement, 'text' | 'paragraphs' | 'editId'>;
+
+            // Newlines are uncommon in IR-rendered inline content (no <br>),
+            // but keep the legacy line-split fallback for safety. When the
+            // text spans multiple lines, we degrade to one paragraph per
+            // line carrying the merged base run — multi-run formatting only
+            // survives within a single line.
+            const hasNewlines = combinedText.includes('\n');
+            const paragraphs = hasNewlines
+              ? combinedText.split('\n').map((line) => ({
+                  text: line,
+                  runs: [{
+                    text: line,
+                    color: baseFmt.color,
+                    fontFamily: baseFmt.fontFamily,
+                    fontSize: baseFmt.fontSize,
+                    ...(baseFmt.bold ? { bold: true } : {}),
+                    ...(baseFmt.italic ? { italic: true } : {}),
+                  }],
+                  ...(isListItem
+                    ? {
+                        bullet: {
+                          type: listKind,
+                          ...(bulletText ? { characterCode: bulletText.codePointAt(0)?.toString(16).toUpperCase() } : {}),
+                          level: 0,
+                        },
+                      }
+                    : {}),
+                }))
+              : [{
+                  text: combinedText,
+                  runs: allRuns,
+                  ...(isListItem
+                    ? {
+                        bullet: {
+                          type: listKind,
+                          ...(bulletText ? { characterCode: bulletText.codePointAt(0)?.toString(16).toUpperCase() } : {}),
+                          level: 0,
+                        },
+                      }
+                    : {}),
+                }];
+
             elements.push({
               ...base,
               kind: 'text',
               text: combinedText,
-              paragraphs: combinedText.split('\n').map((line) => ({
-                text: line,
-                runs: [{
-                  text: line,
-                  color: computed.color,
-                  fontFamily: trimFontFamily(computed.fontFamily),
-                  fontSize: toNumber(computed.fontSize),
-                  bold: (toNumber(computed.fontWeight) ?? 400) >= 600,
-                  italic: computed.fontStyle === 'italic',
-                }],
-                ...(isListItem
-                  ? {
-                      bullet: {
-                        type: 'bullet' as const,
-                        ...(bulletText ? { characterCode: bulletText.codePointAt(0)?.toString(16).toUpperCase() } : {}),
-                        level: 0,
-                      },
-                    }
-                  : {}),
-              })),
+              paragraphs,
               editId: element.getAttribute('data-edit-id') || undefined,
             });
             return;

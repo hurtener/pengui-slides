@@ -221,6 +221,80 @@ describe('EditablePptxExporter', () => {
     expect(notesXml).toContain('Editable Slide');
     expect(themeXml).toContain('Georgia');
     expect(themeXml).toContain('Arial');
+
+    // Regression: pptxgenjs 3.12.0 emits one Override per slide for
+    // slideMasterN.xml even though only slideMaster1.xml exists, which makes
+    // PowerPoint flag the file with "found a problem with content". Our
+    // post-process removes overrides whose target file is missing.
+    // Bracket-literal name; must escape the glob metachars when invoking unzip.
+    const contentTypes = execFileSync('unzip', ['-p', pptxPath, '\\[Content_Types\\].xml'], { encoding: 'utf8' });
+    const slideMasterOverrides = (contentTypes.match(/PartName="\/ppt\/slideMasters\/slideMaster\d+\.xml"/g) || []);
+    const archiveListing = execFileSync('unzip', ['-Z1', pptxPath], { encoding: 'utf8' });
+    const slideMasterFiles = (archiveListing.match(/ppt\/slideMasters\/slideMaster\d+\.xml$/gm) || []);
+    expect(slideMasterOverrides).toHaveLength(slideMasterFiles.length);
+  });
+
+  it('emits one <a:pPr> per paragraph even when the paragraph has multiple runs', async () => {
+    // Regression: pptxgenjs 3.12.0 emits a fresh <a:pPr> for every text run
+    // inside <a:p> (pptxgen.cjs.js:6230). OOXML allows ONE pPr per
+    // paragraph; multi-run paragraphs (e.g. a heading with one black + one
+    // accent-colored span) end up with N copies of identical pPr blocks,
+    // which PowerPoint flags on open as "found a problem with content".
+    // Our post-process collapses duplicates per <a:p>.
+    const renderer = { render: vi.fn() };
+    const exporter = new EditablePptxExporter(
+      renderer as never,
+      new Logger('test', 'error'),
+    );
+    const slide = makeSlide();
+    slide.document!.backgroundImage = undefined;
+    slide.document!.elements = [
+      {
+        id: 'multi-run',
+        kind: 'text',
+        x: 100,
+        y: 100,
+        width: 800,
+        height: 90,
+        rotation: 0,
+        zIndex: 1,
+        opacity: 1,
+        locked: false,
+        exportDisposition: 'native',
+        selector: 'h1.title',
+        text: 'The Art of Coffee Brewing',
+        paragraphs: [
+          {
+            text: 'The Art of Coffee Brewing',
+            runs: [
+              { text: 'The Art of ', color: '#2C2825', bold: true },
+              { text: 'Coffee Brewing', color: '#5B9E8F', bold: true },
+            ],
+          },
+        ],
+        style: { color: '#2C2825', fontFamily: 'Inter', fontSize: 42 },
+      },
+    ];
+
+    const result = await exporter.export([slide], 'Multi Run Deck');
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), 'pengui-pptx-multirun-'));
+    tempDirs.push(tempDir);
+    const pptxPath = path.join(tempDir, result.filename);
+    writeFileSync(pptxPath, result.data);
+
+    const slideXml = execFileSync('unzip', ['-p', pptxPath, 'ppt/slides/slide1.xml'], { encoding: 'utf8' });
+
+    // Both runs preserved.
+    expect(slideXml).toContain('The Art of ');
+    expect(slideXml).toContain('Coffee Brewing');
+
+    // Each <a:p> contains at most one <a:pPr> block.
+    const paragraphs = slideXml.match(/<a:p\b[^>]*>[\s\S]*?<\/a:p>/g) ?? [];
+    for (const para of paragraphs) {
+      const pPrCount = (para.match(/<a:pPr\b/g) ?? []).length;
+      expect(pPrCount).toBeLessThanOrEqual(1);
+    }
+    expect(paragraphs.length).toBeGreaterThan(0);
   });
 
   it('emulates top-only borders as dedicated shapes instead of full outlines', async () => {

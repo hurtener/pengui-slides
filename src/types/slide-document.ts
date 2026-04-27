@@ -80,6 +80,10 @@ export interface SlideTextRun {
   color?: string;
   fontFamily?: string;
   fontSize?: number;
+  /** Outbound URL when this run was authored as a link (`<a href>` in HTML,
+   *  `link:` flag on a RichText run). Surfaced as a clickable hyperlink in
+   *  PPTX export. */
+  link?: string;
 }
 
 export interface SlideParagraph {
@@ -99,6 +103,10 @@ export interface SlideTableCell {
   row: number;
   column: number;
   text: string;
+  /** When set, supersedes `text` for export — preserves per-run color,
+   *  bold, italic, etc. (e.g. a first-column accent-colored label inside
+   *  an otherwise-default-styled row). */
+  runs?: SlideTextRun[];
   style?: SlideElementStyle;
 }
 
@@ -157,8 +165,25 @@ export type SlideElement =
   | SlideShapeElement
   | SlideTableElement;
 
+/**
+ * Bumped whenever the HTML→SlideDocument compiler changes its output
+ * structure (new element kinds, run-collapse rules, shapeType assignments,
+ * etc.). Cached documents with a stale `compilerRevision` are recompiled
+ * at the next export-time `ensureSlidesReadyForEditableExport` call.
+ *
+ *  - 1: pre-v4.7 visual-loop fixes
+ *  - 2: v4.7 mixed-content text leaves (Fix 1) + table descendants (Fix 2)
+ *       + hr→line shape (Fix 3) + run hyperlinks + ol/ul bullet typing
+ *  - 3: table cells expose multi-run formatting; captions emitted as text
+ *  - 4: table bbox shrunk to inner rows so caption text doesn't overlap
+ */
+export const CURRENT_COMPILER_REVISION = 4;
+
 export interface SlideDocument {
   version: '1';
+  /** See {@link CURRENT_COMPILER_REVISION}. Documents without this field
+   *  are treated as revision 1 and force-recompiled on next export. */
+  compilerRevision?: number;
   sourceRevisionHash: string;
   width: number;
   height: number;
