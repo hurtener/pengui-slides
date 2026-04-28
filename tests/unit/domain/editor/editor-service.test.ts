@@ -130,4 +130,57 @@ describe('EditorService', () => {
       container.editorService.getEditorState(deck.id as string),
     ).rejects.toBeInstanceOf(DeckEmptyError);
   });
+
+  // ── v4.8.5 pin migration ────────────────────────────────────────
+
+  it('refreshes pre-v4.8.5 slide html in-memory when stored html lacks data-ir-path', async () => {
+    const container = createContainer(loadConfig({ logLevel: 'error' }));
+    containers.push(container);
+
+    const soul = await container.soulService.register(sampleSoulInput);
+    await container.soulService.approve(soul.id);
+    const deck = await container.deckService.createDeck({
+      soulId: soul.id as string,
+      title: 'Pre-v4.8.5 Deck',
+    });
+
+    const slide = await container.deckService.addSlide({
+      deckId: deck.id as string,
+      ir: makeSlideIR('Hi from before'),
+      metadata: {
+        title: 'Stale Slide',
+        type: 'content',
+        narrative: 'Authored when data-ir-path did not exist',
+      },
+    });
+
+    // Simulate a pre-v4.8.5 stored html: strip data-ir-path attributes
+    // from the persisted record so the editor's lazy-refresh path fires.
+    const stripped = slide.html.replace(/\s*data-ir-path="[^"]*"/g, '');
+    expect(stripped).not.toContain('data-ir-path=');
+    await container.deckService.updateSlide({
+      deckId: deck.id as string,
+      slideId: slide.id as string,
+      // We can't set html directly through updateSlide; manipulate via the
+      // store to install the stale snapshot, then read back through the
+      // editor service to confirm the in-memory refresh.
+    });
+    const stored = await container.deckService.getSlide(slide.id as string);
+    // Bypass the IR-recompile branch by writing directly to the store —
+    // we want to assert that getEditorState heals the cached html on read.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (container as any).slideStore.save({ ...stored, html: stripped });
+
+    const state = await container.editorService.getEditorState(
+      deck.id as string,
+      slide.id as string,
+    );
+
+    expect(state.selectedSlide.html).toContain('data-ir-path="body,0"');
+
+    // The on-disk record should still hold the stale html — the refresh
+    // is in-memory only so we don't pollute revision history.
+    const reread = await container.deckService.getSlide(slide.id as string);
+    expect(reread.html).not.toContain('data-ir-path=');
+  }, 20000);
 });

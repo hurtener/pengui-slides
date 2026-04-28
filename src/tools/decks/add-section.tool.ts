@@ -79,6 +79,10 @@ export function registerAddSectionTool(server: McpServer, container: ServiceCont
         '  • `table` — { headers?: RichText[], rows: RichText[][], caption?: RichText }\n' +
         '  • `divider` — { spacing?: sm|md|lg }\n' +
         '  • `two_column` — { ratio?: 1:1|1:2|2:1, gap?, left: leaf[], right: leaf[] } (left/right cannot nest two_column)\n' +
+        '  • `grid` — { columns: 2|3|4, ratio?: "2:1:1", gap?, align_items?, cells: leaf[][] } (cells.length must be a multiple of columns; ratio parts must equal columns; cells cannot nest grid/two_column)\n' +
+        '  • `toc` (doc-only) — { title?: RichText, include_kinds?: SectionKind[], max_depth?: 1|2|3 } auto-fills at compose time inside a kind="toc" section\n' +
+        '  • `bibliography` (doc-only) — { title?: RichText, entries: { id?: string, text: RichText }[] } numbered reference list\n' +
+        '  • `page_break` (doc-only) — { } zero-height marker that forces the next sibling onto a new page\n' +
         '  • RichText is `[{ text, bold?, italic?, code?, strike?, sup?, sub?, link?, color? }, ...]` — runs concatenate verbatim, INCLUDE spaces inside text. bold/italic/code/strike STACK freely on a single run. sup/sub are mutually exclusive (sup wins). `color` accepts SEMANTIC roles (accent | accent_alt | accent_warm | success | warning | error | info | muted | inverse); omit to inherit the cascade-aware default.\n' +
         '\n' +
         'IMAGES — image nodes reference assets by id (`asset_id: "uuid"`). Upload binaries via ' +

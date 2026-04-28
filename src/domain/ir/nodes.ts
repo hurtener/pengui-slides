@@ -181,6 +181,94 @@ export const TwoColumnNodeSchema = z
   .strict();
 export type TwoColumnNode = z.infer<typeof TwoColumnNodeSchema>;
 
+/**
+ * Bimodal N-column grid. Generalizes two_column to 2/3/4 columns with
+ * optional weighted ratios. Each cell is its own array of leaf nodes —
+ * mirrors two_column's no-recursion stance.
+ *
+ * `cells.length` must equal `columns * rowsImplied`. We enforce
+ * `length % columns === 0` at render time (refine breaks discriminatedUnion).
+ *
+ * `ratio` is a colon-separated weight list; its parts must equal `columns`
+ * (validated at render time). Defaults to even (1fr each).
+ */
+export const GridNodeSchema = z
+  .object({
+    type: z.literal('grid'),
+    columns: z.union([z.literal(2), z.literal(3), z.literal(4)]),
+    ratio: z.string().regex(/^\d+(?::\d+)+$/).optional(),
+    gap: z.enum(['sm', 'md', 'lg']).optional(),
+    align_items: z.enum(['start', 'center', 'stretch']).optional(),
+    cells: z.array(z.array(LeafSlideNodeSchema)).min(1),
+  })
+  .strict();
+export type GridNode = z.infer<typeof GridNodeSchema>;
+
+// ── v4.8 mode-specific top-level nodes ───────────────────────────
+
+/**
+ * Table-of-contents (doc-only). Resolves at compose time by walking the
+ * containing deck's chapter_header / heading sections. Slide-mode IR
+ * rejects this node at Stage 1.
+ */
+export const TocNodeSchema = z
+  .object({
+    type: z.literal('toc'),
+    title: RichTextSchema.optional(),
+    include_kinds: z.array(z.string()).optional(),
+    max_depth: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
+  })
+  .strict();
+export type TocNode = z.infer<typeof TocNodeSchema>;
+
+/**
+ * Section divider (slide-only). Full-bleed chapter break with optional
+ * label + ornament. Document mode uses chapter_header sections instead;
+ * Stage 1 rejects this node in document IR.
+ */
+export const SectionDividerNodeSchema = z
+  .object({
+    type: z.literal('section_divider'),
+    label: RichTextSchema.optional(),
+    ornament: z.enum(['rule', 'dot', 'none']).optional(),
+  })
+  .strict();
+export type SectionDividerNode = z.infer<typeof SectionDividerNodeSchema>;
+
+/**
+ * Bibliography (doc-only). Numbered list of references with optional
+ * citation ids for future inline-cite support. Stage 1 rejects this in
+ * slide IR.
+ */
+export const BibliographyEntrySchema = z
+  .object({
+    id: z.string().min(1).optional(),
+    text: RichTextSchema,
+  })
+  .strict();
+export type BibliographyEntry = z.infer<typeof BibliographyEntrySchema>;
+
+export const BibliographyNodeSchema = z
+  .object({
+    type: z.literal('bibliography'),
+    title: RichTextSchema.optional(),
+    entries: z.array(BibliographyEntrySchema).min(1),
+  })
+  .strict();
+export type BibliographyNode = z.infer<typeof BibliographyNodeSchema>;
+
+/**
+ * Page break (doc-only). Forces the next sibling onto a new page when
+ * the print pipeline flows the section. Renders as a zero-height
+ * element with `break-after: page`. Stage 1 rejects in slide IR.
+ */
+export const PageBreakNodeSchema = z
+  .object({
+    type: z.literal('page_break'),
+  })
+  .strict();
+export type PageBreakNode = z.infer<typeof PageBreakNodeSchema>;
+
 // ── Top-level union ──────────────────────────────────────────────
 
 export const SlideNodeSchema = z.discriminatedUnion('type', [
@@ -194,6 +282,11 @@ export const SlideNodeSchema = z.discriminatedUnion('type', [
   QuoteNodeSchema,
   TableNodeSchema,
   TwoColumnNodeSchema,
+  GridNodeSchema,
+  TocNodeSchema,
+  SectionDividerNodeSchema,
+  BibliographyNodeSchema,
+  PageBreakNodeSchema,
 ]);
 export type SlideNode = z.infer<typeof SlideNodeSchema>;
 
@@ -210,5 +303,16 @@ export const SLIDE_NODE_TYPES = [
   'quote',
   'table',
   'two_column',
+  'grid',
+  'toc',
+  'section_divider',
+  'bibliography',
+  'page_break',
 ] as const;
 export type SlideNodeType = (typeof SLIDE_NODE_TYPES)[number];
+
+/** Mode constraint for top-level IR nodes. Bimodal nodes work in both
+ *  authoring models; mode-specific nodes are rejected at Stage 1 lint
+ *  when used in the wrong mode. */
+export const SLIDE_ONLY_NODE_TYPES = ['section_divider'] as const;
+export const DOC_ONLY_NODE_TYPES = ['toc', 'bibliography', 'page_break'] as const;

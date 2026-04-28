@@ -19,9 +19,14 @@ import {
 } from '../validation/validation-presentation.js';
 import type { ValidationResult } from '../../types/validation.js';
 import type { SlideDocumentService } from '../documents/index.js';
+import { compileSlideIRToHtml } from '../ir/index.js';
+import { DEFAULT_FORMAT, getFormat } from '../formats/format-registry.js';
+import { MetadataEmbedder } from '../metadata/metadata-embedder.js';
+import { soulId } from '../../types/common.js';
 
 export class EditorService {
   private readonly normalizer = new TextEditableNormalizer();
+  private readonly metadataEmbedder = new MetadataEmbedder();
   private session: SessionView = { openPanels: [] };
 
   constructor(
@@ -209,6 +214,16 @@ export class EditorService {
       summary.slides.map((slideSummary) => this.deckService.getSlide(slideSummary.id as string)),
     );
 
+    // v4.8.5: replace the selected slide's stored copy with the
+    // ensured-editable refresh so downstream consumers (preview HTML,
+    // App pin bridge) see the in-memory regenerated html with
+    // data-ir-path attributes. Other slides keep their stored copy —
+    // only the active slide drives the iframe / pin flow.
+    const ensuredIdx = slides.findIndex((s) => (s.id as string) === selectedSlideId);
+    if (ensuredIdx >= 0) {
+      slides[ensuredIdx] = ensuredSlide;
+    }
+
     const previews = await this.renderService.renderPreview(slides, undefined, summary.format);
     const previewMap = new Map(previews.map((preview) => [preview.slideId, preview]));
     const slideSummaryMap = new Map(summary.slides.map((slideSummary) => [slideSummary.id as string, slideSummary]));
@@ -280,16 +295,66 @@ export class EditorService {
   }
 
   private async ensureEditableMarkup(
-    _deckId: string,
+    deckId: string,
     slide: Slide,
-    _soulIdStr: string,
+    soulIdStr: string,
   ): Promise<Slide> {
-    // v4.5: slides are IR-first. The legacy normalizer added data-edit-id
-    // attributes to slide HTML so the App could target text nodes, but
-    // mutating the stored HTML conflicts with the IR-as-source-of-truth
-    // contract. The IR-aware editable markup pass lands with the v4.6
-    // editor surface — until then, return the slide unchanged.
+    // v4.8.5 — pin-mode in the App needs `data-ir-path` attributes the
+    // IR compiler started emitting in this release. Pre-v4.8.5 slides
+    // have stored HTML compiled before the attribute existed; the App's
+    // pin bridge would silently fail on them. When we detect a stale
+    // authored_ir slide on retrieval, recompile from IR in-memory.
+    //
+    // We deliberately do NOT persist via updateSlide — that would
+    // create a "Slide updated" revision history entry and re-run the
+    // full validation pipeline on every editor open. The IR is
+    // unchanged; only the cached HTML drifted. The next genuine
+    // user-driven update_slide / apply_slide_node_edit will persist
+    // fresh HTML naturally.
+    //
+    // Only triggers for authored_ir slides; legacy_html / document_v1
+    // sourceKinds don't carry IR and are out of scope for pin support.
+    if (
+      slide.sourceKind === 'authored_ir'
+      && slide.ir
+      && !slide.html.includes('data-ir-path=')
+    ) {
+      const refreshed = await this.recompileSlideInMemory(deckId, slide, soulIdStr);
+      if (refreshed) return refreshed;
+    }
     return slide;
+  }
+
+  /**
+   * Recompile a slide's HTML from IR in-memory (no persistence). Used
+   * by `ensureEditableMarkup` to refresh pre-v4.8.5 stored HTML so the
+   * App's pin bridge finds `data-ir-path` anchors. Returns null if the
+   * deck or soul lookup fails — caller falls back to the stale HTML.
+   */
+  private async recompileSlideInMemory(
+    deckId: string,
+    slide: Slide,
+    soulIdStr: string,
+  ): Promise<Slide | null> {
+    if (!slide.ir) return null;
+    try {
+      const summary = await this.deckService.getDeckSummary(deckId);
+      const got = await this.soulService.get(soulId(soulIdStr));
+      if (!got) return null;
+      const geometry = getFormat(summary.format ?? DEFAULT_FORMAT).geometry;
+      const compiledHtml = compileSlideIRToHtml({ ir: slide.ir, soul: got.soul, geometry });
+      const embedded = this.metadataEmbedder.embed(compiledHtml, slide.metadata);
+      this.logger.info('Refreshed pre-v4.8.5 slide html in-memory', {
+        slideId: slide.id,
+      });
+      return { ...slide, html: embedded };
+    } catch (err) {
+      this.logger.warn('Failed to refresh slide html in-memory; serving stored html', {
+        slideId: slide.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
   }
 
   private async ensureDocumentState(deckId: string, slide: Slide): Promise<SlideDocument | null> {

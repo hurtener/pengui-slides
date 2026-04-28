@@ -13,9 +13,14 @@
  * Example: change the right column's first node in a two-column layout:
  *   { slide_id, path: ["body", 0, "right", 0], new_node: { ... } }
  *
+ * Example: change the second cell's first node in a grid (v4.8):
+ *   { slide_id, path: ["body", 2, "cells", 1, 0], new_node: { ... } }
+ *
  * After the replacement the slide's IR is committed via update_slide,
  * so HTML recompiles and validation re-runs. Errors flow through the
- * standard tool error path.
+ * standard tool error path. Mode-aware lint runs at update_slide time —
+ * inserting a doc-only node (toc / bibliography / page_break) into a
+ * slide IR is rejected with INVALID_INPUT.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -36,8 +41,9 @@ const PATH_SCHEMA = z
   .min(2)
   .describe(
     'Structural path into the IR tree. Starts with "body" then a numeric index; ' +
-      'two_column nodes accept "left"/"right" + numeric index. Examples: ["body", 0]; ' +
-      '["body", 2, "right", 1].',
+      'two_column nodes accept "left"/"right" + numeric index; grid nodes accept ' +
+      '"cells" + row index + cell index. Examples: ["body", 0]; ' +
+      '["body", 2, "right", 1]; ["body", 3, "cells", 1, 0].',
   );
 
 export function registerApplySlideNodeEditTool(server: McpServer, container: ServiceContainer): void {
@@ -51,9 +57,12 @@ export function registerApplySlideNodeEditTool(server: McpServer, container: Ser
         'fixing one prose block). The slide must be IR-authored (sourceKind="authored_ir"). ' +
         '\n\n' +
         'INPUT — `path` is an array of structural steps. Start with "body" then a numeric ' +
-        'index. To descend into a two_column, append "left" or "right" plus an index. ' +
+        'index. To descend into a two_column, append "left" or "right" plus an index; into ' +
+        'a grid, append "cells" + row index + cell index. ' +
         '`new_node` is one of the IR node types in `pengui://schema/slide-ir`. Inside ' +
-        'two_column.left/right the replacement must be a LEAF node (no nested two_column). ' +
+        'two_column.left/right and grid.cells[i] the replacement must be a LEAF node (no ' +
+        'nested two_column / grid). Doc-only nodes (toc, bibliography, page_break) are ' +
+        'rejected by the slide-mode lint at update_slide time. ' +
         '\n\n' +
         'RETURNS — `{ slide_id, path, source_kind, validation, validation_delta }`. The ' +
         'slide is recompiled and re-validated against the deck\'s soul.',

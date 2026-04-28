@@ -176,8 +176,12 @@ export type SlideElement =
  *       + hr→line shape (Fix 3) + run hyperlinks + ol/ul bullet typing
  *  - 3: table cells expose multi-run formatting; captions emitted as text
  *  - 4: table bbox shrunk to inner rows so caption text doesn't overlap
+ *  - 5: v4.8 IR catalog widens (grid bimodal layout primitive — each cell's
+ *       leaves get their own native shape rect from layout, no special
+ *       compiler branch). Mode-specific nodes (toc, section_divider,
+ *       bibliography, page_break) don't reach the slide-document path.
  */
-export const CURRENT_COMPILER_REVISION = 4;
+export const CURRENT_COMPILER_REVISION = 5;
 
 export interface SlideDocument {
   version: '1';

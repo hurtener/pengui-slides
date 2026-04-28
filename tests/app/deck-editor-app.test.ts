@@ -130,7 +130,7 @@ function makeState(selectedSlideId: string): EditorState {
     selectedSlide: {
       slideId: selectedSlideId,
       position: selectedSlideId === 'slide-1' ? 0 : 1,
-      html: `<!DOCTYPE html><html><body><div class="slide"><p data-edit-id="text-1">${selectedSlideId === 'slide-1' ? 'Alpha' : 'Beta'}</p></div></body></html>`,
+      html: `<!DOCTYPE html><html><body><div class="slide"><p data-edit-id="text-1" data-ir-path="body,0">${selectedSlideId === 'slide-1' ? 'Alpha' : 'Beta'}</p></div></body></html>`,
       metadata: {
         title: selectedSlideId === 'slide-1' ? 'Slide One' : 'Slide Two',
         type: selectedSlideId === 'slide-1' ? 'content' : 'metrics',

@@ -78,10 +78,22 @@ export interface GetDesignSoulResponse {
   soul: DesignSoul;
 }
 
+/**
+ * v4.8.5: element-target comments now reference an IR node by structural
+ * `ir_path` — same shape that `apply_slide_node_edit` /
+ * `apply_section_node_edit` accept. The compiler emits matching
+ * `data-ir-path` attributes on every node root for the App's pin bridge
+ * to read.
+ */
 export type CommentTarget =
   | { kind: 'slide'; slide_id: string }
   | { kind: 'section'; section_id: string }
-  | { kind: 'element'; container_id: string; edit_id: string };
+  | {
+      kind: 'ir_node';
+      container_id: string;
+      ir_path: ReadonlyArray<string | number>;
+      preview?: string;
+    };
 
 export interface CommentItem {
   id: string;
@@ -364,7 +376,7 @@ export class McpDeckEditorBridge implements DeckEditorBridge {
     deckId: string,
     opts: {
       resolved?: 'unresolved' | 'resolved' | 'all';
-      target_kind?: 'slide' | 'section' | 'element';
+      target_kind?: 'slide' | 'section' | 'ir_node';
     } = {},
   ): Promise<ListCommentsResponse> {
     const args: Record<string, unknown> = { deck_id: deckId };

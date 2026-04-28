@@ -102,4 +102,83 @@ describe('replaceNodeAtPath', () => {
     const ir: SlideIR = { body: [HERO] };
     expect(() => replaceNodeAtPath(ir, ['body'], NEW_HERO)).toThrow(/at least one body child/);
   });
+
+  // ── v4.8: grid cell paths ────────────────────────────────────────
+
+  it('descends into grid.cells[i][j]', () => {
+    const ir: SlideIR = {
+      body: [
+        {
+          type: 'grid',
+          columns: 2,
+          cells: [[HERO], [PROSE]],
+        },
+      ],
+    };
+    const next = replaceNodeAtPath(ir, ['body', 0, 'cells', 0, 0], NEW_HERO);
+    const grid = next.body[0];
+    if (grid.type !== 'grid') throw new Error('expected grid');
+    expect(grid.cells[0][0]).toEqual(NEW_HERO);
+    expect(grid.cells[1][0]).toEqual(PROSE);
+  });
+
+  it('rejects nested grid inside a grid cell (leaf-only)', () => {
+    const ir: SlideIR = {
+      body: [
+        {
+          type: 'grid',
+          columns: 2,
+          cells: [[HERO], [PROSE]],
+        },
+      ],
+    };
+    const nestedGrid: SlideNode = {
+      type: 'grid',
+      columns: 2,
+      cells: [[HERO], [PROSE]],
+    };
+    expect(() =>
+      replaceNodeAtPath(ir, ['body', 0, 'cells', 0, 0], nestedGrid),
+    ).toThrow(/must be a leaf node/);
+  });
+
+  it('rejects nested two_column inside a grid cell (leaf-only)', () => {
+    const ir: SlideIR = {
+      body: [
+        {
+          type: 'grid',
+          columns: 2,
+          cells: [[HERO], [PROSE]],
+        },
+      ],
+    };
+    const nestedTwoColumn: SlideNode = {
+      type: 'two_column',
+      left: [HERO],
+      right: [PROSE],
+    };
+    expect(() =>
+      replaceNodeAtPath(ir, ['body', 0, 'cells', 1, 0], nestedTwoColumn),
+    ).toThrow(/must be a leaf node/);
+  });
+
+  it('rejects wrong key on grid (not "cells")', () => {
+    const ir: SlideIR = {
+      body: [{ type: 'grid', columns: 2, cells: [[HERO], [PROSE]] }],
+    };
+    expect(() =>
+      replaceNodeAtPath(ir, ['body', 0, 'rows', 0, 0], NEW_HERO),
+    ).toThrow(/must be "cells"/);
+  });
+
+  it('replacing a top-level body[i] with a grid is allowed (top-level layout container)', () => {
+    const ir: SlideIR = { body: [HERO] };
+    const grid: SlideNode = {
+      type: 'grid',
+      columns: 2,
+      cells: [[HERO], [PROSE]],
+    };
+    const next = replaceNodeAtPath(ir, ['body', 0], grid);
+    expect(next.body[0]).toEqual(grid);
+  });
 });

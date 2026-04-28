@@ -56,16 +56,28 @@ describe('InMemoryCommentStore', () => {
     expect(closed.map((c) => c.id)).toEqual(['c2']);
   });
 
-  it('filters by target kind', async () => {
+  it('filters by target kind (slide vs ir_node)', async () => {
     await store.save(makeComment({ id: 'c1' as CommentId }));
     await store.save(
       makeComment({
         id: 'c2' as CommentId,
-        target: { kind: 'element', containerId: 's1', editId: 'e42' },
+        target: {
+          kind: 'ir_node',
+          containerId: 's1',
+          irPath: ['body', 0, 'left', 1],
+          preview: 'Hero title',
+        },
       }),
     );
     const onlySlides = await store.listByDeck('deck-1' as DeckId, { targetKind: 'slide' });
     expect(onlySlides.map((c) => c.id)).toEqual(['c1']);
+
+    const onlyIrNode = await store.listByDeck('deck-1' as DeckId, { targetKind: 'ir_node' });
+    expect(onlyIrNode.map((c) => c.id)).toEqual(['c2']);
+    const c2 = onlyIrNode[0];
+    if (c2.target.kind !== 'ir_node') throw new Error('expected ir_node target');
+    expect(c2.target.irPath).toEqual(['body', 0, 'left', 1]);
+    expect(c2.target.preview).toBe('Hero title');
   });
 
   it('ignores comments from other decks', async () => {

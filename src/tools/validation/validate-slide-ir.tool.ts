@@ -13,7 +13,11 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
-import { SlideIRSchema, SectionIRSchema } from '../../domain/ir/index.js';
+import {
+  SlideIRSchema,
+  SectionIRSchema,
+  lintNodesForMode,
+} from '../../domain/ir/index.js';
 
 interface IssueOut {
   path: string;
@@ -51,13 +55,24 @@ export function registerValidateSlideIRTool(server: McpServer): void {
     async ({ slide_ir }) => {
       try {
         const result = SlideIRSchema.safeParse(slide_ir);
-        if (result.success) {
-          return structuredResponse({ ok: true, issues: [] });
+        if (!result.success) {
+          return structuredResponse({
+            ok: false,
+            issues: flattenZodIssues(result.error.issues),
+          });
         }
-        return structuredResponse({
-          ok: false,
-          issues: flattenZodIssues(result.error.issues),
-        });
+        const modeIssues = lintNodesForMode(result.data.body, 'slide');
+        if (modeIssues.length > 0) {
+          return structuredResponse({
+            ok: false,
+            issues: modeIssues.map((m) => ({
+              path: m.path,
+              message: m.message,
+              code: 'mode_only_node',
+            })),
+          });
+        }
+        return structuredResponse({ ok: true, issues: [] });
       } catch (error) {
         return handleToolError(error);
       }
@@ -86,13 +101,24 @@ export function registerValidateSectionIRTool(server: McpServer): void {
     async ({ section_ir }) => {
       try {
         const result = SectionIRSchema.safeParse(section_ir);
-        if (result.success) {
-          return structuredResponse({ ok: true, issues: [] });
+        if (!result.success) {
+          return structuredResponse({
+            ok: false,
+            issues: flattenZodIssues(result.error.issues),
+          });
         }
-        return structuredResponse({
-          ok: false,
-          issues: flattenZodIssues(result.error.issues),
-        });
+        const modeIssues = lintNodesForMode(result.data.body, 'doc');
+        if (modeIssues.length > 0) {
+          return structuredResponse({
+            ok: false,
+            issues: modeIssues.map((m) => ({
+              path: m.path,
+              message: m.message,
+              code: 'mode_only_node',
+            })),
+          });
+        }
+        return structuredResponse({ ok: true, issues: [] });
       } catch (error) {
         return handleToolError(error);
       }

@@ -49,8 +49,14 @@ import type { Logger } from '../../infrastructure/index.js';
 import { RevisionTracker } from './revision-tracker.js';
 import { SlugIndex } from '../_shared/slug-index.js';
 import type { SoulService } from '../souls/soul-service.js';
-import { compileSlideIRToHtml, replaceNodeAtPath, type IRPath } from '../ir/index.js';
+import {
+  compileSlideIRToHtml,
+  lintNodesForMode,
+  replaceNodeAtPath,
+  type IRPath,
+} from '../ir/index.js';
 import type { SlideNode } from '../ir/index.js';
+import { ErrorCode, PenguiError } from '../../types/errors.js';
 import { MetadataEmbedder } from '../metadata/metadata-embedder.js';
 
 export class DeckService {
@@ -235,6 +241,16 @@ export class DeckService {
     }
     this.assertSlidesModel(deck, 'add_section');
 
+    const modeIssues = lintNodesForMode(input.ir.body, 'slide');
+    if (modeIssues.length > 0) {
+      throw new PenguiError(
+        ErrorCode.SLIDE_INVALID_HTML,
+        `Slide IR contains doc-only nodes: ${modeIssues
+          .map((m) => `${m.path} (${m.nodeType})`)
+          .join(', ')}. ${modeIssues[0].message}`,
+      );
+    }
+
     const soul = await this.soulStore.get(deck.soulId);
     if (!soul) {
       throw new SoulNotFoundError(deck.soulId as string);
@@ -364,6 +380,15 @@ export class DeckService {
     // v4.5: when IR changes, recompile HTML and refresh revisionHash.
     let recompiled = false;
     if (input.ir !== undefined) {
+      const modeIssues = lintNodesForMode(input.ir.body, 'slide');
+      if (modeIssues.length > 0) {
+        throw new PenguiError(
+          ErrorCode.SLIDE_INVALID_HTML,
+          `Slide IR contains doc-only nodes: ${modeIssues
+            .map((m) => `${m.path} (${m.nodeType})`)
+            .join(', ')}. ${modeIssues[0].message}`,
+        );
+      }
       const soul = await this.soulStore.get(deck.soulId);
       if (!soul) {
         throw new SoulNotFoundError(deck.soulId as string);

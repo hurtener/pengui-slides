@@ -33,8 +33,14 @@ import type { Logger } from '../../infrastructure/index.js';
 import { DeckService } from '../decks/deck-service.js';
 import { RevisionTracker } from '../decks/revision-tracker.js';
 import { embedSectionMeta } from './section-meta-embedder.js';
-import { compileSectionIRToHtml, replaceNodeAtPath, type IRPath } from '../ir/index.js';
+import {
+  compileSectionIRToHtml,
+  lintNodesForMode,
+  replaceNodeAtPath,
+  type IRPath,
+} from '../ir/index.js';
 import type { SlideNode } from '../ir/index.js';
+import { ErrorCode, PenguiError } from '../../types/errors.js';
 
 export class DocumentService {
   private readonly deckStore: IDeckStore;
@@ -110,6 +116,16 @@ export class DocumentService {
       throw new DeckNotFoundError(input.deckId);
     }
     this.assertDocumentModel(deck, 'add_slide');
+
+    const modeIssues = lintNodesForMode(input.ir.body, 'doc');
+    if (modeIssues.length > 0) {
+      throw new PenguiError(
+        ErrorCode.SECTION_INVALID_FRAGMENT,
+        `Section IR contains slide-only nodes: ${modeIssues
+          .map((m) => `${m.path} (${m.nodeType})`)
+          .join(', ')}. ${modeIssues[0].message}`,
+      );
+    }
 
     const now = this.clock.now();
     const currentSectionIds = deck.sectionIds ?? [];
@@ -247,6 +263,15 @@ export class DocumentService {
     const effectiveKind = input.kind ?? section.kind;
 
     if (input.ir !== undefined) {
+      const modeIssues = lintNodesForMode(input.ir.body, 'doc');
+      if (modeIssues.length > 0) {
+        throw new PenguiError(
+          ErrorCode.SECTION_INVALID_FRAGMENT,
+          `Section IR contains slide-only nodes: ${modeIssues
+            .map((m) => `${m.path} (${m.nodeType})`)
+            .join(', ')}. ${modeIssues[0].message}`,
+        );
+      }
       section.ir = input.ir;
       section.html = compileSectionIRToHtml({ ir: input.ir, kind: effectiveKind });
       section.metadata.revisionHash = sha256(section.html);

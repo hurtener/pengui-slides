@@ -71,6 +71,8 @@ export function registerAddSlideTool(server: McpServer, container: ServiceContai
         '  • `table` — { headers?: RichText[], rows: RichText[][], caption?: RichText }\n' +
         '  • `divider` — { spacing?: sm|md|lg }\n' +
         '  • `two_column` — { ratio?: 1:1|1:2|2:1, gap?, left: leaf[], right: leaf[] } (left/right cannot nest two_column)\n' +
+        '  • `grid` — { columns: 2|3|4, ratio?: "2:1:1", gap?, align_items?, cells: leaf[][] } (cells.length must be a multiple of columns; ratio parts must equal columns; cells cannot nest grid/two_column)\n' +
+        '  • `section_divider` (slide-only) — { label?: RichText, ornament?: rule|dot|none } full-bleed chapter break\n' +
         '  • RichText is `[{ text, bold?, italic?, code?, strike?, sup?, sub?, link?, color? }, ...]` — runs concatenate verbatim, INCLUDE spaces inside text. bold/italic/code/strike STACK freely on a single run. sup/sub are mutually exclusive (sup wins). `color` accepts SEMANTIC roles (accent | accent_alt | accent_warm | success | warning | error | info | muted | inverse); omit to inherit the cascade-aware default.\n' +
         '\n' +
         'IMAGES — image nodes reference assets by id (`asset_id: "uuid"`). Upload binaries with `upload_asset` first, then pass the returned id. Provide `alt` for accessibility (empty string marks decorative). ' +

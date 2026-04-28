@@ -130,7 +130,7 @@ describe('renderNodeList — per-node HTML emitters', () => {
     const html = renderNodeList([
       { type: 'hero', title: rt('Title'), eyebrow: rt('Eye'), subtitle: rt('Sub') },
     ]);
-    expect(html).toContain('<div class="pengui-hero pengui-align-left">');
+    expect(html).toContain('<div class="pengui-hero pengui-align-left"');
     expect(html).toContain('<p class="pengui-hero-eyebrow">Eye</p>');
     expect(html).toContain('<h1 class="pengui-hero-title">Title</h1>');
     expect(html).toContain('<p class="pengui-hero-subtitle">Sub</p>');
@@ -153,7 +153,7 @@ describe('renderNodeList — per-node HTML emitters', () => {
     const html = renderNodeList([
       { type: 'prose', body: rt('Plain ', { text: 'bold', bold: true }), align: 'center' },
     ]);
-    expect(html).toContain('<p class="pengui-prose pengui-align-center">');
+    expect(html).toContain('<p class="pengui-prose pengui-align-center"');
     expect(html).toContain('Plain <strong>bold</strong>');
   });
 
@@ -182,7 +182,7 @@ describe('renderNodeList — per-node HTML emitters', () => {
     const html = renderNodeList([
       { type: 'callout', kind: 'warning', title: rt('Watch out'), body: rt('Body') },
     ]);
-    expect(html).toContain('<aside class="pengui-callout pengui-callout-warning">');
+    expect(html).toContain('<aside class="pengui-callout pengui-callout-warning"');
     expect(html).toContain('<p class="pengui-callout-title">Watch out</p>');
     expect(html).toContain('<div class="pengui-callout-body">Body</div>');
   });
@@ -197,13 +197,13 @@ describe('renderNodeList — per-node HTML emitters', () => {
 
   it('list emits ul for bullet/checklist and ol for numbered', () => {
     expect(renderNodeList([{ type: 'list', style: 'bullet', items: [rt('a')] }])).toMatch(
-      /<ul class="pengui-list pengui-list-bullet">/,
+      /<ul class="pengui-list pengui-list-bullet"/,
     );
     expect(renderNodeList([{ type: 'list', style: 'numbered', items: [rt('a')] }])).toMatch(
-      /<ol class="pengui-list pengui-list-numbered">/,
+      /<ol class="pengui-list pengui-list-numbered"/,
     );
     expect(renderNodeList([{ type: 'list', style: 'checklist', items: [rt('a')] }])).toMatch(
-      /<ul class="pengui-list pengui-list-checklist">/,
+      /<ul class="pengui-list pengui-list-checklist"/,
     );
   });
 
@@ -214,7 +214,7 @@ describe('renderNodeList — per-node HTML emitters', () => {
 
   it('quote emits body + optional attribution', () => {
     const noAttr = renderNodeList([{ type: 'quote', body: rt('Q') }]);
-    expect(noAttr).toContain('<blockquote class="pengui-quote">');
+    expect(noAttr).toContain('<blockquote class="pengui-quote"');
     expect(noAttr).toContain('<p class="pengui-quote-body">Q</p>');
     expect(noAttr).not.toContain('pengui-quote-attribution');
 
@@ -236,7 +236,7 @@ describe('renderNodeList — per-node HTML emitters', () => {
         ],
       },
     ]);
-    expect(html).toContain('<table class="pengui-table">');
+    expect(html).toContain('<table class="pengui-table"');
     expect(html).toContain('<caption class="pengui-table-caption">Cap</caption>');
     expect(html).toContain('<th class="pengui-table-th" scope="col">A</th>');
     // 6 td cells total (2 rows × 3 cols), and the 6th is empty
@@ -260,6 +260,116 @@ describe('renderNodeList — per-node HTML emitters', () => {
     expect(html).toContain('<div class="pengui-two-column-right"><figure class="pengui-image');
   });
 
+  it('grid emits cols class + gap + cell wrappers (3-column even)', () => {
+    const html = renderNodeList([
+      {
+        type: 'grid',
+        columns: 3,
+        gap: 'md',
+        cells: [
+          [{ type: 'prose', body: rt('A') }],
+          [{ type: 'prose', body: rt('B') }],
+          [{ type: 'prose', body: rt('C') }],
+        ],
+      },
+    ]);
+    expect(html).toContain('pengui-grid pengui-grid-cols-3 pengui-gap-md');
+    expect(html).toContain('pengui-grid-align-start');
+    expect((html.match(/<div class="pengui-grid-cell">/g) ?? []).length).toBe(3);
+    // No inline ratio style when ratio is omitted.
+    expect(html).not.toMatch(/grid-template-columns:/);
+  });
+
+  it('grid with ratio emits inline grid-template-columns from weights', () => {
+    const html = renderNodeList([
+      {
+        type: 'grid',
+        columns: 3,
+        ratio: '2:1:1',
+        cells: [[], [], []],
+      },
+    ]);
+    expect(html).toContain('grid-template-columns: 2fr 1fr 1fr');
+  });
+
+  it('grid throws when cells length is not a multiple of columns', () => {
+    expect(() =>
+      renderNodeList([
+        {
+          type: 'grid',
+          columns: 3,
+          cells: [[], []],
+        },
+      ]),
+    ).toThrow(/multiple of columns/);
+  });
+
+  it('grid throws when ratio parts != columns', () => {
+    expect(() =>
+      renderNodeList([
+        {
+          type: 'grid',
+          columns: 3,
+          ratio: '1:1',
+          cells: [[], [], []],
+        },
+      ]),
+    ).toThrow(/parts but columns=3/);
+  });
+
+  it('toc emits the data-pengui-toc=auto wrapper with include + depth', () => {
+    const html = renderNodeList([
+      { type: 'toc', title: rt('On these pages'), include_kinds: ['chapter_header', 'prose'], max_depth: 2 },
+    ]);
+    expect(html).toContain('class="pengui-toc"');
+    expect(html).toContain('data-pengui-toc="auto"');
+    expect(html).toContain('data-pengui-toc-include="chapter_header,prose"');
+    expect(html).toContain('data-pengui-toc-depth="2"');
+    expect(html).toContain('<h2 class="pengui-toc-title">On these pages</h2>');
+    expect(html).toContain('<ol class="pengui-toc-list"></ol>');
+  });
+
+  it('section_divider emits the wrapper + ornament class', () => {
+    const html = renderNodeList([
+      { type: 'section_divider', label: rt('Part II'), ornament: 'dot' },
+    ]);
+    expect(html).toContain('class="pengui-section-divider"');
+    expect(html).toContain('pengui-section-divider-ornament-dot');
+    expect(html).toContain('<p class="pengui-section-divider-label">Part II</p>');
+  });
+
+  it('section_divider with ornament=none omits the ornament span', () => {
+    const html = renderNodeList([
+      { type: 'section_divider', ornament: 'none' },
+    ]);
+    expect(html).not.toContain('pengui-section-divider-ornament');
+  });
+
+  it('bibliography emits an ordered list with optional ids', () => {
+    const html = renderNodeList([
+      {
+        type: 'bibliography',
+        title: rt('Sources'),
+        entries: [
+          { id: 'smith-2024', text: rt('Smith, J. 2024.') },
+          { text: rt('Jones, K. 2025.') },
+        ],
+      },
+    ]);
+    expect(html).toContain('class="pengui-bibliography"');
+    expect(html).toContain('<h2 class="pengui-bibliography-title">Sources</h2>');
+    expect(html).toContain('id="bib-smith-2024"');
+    expect(html).toContain('Smith, J. 2024.');
+    expect(html).toContain('Jones, K. 2025.');
+  });
+
+  it('page_break emits a zero-height marker div with the IR path', () => {
+    const html = renderNodeList([{ type: 'page_break' }]);
+    expect(html).toBe(
+      '<div class="pengui-page-break" aria-hidden="true" data-ir-path="body,0"></div>',
+    );
+  });
+
   it('emits NO literal hex colors anywhere (token-only output)', () => {
     const html = renderNodeList([
       { type: 'hero', title: rt('T'), subtitle: rt('S'), eyebrow: rt('E') },
@@ -269,6 +379,57 @@ describe('renderNodeList — per-node HTML emitters', () => {
       { type: 'two_column', left: [{ type: 'prose', body: rt('L') }], right: [] },
     ]);
     expect(html).not.toMatch(/#[0-9a-fA-F]{3,8}/);
+  });
+
+  // ── v4.8.5: data-ir-path emission ─────────────────────────────
+
+  it('every top-level body node carries data-ir-path="body,N" on its root', () => {
+    const html = renderNodeList([
+      { type: 'hero', title: rt('T') },
+      { type: 'prose', body: rt('p') },
+      { type: 'divider' },
+    ]);
+    expect(html).toMatch(/<div class="pengui-hero[^"]*" data-ir-path="body,0"/);
+    expect(html).toMatch(/<p class="pengui-prose[^"]*" data-ir-path="body,1"/);
+    expect(html).toMatch(/<hr class="pengui-divider[^"]*" data-ir-path="body,2"/);
+  });
+
+  it('two_column children carry data-ir-path="body,N,left|right,M"', () => {
+    const html = renderNodeList([
+      {
+        type: 'two_column',
+        left: [{ type: 'prose', body: rt('L') }],
+        right: [{ type: 'prose', body: rt('R0') }, { type: 'prose', body: rt('R1') }],
+      },
+    ]);
+    expect(html).toMatch(/data-ir-path="body,0"/); // wrapper
+    expect(html).toMatch(/data-ir-path="body,0,left,0"/);
+    expect(html).toMatch(/data-ir-path="body,0,right,0"/);
+    expect(html).toMatch(/data-ir-path="body,0,right,1"/);
+    // The `.pengui-two-column-left/right` layout divs are not IR nodes
+    // and must NOT carry a path.
+    expect(html).not.toMatch(/<div class="pengui-two-column-left"[^>]*data-ir-path/);
+    expect(html).not.toMatch(/<div class="pengui-two-column-right"[^>]*data-ir-path/);
+  });
+
+  it('grid cell leaves carry data-ir-path="body,N,cells,row,col"', () => {
+    const html = renderNodeList([
+      {
+        type: 'grid',
+        columns: 3,
+        cells: [
+          [{ type: 'prose', body: rt('A') }],
+          [{ type: 'prose', body: rt('B') }],
+          [{ type: 'prose', body: rt('C') }],
+        ],
+      },
+    ]);
+    expect(html).toMatch(/<div class="pengui-grid[^"]*"[^>]*data-ir-path="body,0"/);
+    expect(html).toMatch(/data-ir-path="body,0,cells,0,0"/);
+    expect(html).toMatch(/data-ir-path="body,0,cells,1,0"/);
+    expect(html).toMatch(/data-ir-path="body,0,cells,2,0"/);
+    // The `.pengui-grid-cell` layout wrappers are not IR nodes.
+    expect(html).not.toMatch(/<div class="pengui-grid-cell"[^>]*data-ir-path/);
   });
 });
 
@@ -375,7 +536,8 @@ describe('compileSectionIRToHtml', () => {
   it('renders the IR body inside the root section', () => {
     const html = compileSectionIRToHtml({ ir, kind: 'prose' });
     expect(html).toContain('<h1 class="pengui-hero-title">Chapter 1</h1>');
-    expect(html).toContain('<p class="pengui-prose pengui-align-left">Opening paragraph.</p>');
+    expect(html).toContain('<p class="pengui-prose pengui-align-left"');
+    expect(html).toContain('>Opening paragraph.</p>');
   });
 
   it('is deterministic — same inputs produce byte-identical output', () => {

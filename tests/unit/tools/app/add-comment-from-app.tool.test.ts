@@ -127,14 +127,19 @@ describe('registerAddCommentFromAppTool', () => {
     expect(structured).not.toHaveProperty('scroll_snapshot');
   });
 
-  it('maps element target correctly (containerId + editId)', async () => {
+  it('maps ir_node target correctly (containerId + irPath, optional preview)', async () => {
     const { server, getHandler } = buildFakeServer();
     const container = buildFakeContainer({
       commentService: {
         add: vi.fn().mockResolvedValue({
           id: 'comment-002',
           deckId: 'deck-abc',
-          target: { kind: 'element', containerId: 'slide-xyz', editId: 'title-node' },
+          target: {
+            kind: 'ir_node',
+            containerId: 'slide-xyz',
+            irPath: ['body', 0, 'left', 1],
+            preview: 'Hero title',
+          },
           author: 'user',
           kind: 'question',
           body: 'Is this font on-brand?',
@@ -145,19 +150,40 @@ describe('registerAddCommentFromAppTool', () => {
 
     registerAddCommentFromAppTool(server as never, container as never);
 
-    await getHandler()({
+    const result = await getHandler()({
       deck_id: 'deck-abc',
-      target: { kind: 'element', container_id: 'slide-xyz', edit_id: 'title-node' },
+      target: {
+        kind: 'ir_node',
+        container_id: 'slide-xyz',
+        ir_path: ['body', 0, 'left', 1],
+        preview: 'Hero title',
+      },
       kind: 'question',
       body: 'Is this font on-brand?',
     });
 
     expect((container.commentService as { add: ReturnType<typeof vi.fn> }).add).toHaveBeenCalledWith(
       expect.objectContaining({
-        target: { kind: 'element', containerId: 'slide-xyz', editId: 'title-node' },
+        target: {
+          kind: 'ir_node',
+          containerId: 'slide-xyz',
+          irPath: ['body', 0, 'left', 1],
+          preview: 'Hero title',
+        },
         author: 'user',
       }),
     );
+
+    // Wire format on the way out should expose ir_path so the agent can
+    // feed it straight into apply_slide_node_edit.
+    const structured = result.structuredContent as {
+      comment: {
+        target: { kind: string; container_id: string; ir_path: ReadonlyArray<string | number>; preview?: string };
+      };
+    };
+    expect(structured.comment.target.kind).toBe('ir_node');
+    expect(structured.comment.target.ir_path).toEqual(['body', 0, 'left', 1]);
+    expect(structured.comment.target.preview).toBe('Hero title');
   });
 
   it('returns an error response when commentService.add throws', async () => {

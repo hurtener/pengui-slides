@@ -36,14 +36,17 @@ export function registerListCommentsTool(server: McpServer, container: ServiceCo
           .nullish()
           .describe('Filter by resolution state. Defaults to "unresolved".'),
         target_kind: z
-          .enum(['slide', 'section', 'element'])
+          .enum(['slide', 'section', 'ir_node'])
           .nullish()
-          .describe('Filter by target kind. Omit for all targets.'),
+          .describe(
+            'Filter by target kind. Omit for all targets. ' +
+              '"ir_node" returns element-targeted pins addressable by `target.ir_path`.',
+          ),
       }),
     },
     async ({ deck_id, resolved, target_kind }) => {
       try {
-        const filter: { resolved?: boolean; targetKind?: 'slide' | 'section' | 'element' } = {};
+        const filter: { resolved?: boolean; targetKind?: 'slide' | 'section' | 'ir_node' } = {};
         const r = resolved ?? 'unresolved';
         if (r === 'unresolved') filter.resolved = false;
         else if (r === 'resolved') filter.resolved = true;

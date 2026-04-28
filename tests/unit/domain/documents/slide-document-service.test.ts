@@ -340,4 +340,59 @@ describe('SlideDocumentService', () => {
     const stray = textElements.find((el) => el.kind === 'text' && el.text.includes('critical'));
     expect(stray).toBeUndefined();
   }, 12000);
+
+  it('bimodal grid: each grid cell becomes its own native text element with distinct x positions', async () => {
+    // v4.8 bimodal contract: a 3-column grid in slide mode must export to
+    // PPTX with three native text shapes laid out by Chromium — not a
+    // single rasterized chunk, not a background fallback.
+    const container = createContainer(loadConfig({ logLevel: 'error' }));
+    containers.push(container);
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root { --color-canvas: #fff; }
+    html, body { margin: 0; padding: 0; }
+    * { box-sizing: border-box; }
+    .slide { width: 1920px; height: 1080px; padding: 48px; background: #fff; position: relative; display: flex; flex-direction: column; gap: 24px; font-family: Inter, sans-serif; color: #111; }
+    .pengui-grid { display: grid; align-items: start; flex: 1 1 auto; min-height: 0; }
+    .pengui-grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .pengui-gap-md { gap: 16px; }
+    .pengui-grid-cell { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    p { margin: 0; font-size: 18px; }
+  </style>
+</head>
+<body>
+  <!-- @slide-meta {"title":"Grid","type":"content"} -->
+  <div class="slide">
+    <div class="pengui-grid pengui-grid-cols-3 pengui-gap-md">
+      <div class="pengui-grid-cell"><p>Alpha</p></div>
+      <div class="pengui-grid-cell"><p>Bravo</p></div>
+      <div class="pengui-grid-cell"><p>Charlie</p></div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const result = await container.slideDocumentService.compileSlideHtml(html, 'rev-grid');
+
+    expect(result.document).not.toBeNull();
+    const textElements = (result.document?.elements ?? []).filter((el) => el.kind === 'text');
+    const cellTexts = textElements.filter((el) =>
+      el.kind === 'text' && ['Alpha', 'Bravo', 'Charlie'].includes(el.text.trim()),
+    );
+    expect(cellTexts).toHaveLength(3);
+    // Each cell must be classified as native (not background fallback).
+    for (const t of cellTexts) {
+      expect(t.exportDisposition).not.toBe('background');
+    }
+    // Cells must be laid out left-to-right at distinct x positions.
+    const xs = cellTexts
+      .map((el) => (el.kind === 'text' ? el.x : 0))
+      .sort((a, b) => a - b);
+    expect(xs[0]).toBeLessThan(xs[1]);
+    expect(xs[1]).toBeLessThan(xs[2]);
+  }, 15000);
 });

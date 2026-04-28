@@ -10,6 +10,11 @@ import {
   QuoteNodeSchema,
   TableNodeSchema,
   TwoColumnNodeSchema,
+  GridNodeSchema,
+  TocNodeSchema,
+  SectionDividerNodeSchema,
+  BibliographyNodeSchema,
+  PageBreakNodeSchema,
   SlideNodeSchema,
   LeafSlideNodeSchema,
   SLIDE_NODE_TYPES,
@@ -152,9 +157,25 @@ describe('SlideNodeSchema (top-level union)', () => {
     expect(() => SlideNodeSchema.parse({ type: 'metric_grid', items: [] })).toThrow();
   });
 
-  it('SLIDE_NODE_TYPES enumerates the v4.7 catalog', () => {
+  it('SLIDE_NODE_TYPES enumerates the v4.8 catalog', () => {
     expect([...SLIDE_NODE_TYPES].sort()).toEqual(
-      ['callout', 'divider', 'heading', 'hero', 'image', 'list', 'prose', 'quote', 'table', 'two_column'].sort(),
+      [
+        'bibliography',
+        'callout',
+        'divider',
+        'grid',
+        'heading',
+        'hero',
+        'image',
+        'list',
+        'page_break',
+        'prose',
+        'quote',
+        'section_divider',
+        'table',
+        'toc',
+        'two_column',
+      ].sort(),
     );
   });
 });
@@ -239,4 +260,128 @@ describe('TableNodeSchema', () => {
   });
   // Row-vs-headers length mismatch is enforced at render time (renderTable
   // pads short rows), not in the Zod schema — see nodes.ts comment.
+});
+
+describe('GridNodeSchema', () => {
+  it('accepts a 2-column grid with even ratio', () => {
+    expect(() =>
+      GridNodeSchema.parse({
+        type: 'grid',
+        columns: 2,
+        cells: [[{ type: 'prose', body: rt('a') }], [{ type: 'prose', body: rt('b') }]],
+      }),
+    ).not.toThrow();
+  });
+  it('accepts a 3-column grid with weighted ratio + gap + align_items', () => {
+    const node = {
+      type: 'grid',
+      columns: 3 as const,
+      ratio: '2:1:1',
+      gap: 'lg' as const,
+      align_items: 'center' as const,
+      cells: [
+        [{ type: 'heading', level: 2 as const, text: rt('A') }],
+        [{ type: 'heading', level: 2 as const, text: rt('B') }],
+        [{ type: 'heading', level: 2 as const, text: rt('C') }],
+      ],
+    };
+    expect(GridNodeSchema.parse(node)).toMatchObject(node);
+  });
+  it('rejects columns outside 2/3/4', () => {
+    expect(() =>
+      GridNodeSchema.parse({ type: 'grid', columns: 5, cells: [[]] }),
+    ).toThrow();
+  });
+  it('rejects ratio that is not colon-delimited integers', () => {
+    expect(() =>
+      GridNodeSchema.parse({ type: 'grid', columns: 2, ratio: '2', cells: [[], []] }),
+    ).toThrow();
+  });
+  it('rejects nested grid inside a cell', () => {
+    expect(() =>
+      GridNodeSchema.parse({
+        type: 'grid',
+        columns: 2,
+        cells: [[{ type: 'grid', columns: 2, cells: [[], []] }], []],
+      }),
+    ).toThrow();
+  });
+  it('rejects empty cells array', () => {
+    expect(() => GridNodeSchema.parse({ type: 'grid', columns: 2, cells: [] })).toThrow();
+  });
+});
+
+describe('TocNodeSchema', () => {
+  it('accepts the minimum (just type)', () => {
+    expect(() => TocNodeSchema.parse({ type: 'toc' })).not.toThrow();
+  });
+  it('accepts title + include_kinds + max_depth', () => {
+    expect(() =>
+      TocNodeSchema.parse({
+        type: 'toc',
+        title: rt('On these pages'),
+        include_kinds: ['chapter_header', 'prose'],
+        max_depth: 2,
+      }),
+    ).not.toThrow();
+  });
+  it('rejects max_depth outside 1..3', () => {
+    expect(() => TocNodeSchema.parse({ type: 'toc', max_depth: 5 })).toThrow();
+  });
+});
+
+describe('SectionDividerNodeSchema', () => {
+  it('accepts the minimum (just type)', () => {
+    expect(() => SectionDividerNodeSchema.parse({ type: 'section_divider' })).not.toThrow();
+  });
+  it('accepts label + ornament', () => {
+    expect(() =>
+      SectionDividerNodeSchema.parse({
+        type: 'section_divider',
+        label: rt('Part II'),
+        ornament: 'dot',
+      }),
+    ).not.toThrow();
+  });
+  it('rejects unknown ornament', () => {
+    expect(() =>
+      SectionDividerNodeSchema.parse({ type: 'section_divider', ornament: 'star' }),
+    ).toThrow();
+  });
+});
+
+describe('BibliographyNodeSchema', () => {
+  it('accepts entries[]', () => {
+    expect(() =>
+      BibliographyNodeSchema.parse({
+        type: 'bibliography',
+        entries: [{ text: rt('Smith, J. 2024.') }],
+      }),
+    ).not.toThrow();
+  });
+  it('accepts optional entry id + title', () => {
+    expect(() =>
+      BibliographyNodeSchema.parse({
+        type: 'bibliography',
+        title: rt('Sources'),
+        entries: [{ id: 'smith-2024', text: rt('Smith, J. 2024.') }],
+      }),
+    ).not.toThrow();
+  });
+  it('rejects empty entries array', () => {
+    expect(() =>
+      BibliographyNodeSchema.parse({ type: 'bibliography', entries: [] }),
+    ).toThrow();
+  });
+});
+
+describe('PageBreakNodeSchema', () => {
+  it('accepts the minimum (just type)', () => {
+    expect(() => PageBreakNodeSchema.parse({ type: 'page_break' })).not.toThrow();
+  });
+  it('rejects unknown fields', () => {
+    expect(() =>
+      PageBreakNodeSchema.parse({ type: 'page_break', force: true }),
+    ).toThrow();
+  });
 });

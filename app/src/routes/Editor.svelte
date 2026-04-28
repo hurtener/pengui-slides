@@ -23,21 +23,23 @@
 
   let { deck, bridge, onRevisionRequest }: Props = $props();
 
-  // ── Comment drawer state (v4) ────────────────────────────────────────────
+  // ── Comment drawer state (v4.8.5) ────────────────────────────────────────
   let commentDrawerOpen = $state(false);
   let commentDraft = $state('');
   let commentKind = $state<'revision' | 'question' | 'approval' | 'note'>('note');
   let commentStatus = $state('');
   let commentPending = $state(false);
-  // Pin-mode: capture the clicked element's data-edit-id. Falls back to
-  // slide-level target when null. Element targets give the agent a semantic
-  // reference ("edit-id=title-node") instead of pixel coordinates.
+  // Pin-mode: capture the clicked node's `data-ir-path` (the structural
+  // pointer the IR compiler emits on every node root). Falls back to the
+  // whole slide when null. The agent receives the same `ir_path` array
+  // back via `list_comments` and feeds it straight into
+  // `apply_slide_node_edit` to patch the targeted node.
   let pinMode = $state(false);
-  let pinnedEditId = $state<string | null>(null);
+  let pinnedIrPath = $state<string | null>(null);
   let pinnedPreview = $state<string>('');
-  // editIds of elements that already have (unresolved) comments — drives the
-  // dashed mint outline decoration on the canvas.
-  let commentedEditIds = $state<string[]>([]);
+  // Stringified IR paths of elements that already have (unresolved)
+  // comments — drives the dashed mint outline decoration on the canvas.
+  let commentedIrPaths = $state<string[]>([]);
 
   function toggleCommentDrawer(): void {
     commentDrawerOpen = !commentDrawerOpen;
@@ -46,18 +48,27 @@
   function togglePinMode(): void {
     pinMode = !pinMode;
     if (!pinMode) {
-      pinnedEditId = null;
+      pinnedIrPath = null;
       pinnedPreview = '';
     }
   }
 
-  function handlePinTarget(detail: { editId: string; preview?: string }): void {
-    pinnedEditId = detail.editId;
+  /**
+   * Decode a `data-ir-path` attribute value (`"body,2,left,1"`) into the
+   * structural array the MCP tools accept. Inverse of the compiler's
+   * `irPathToString`. Numeric segments come back as numbers.
+   */
+  function decodeIrPath(s: string): ReadonlyArray<string | number> {
+    return s.split(',').map((seg) => (/^\d+$/.test(seg) ? Number(seg) : seg));
+  }
+
+  function handlePinTarget(detail: { irPath: string; preview?: string }): void {
+    pinnedIrPath = detail.irPath;
     pinnedPreview = detail.preview?.trim() ?? '';
     pinMode = false;
     commentStatus = pinnedPreview
       ? `Pinning to: “${pinnedPreview}”`
-      : `Pinning to element: ${detail.editId}`;
+      : `Pinning to node: ${detail.irPath}`;
   }
 
   async function submitComment(): Promise<void> {
@@ -66,12 +77,17 @@
     commentStatus = '';
     try {
       const slideId = deck.editorState.selectedSlide.slideId;
-      const target: CommentTarget = pinnedEditId
-        ? { kind: 'element', container_id: slideId, edit_id: pinnedEditId }
+      const target: CommentTarget = pinnedIrPath
+        ? {
+            kind: 'ir_node',
+            container_id: slideId,
+            ir_path: decodeIrPath(pinnedIrPath),
+            ...(pinnedPreview ? { preview: pinnedPreview } : {}),
+          }
         : { kind: 'slide', slide_id: slideId };
       const body = commentDraft.trim();
       const savedPreview = pinnedPreview;
-      const savedEditId = pinnedEditId;
+      const savedIrPath = pinnedIrPath;
       const savedKind = commentKind;
       await bridge.addCommentFromApp({
         deck_id: deck.editorState.deck.id,
@@ -87,8 +103,8 @@
       const mcp = bridge as unknown as McpDeckEditorBridge;
       let notified = false;
       if (typeof mcp.notifyAgentOfComment === 'function') {
-        const targetLabel = savedEditId
-          ? (savedPreview ? `"${savedPreview}" (element ${savedEditId})` : `element ${savedEditId}`)
+        const targetLabel = savedIrPath
+          ? (savedPreview ? `"${savedPreview}" (ir_path ${savedIrPath})` : `ir_path ${savedIrPath}`)
           : (isPrint ? 'the whole page' : 'the whole slide');
         try {
           notified = await mcp.notifyAgentOfComment({
@@ -105,13 +121,13 @@
       }
 
       commentDraft = '';
-      pinnedEditId = null;
+      pinnedIrPath = null;
       pinnedPreview = '';
       commentStatus = notified
         ? 'Saved and sent to the agent in chat.'
         : 'Saved. The agent will pick it up on its next turn — or ask it in chat now.';
       commentDrawerOpen = true;
-      await refreshCommentedEditIds();
+      await refreshCommentedIrPaths();
     } catch (err) {
       commentStatus = err instanceof Error ? err.message : String(err);
     } finally {
@@ -119,28 +135,28 @@
     }
   }
 
-  async function refreshCommentedEditIds(): Promise<void> {
+  async function refreshCommentedIrPaths(): Promise<void> {
     if (!bridge || !deck.editorState) return;
     try {
       const result = await bridge.listComments(
         deck.editorState.deck.id,
-        { resolved: 'unresolved', target_kind: 'element' },
+        { resolved: 'unresolved', target_kind: 'ir_node' },
       );
       const slideId = deck.editorState.selectedSlide.slideId;
-      commentedEditIds = result.comments
-        .filter((c) => c.target.kind === 'element' && c.target.container_id === slideId)
-        .map((c) => (c.target as { edit_id: string }).edit_id);
+      commentedIrPaths = result.comments
+        .filter((c) => c.target.kind === 'ir_node' && c.target.container_id === slideId)
+        .map((c) => (c.target as { ir_path: ReadonlyArray<string | number> }).ir_path.join(','));
     } catch {
-      commentedEditIds = [];
+      commentedIrPaths = [];
     }
   }
 
-  // Refresh element-level pin decorations whenever the selected slide or
+  // Refresh node-level pin decorations whenever the selected slide or
   // the bridge changes.
   $effect(() => {
     if (bridge && deck.editorState) {
       void deck.editorState.selectedSlide.slideId;
-      void refreshCommentedEditIds();
+      void refreshCommentedIrPaths();
     }
   });
 
@@ -148,7 +164,7 @@
     if (target.kind === 'slide') {
       deck.selectSlide(target.slide_id);
       commentDrawerOpen = false;
-    } else if (target.kind === 'element') {
+    } else if (target.kind === 'ir_node') {
       deck.selectSlide(target.container_id);
       commentDrawerOpen = false;
     }
@@ -328,8 +344,8 @@
             disabled={deck.saving}
             format={deckFormat}
             pinMode={pinMode}
-            pinnedEditIds={commentedEditIds}
-            draftPinnedEditId={pinnedEditId}
+            pinnedIrPaths={commentedIrPaths}
+            draftPinnedIrPath={pinnedIrPath}
             oncommit={handleTextCommit}
             onpintarget={handlePinTarget}
             onerror={(d) => console.error(d.message)}
@@ -359,16 +375,16 @@
             </div>
             <div class="cc-target-row">
               <span class="cc-target-label">Target:</span>
-              {#if pinnedEditId}
-                <span class="cc-pin-chip" title={pinnedPreview ? `${pinnedEditId} — ${pinnedPreview}` : pinnedEditId}>
+              {#if pinnedIrPath}
+                <span class="cc-pin-chip" title={pinnedPreview ? `${pinnedIrPath} — ${pinnedPreview}` : pinnedIrPath}>
                   <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" width="10" height="10"><circle cx="6" cy="6" r="4"/></svg>
                   <span class="cc-pin-text">
-                    {pinnedPreview || pinnedEditId}
+                    {pinnedPreview || pinnedIrPath}
                   </span>
                 </span>
-                <button type="button" class="cc-clear" onclick={() => { pinnedEditId = null; pinnedPreview = ''; commentStatus = ''; }}>clear</button>
+                <button type="button" class="cc-clear" onclick={() => { pinnedIrPath = null; pinnedPreview = ''; commentStatus = ''; }}>clear</button>
               {:else if pinMode}
-                <span class="cc-pin-active">Click an element in the slide…</span>
+                <span class="cc-pin-active">Click a node in the slide…</span>
                 <button type="button" class="cc-clear" onclick={togglePinMode}>cancel</button>
               {:else}
                 <span class="cc-target-note">whole slide</span>
@@ -377,17 +393,17 @@
                   class={`cc-pin-btn ${pinMode ? 'active' : ''}`}
                   onclick={togglePinMode}
                 >
-                  Pin to element
+                  Pin to node
                 </button>
               {/if}
             </div>
             <Textarea
               bind:value={commentDraft}
               rows={2}
-              placeholder={pinnedEditId
+              placeholder={pinnedIrPath
                 ? (pinnedPreview
                     ? `Write a note about “${pinnedPreview}”.`
-                    : 'Write a note about the selected element.')
+                    : 'Write a note about the selected node.')
                 : 'Write a note about this page for the agent to address.'}
             />
             <div class="cc-actions">

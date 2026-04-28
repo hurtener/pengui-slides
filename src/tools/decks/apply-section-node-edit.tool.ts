@@ -24,8 +24,9 @@ const PATH_SCHEMA = z
   .min(2)
   .describe(
     'Structural path into the IR tree. Starts with "body" then a numeric index; ' +
-      'two_column nodes accept "left"/"right" + numeric index. Examples: ["body", 0]; ' +
-      '["body", 2, "right", 1].',
+      'two_column nodes accept "left"/"right" + numeric index; grid nodes accept ' +
+      '"cells" + row index + cell index. Examples: ["body", 0]; ' +
+      '["body", 2, "right", 1]; ["body", 3, "cells", 1, 0].',
   );
 
 export function registerApplySectionNodeEditTool(server: McpServer, container: ServiceContainer): void {
@@ -40,6 +41,8 @@ export function registerApplySectionNodeEditTool(server: McpServer, container: S
         '\n\n' +
         'INPUT — same path / new_node shape as apply_slide_node_edit; sections share the ' +
         'slide IR node grammar. Fetch `pengui://schema/slide-ir` for the contract. ' +
+        'Slide-only nodes (section_divider) are rejected by the doc-mode lint at ' +
+        'update_section time. ' +
         '\n\n' +
         'RETURNS — `{ section_id, kind, position, validation }`.',
       inputSchema: z.object({

@@ -60,8 +60,8 @@ Call \`get_session\` early on every turn that begins with an ambiguous
 
 ## Comments: the between-turn feedback channel
 
-Users drop pins on slides / sections / specific \`data-edit-id\` elements in the
-MCP App. These are **structured** objects — not freeform chat — that you read on
+Users drop pins on slides / sections / specific IR nodes in the MCP App.
+These are **structured** objects — not freeform chat — that you read on
 your next turn.
 
 ### Read queue at turn start
@@ -80,13 +80,46 @@ list_comments(deck_id) →
       "body": "Make the title 10% larger",
       "created_at": "..."
     },
-    ...
+    {
+      "id": "...",
+      "target": {
+        "kind": "ir_node",
+        "container_id": "slide_abc123",
+        "ir_path": ["body", 2, "left", 1],
+        "preview": "Hero title — Q3 Review"
+      },
+      "author": "user",
+      "kind": "revision",
+      "body": "tighten this — just \\"Q3\\" is enough",
+      "created_at": "..."
+    }
   ]
 }
 \`\`\`
 
 Default filter is \`resolved: "unresolved"\` — the live work queue. Pass
 \`resolved: "all"\` for history.
+
+### Acting on an \`ir_node\` pin (v4.8.5)
+
+Element-targeted pins carry an \`ir_path\` — the structural pointer
+\`apply_slide_node_edit\` / \`apply_section_node_edit\` accept. **Use that
+path directly; don't re-emit the whole slide IR.** Reading the rest of
+the body is fine for context, but the edit itself is a one-shot
+replacement of the addressed node:
+
+\`\`\`
+apply_slide_node_edit({
+  deck_id: "...",
+  slide_id: comment.target.container_id,
+  path: comment.target.ir_path,        // ← straight from list_comments
+  new_node: { type: "hero", title: [{ text: "Q3" }] }
+})
+\`\`\`
+
+Then \`resolve_comment\` with a short note. This keeps the rest of the
+slide's IR untouched, so the soul tokens, layout, and surrounding
+content don't drift from the original design.
 
 ### Kind semantics
 

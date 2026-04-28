@@ -265,7 +265,9 @@ export class DocumentComposer {
       breakInline: string;
     }
 
-    const plans: Plan[] = sections.map((section, i) => {
+    // First pass — resolve kind, fullPage, chrome (no break inline yet).
+    type PartialPlan = Omit<Plan, 'breakInline'>;
+    const partials: PartialPlan[] = sections.map((section, i) => {
       const domId = `sec-${i + 1}`;
       sectionDomIds[section.id] = domId;
 
@@ -278,19 +280,15 @@ export class DocumentComposer {
         kind = 'prose';
       }
 
-      // Full-page resolution: hint overrides kind-default; kind-default
-      // applies only when the hint is absent.
       let fullPage: boolean;
       if (section.breakHints.fullPage === true) fullPage = true;
       else if (section.breakHints.fullPage === false) fullPage = false;
       else fullPage = kind === 'cover' || kind === 'chapter_header';
 
-      // Chrome resolution: full-page implies off; override via chromeOverrides.hide.
       const chromeOverrides = section.metadata.chromeOverrides;
       let chromeOff = fullPage;
       if (chromeOverrides?.hide === true) chromeOff = true;
 
-      // Running title override → named @page.
       let runningTitlePageName: string | null = null;
       if (chromeOverrides?.runningTitle !== undefined) {
         if (typeof chromeOverrides.runningTitle !== 'string') {
@@ -303,18 +301,38 @@ export class DocumentComposer {
       }
 
       const resetPageCounter = chromeOverrides?.resetPageCounter === true;
-      const breakInline = buildBreakInlineStyle(kind, section.breakHints);
 
-      return {
-        section,
-        domId,
-        kind,
-        fullPage,
-        chromeOff,
-        runningTitlePageName,
-        resetPageCounter,
-        breakInline,
-      };
+      return { section, domId, kind, fullPage, chromeOff, runningTitlePageName, resetPageCounter };
+    });
+
+    // Second pass — resolve break-inline. Suppresses the kind-default
+    // `break-before: page` on a chapter_header (or any section whose hint
+    // doesn't explicitly set breakBefore) when the previous section already
+    // ends with a page break (its own `breakAfter: 'page'` hint OR its
+    // `fullPage` flag, since full-page sections universally emit
+    // `break-after: page`). Chromium's print pipeline doesn't always
+    // collapse adjacent `break-after: page` + `break-before: page` and
+    // emits a fully-blank page in between. Authoring-time `breakBefore`
+    // hints are always respected.
+    const plans: Plan[] = partials.map((p, i) => {
+      const prev = i > 0 ? partials[i - 1] : null;
+      const prevEndsWithBreak = prev
+        ? prev.section.breakHints.breakAfter === 'page' || prev.fullPage
+        : false;
+
+      const explicitBefore = p.section.breakHints.breakBefore;
+      const effectiveHints = (() => {
+        const isDefaultBreakBefore = explicitBefore === undefined;
+        if (isDefaultBreakBefore && prevEndsWithBreak) {
+          // Suppress the kind-default break-before. We don't want a
+          // double break. `'auto'` is emitted as no decl — the previous
+          // section's break-after already gave us a fresh page.
+          return { ...p.section.breakHints, breakBefore: 'auto' as const };
+        }
+        return p.section.breakHints;
+      })();
+      const breakInline = buildBreakInlineStyle(p.kind, effectiveHints);
+      return { ...p, breakInline };
     });
 
     // ── 2. Build per-section wrapped HTML (fragment body). ──
@@ -487,6 +505,38 @@ ${mainBody}
       return originalHtml;
     }
 
+    // ── v4.8 IR `toc` node path ─────────────────────────────────────
+    // The IR node renders to `<nav class="pengui-toc" data-pengui-toc="auto">`
+    // with an empty `<ol>`. Fill the list in place rather than overwriting
+    // the section body, so the author-supplied title and `include_kinds`
+    // attribute survive.
+    const $autoTocs = $root.find('[data-pengui-toc="auto"]');
+    if ($autoTocs.length > 0) {
+      $autoTocs.each((_, el) => {
+        const $nav = $(el);
+        const includeAttr = $nav.attr('data-pengui-toc-include');
+        const includeKinds: string[] = includeAttr
+          ? includeAttr.split(',').map((s) => s.trim()).filter(Boolean)
+          : (documentMeta.toc?.includeKinds ?? ['chapter_header']);
+        const includeSet = new Set(includeKinds);
+        const entries = allPlans.filter((p) => includeSet.has(p.kind));
+        if (entries.length === 0) {
+          warnings.push(
+            `IR toc node matches no sections (include_kinds=${JSON.stringify(includeKinds)}).`,
+          );
+        }
+        const items = entries
+          .map(
+            (p) =>
+              `<li><a href="#${p.domId}">${escapeHtml(p.section.metadata.title || p.section.id)}</a></li>`,
+          )
+          .join('');
+        $nav.find('ol.pengui-toc-list').html(items);
+      });
+      return $.html($root);
+    }
+
+    // ── Legacy auto-fill path (empty kind='toc' fragment) ──────────
     // "Empty" means no element children and only whitespace text.
     const childElementCount = $root.children().length;
     const textOnly = $root.text().trim();
@@ -557,7 +607,12 @@ ${mainBody}
     }
 
     .pengui-figure, .pengui-chart, .pengui-diagram,
-    .pengui-callout, .pengui-quote, .pengui-image {
+    .pengui-callout, .pengui-quote, .pengui-image,
+    /* v4.8: keep alignment grids together. Card grids, metric strips,
+       country/comparison rows shear awkwardly across pages otherwise.
+       Authors with overflowing-tall grids can override via the section
+       break_hints. */
+    .pengui-grid, .pengui-two-column {
       break-inside: avoid; page-break-inside: avoid;
     }
 
@@ -567,6 +622,9 @@ ${mainBody}
     thead { display: table-header-group; }
     tfoot { display: table-footer-group; }
     tr { break-inside: avoid; page-break-inside: avoid; }
+    /* v4.8: don't orphan the table caption on a previous page from its
+       header row. Caption sticks to the first thead row. */
+    caption { break-after: avoid; page-break-after: avoid; }
 
     p, li, dd { orphans: 3; widows: 3; }
 

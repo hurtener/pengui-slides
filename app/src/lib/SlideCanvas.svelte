@@ -16,23 +16,23 @@
     disabled?: boolean;
     format?: FormatKind;
     /**
-     * When true, clicks on `[data-edit-id]` elements emit `onpintarget`
-     * instead of starting an inline text edit. Used by the v4 comment
-     * composer — the user picks the specific child element to pin their
-     * note to, which gives the agent a semantic target (editId) rather
-     * than a pixel coordinate.
+     * When true, clicks on `[data-ir-path]` elements emit `onpintarget`
+     * instead of starting an inline text edit. The compiled HTML carries
+     * `data-ir-path="body,N[,key,M…]"` on every IR-node root (v4.8.5);
+     * the user picks the specific node to pin their note to, which gives
+     * the agent the structural path that `apply_slide_node_edit` accepts.
      */
     pinMode?: boolean;
-    /** data-edit-ids of elements that already have comments attached. */
-    pinnedEditIds?: string[];
+    /** Stringified IR paths that already have comments attached. */
+    pinnedIrPaths?: string[];
     /**
-     * When non-null, the element with this editId is considered "about
+     * When non-null, the element with this IR path is considered "about
      * to receive a pin" and is drawn with a persistent highlight so the
      * user doesn't forget what they picked while writing their note.
      */
-    draftPinnedEditId?: string | null;
+    draftPinnedIrPath?: string | null;
     oncommit?: (detail: { editId: string; text: string }) => void;
-    onpintarget?: (detail: { editId: string; preview?: string }) => void;
+    onpintarget?: (detail: { irPath: string; preview?: string }) => void;
     onerror?: (detail: { message: string }) => void;
   }
 
@@ -43,8 +43,8 @@
     disabled = false,
     format = 'slides_16_9',
     pinMode = false,
-    pinnedEditIds = [],
-    draftPinnedEditId = null,
+    pinnedIrPaths = [],
+    draftPinnedIrPath = null,
     oncommit,
     onpintarget,
     onerror,
@@ -58,16 +58,20 @@
   // The iframe runs this bridge script (via `allow-scripts` + srcdoc) so
   // click detection happens inside the iframe's own JS context, which
   // sidesteps every parent-attached-listener / reactivity-in-closure risk.
-  // The bridge postMessages editIds back to the parent, which routes them
+  // The bridge postMessages IR paths back to the parent, which routes them
   // to onpintarget.
+  //
+  // v4.8.5: pin mode targets `data-ir-path` (the structural pointer the
+  // IR compiler emits on every node root). Inline text-edit mode still
+  // targets `data-edit-id` — that's a separate feature (text-only swaps).
   const BRIDGE_SCRIPT = `<script>(function(){
   var root = document.documentElement;
-  function resolve(e){
-    var t = e.target && e.target.closest ? e.target.closest('[data-edit-id]') : null;
+  function resolveIrPath(e){
+    var t = e.target && e.target.closest ? e.target.closest('[data-ir-path]') : null;
     if (t) return t;
     var stack = document.elementsFromPoint(e.clientX, e.clientY) || [];
     for (var i = 0; i < stack.length; i++) {
-      if (stack[i].dataset && stack[i].dataset.editId) return stack[i];
+      if (stack[i].dataset && stack[i].dataset.irPath) return stack[i];
     }
     return null;
   }
@@ -77,27 +81,27 @@
     return raw.length > 80 ? raw.slice(0, 77) + '…' : raw;
   }
   document.addEventListener('click', function(e){
-    var t = resolve(e);
-    var editId = t ? t.dataset.editId : null;
+    var t = resolveIrPath(e);
+    var irPath = t ? t.dataset.irPath : null;
     var text = preview(t);
     var pinMode = root.dataset.penguiPinMode === 'true';
     window.parent.postMessage({
       source: 'pengui-slide',
       type: 'click-debug',
       pinMode: pinMode,
-      editId: editId,
+      irPath: irPath,
       preview: text,
       targetTag: e.target ? (e.target.tagName || '') : '',
       clientX: e.clientX, clientY: e.clientY,
       ts: Date.now()
     }, '*');
-    if (pinMode && editId) {
+    if (pinMode && irPath) {
       e.preventDefault();
       e.stopPropagation();
       window.parent.postMessage({
         source: 'pengui-slide',
         type: 'pintarget',
-        editId: editId,
+        irPath: irPath,
         preview: text
       }, '*');
     }
@@ -129,7 +133,7 @@
   // shipping the panel to end users.
   interface DebugEvent {
     ts: number;
-    editId: string | null;
+    irPath: string | null;
     preview: string;
     targetTag: string;
     pinMode: boolean;
@@ -157,12 +161,12 @@
   const scaledHeight = $derived(NATIVE_HEIGHT * scale);
   const enrichedHtml = $derived(enrichHtml(html));
 
-  // editableCount is recomputed when iframeReady bumps. Used by the debug
-  // panel to confirm the iframe actually has elements with data-edit-id.
-  const editableCount = $derived.by(() => {
+  // pinnableCount is recomputed when iframeReady bumps. Used by the debug
+  // panel to confirm the iframe actually has elements with data-ir-path.
+  const pinnableCount = $derived.by(() => {
     void iframeReady;
     try {
-      return iframeEl?.contentDocument?.querySelectorAll('[data-edit-id]').length ?? 0;
+      return iframeEl?.contentDocument?.querySelectorAll('[data-ir-path]').length ?? 0;
     } catch {
       return 0;
     }
@@ -220,7 +224,7 @@
     const data = event.data as {
       source?: string;
       type?: string;
-      editId?: string | null;
+      irPath?: string | null;
       preview?: string;
       targetTag?: string;
       pinMode?: boolean;
@@ -232,15 +236,15 @@
     // Validate origin is our iframe, not some other frame in the page.
     if (iframeEl && event.source !== iframeEl.contentWindow) return;
 
-    if (data.type === 'pintarget' && typeof data.editId === 'string') {
-      onpintargetRef?.({ editId: data.editId, preview: data.preview ?? '' });
+    if (data.type === 'pintarget' && typeof data.irPath === 'string') {
+      onpintargetRef?.({ irPath: data.irPath, preview: data.preview ?? '' });
       return;
     }
 
     if (data.type === 'click-debug') {
       const ev: DebugEvent = {
         ts: data.ts ?? Date.now(),
-        editId: data.editId ?? null,
+        irPath: data.irPath ?? null,
         preview: data.preview ?? '',
         targetTag: data.targetTag ?? '',
         pinMode: !!data.pinMode,
@@ -296,8 +300,8 @@
   $effect(() => {
     void iframeReady;
     void pinModeState;
-    void pinnedEditIds;
-    void draftPinnedEditId;
+    void pinnedIrPaths;
+    void draftPinnedIrPath;
     const doc = iframeEl?.contentDocument;
     if (doc) applyPinDecorations(doc);
   });
@@ -321,12 +325,16 @@
   }
 
   function applyPinDecorations(doc: Document): void {
-    const editables = doc.querySelectorAll<HTMLElement>('[data-edit-id]');
-    const pinnedSet = new Set(pinnedEditIds);
-    editables.forEach((el) => {
-      const editId = el.dataset.editId ?? '';
-      const isPinned = editId ? pinnedSet.has(editId) : false;
-      const isDraft = !!draftPinnedEditId && editId === draftPinnedEditId;
+    // Pin decorations target `data-ir-path` (every IR-node root), not
+    // `data-edit-id` (text-edit anchors only). Text-edit decorations
+    // are applied by the inline-edit click handler when entering edit
+    // mode and don't need a passive resting state.
+    const pinnable = doc.querySelectorAll<HTMLElement>('[data-ir-path]');
+    const pinnedSet = new Set(pinnedIrPaths);
+    pinnable.forEach((el) => {
+      const irPath = el.dataset.irPath ?? '';
+      const isPinned = irPath ? pinnedSet.has(irPath) : false;
+      const isDraft = !!draftPinnedIrPath && irPath === draftPinnedIrPath;
 
       if (isDraft) {
         // In-flight pin — the user just picked this, their note is
@@ -342,7 +350,7 @@
         el.style.outlineOffset = '2px';
         el.style.backgroundColor = '';
       } else {
-        el.style.cursor = disabledState ? 'default' : 'text';
+        el.style.cursor = disabledState ? 'default' : '';
         el.style.outline = isPinned ? '1px dashed rgba(47, 184, 166, 0.55)' : 'none';
         el.style.outlineOffset = isPinned ? '2px' : '0';
         el.style.backgroundColor = '';
@@ -350,7 +358,7 @@
     });
 
     // In pin mode, the whole slide should feel clickable — shapes and
-    // backgrounds without data-edit-id sit on top of text in z-order,
+    // backgrounds without data-ir-path sit on top of text in z-order,
     // and users shouldn't see a default cursor over them.
     const STYLE_ID = 'pengui-pin-mode-cursor';
     const existing = doc.getElementById(STYLE_ID);
@@ -461,14 +469,14 @@
         >clear</button>
       </div>
       <div class="pin-debug-state">
-        pinMode={pinModeState} · disabled={disabledState} · editables={editableCount}
+        pinMode={pinModeState} · disabled={disabledState} · pinnable={pinnableCount}
       </div>
       {#if debugEvents.length === 0}
         <div class="pin-debug-empty">No clicks yet. Click inside the slide.</div>
       {:else}
         {#each debugEvents as ev (ev.ts)}
-          <div class={`pin-debug-row ${ev.editId ? 'hit' : 'miss'}`}>
-            <span class="pin-debug-id">{ev.editId ?? '—'}</span>
+          <div class={`pin-debug-row ${ev.irPath ? 'hit' : 'miss'}`}>
+            <span class="pin-debug-id">{ev.irPath ?? '—'}</span>
             <span class="pin-debug-tag">{ev.targetTag}</span>
             <span class="pin-debug-coords">{ev.clientX},{ev.clientY}</span>
           </div>

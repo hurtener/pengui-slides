@@ -2,7 +2,7 @@
  * MCP App Tool: add_comment_from_app
  *
  * App-only equivalent of `add_comment`. The MCP App calls this when the
- * user drops a comment pin on a slide, section, or specific element.
+ * user drops a comment pin on a slide, section, or specific IR node.
  * Author is always `'user'` — the app declares on behalf of the user;
  * the agent gets an `add_comment` call for agent-authored notes.
  *
@@ -10,6 +10,11 @@
  * app may use to restore position when the comment is opened later.
  * Echoed back in the response; persistence of UI context is a future
  * concern (extend `Comment` shape if it becomes load-bearing).
+ *
+ * v4.8.5 — element pins use `target.kind="ir_node"` carrying the
+ * structural `ir_path` extracted from the rendered element's
+ * `data-ir-path` attribute. The agent's downstream `apply_*_node_edit`
+ * call accepts the exact same path shape.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -23,13 +28,18 @@ import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 import { formatComment } from '../comments/_format.js';
 
+const irPathSchema = z
+  .array(z.union([z.string(), z.number().int().nonnegative()]))
+  .min(2);
+
 const targetSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('slide'), slide_id: z.string() }),
   z.object({ kind: z.literal('section'), section_id: z.string() }),
   z.object({
-    kind: z.literal('element'),
+    kind: z.literal('ir_node'),
     container_id: z.string(),
-    edit_id: z.string(),
+    ir_path: irPathSchema,
+    preview: z.string().optional(),
   }),
 ]);
 
@@ -43,13 +53,13 @@ export function registerAddCommentFromAppTool(
     {
       title: 'Add Comment (App)',
       description:
-        'Pin a structured comment to a slide, section, or element on behalf of the user. ' +
+        'Pin a structured comment to a slide, section, or IR node on behalf of the user. ' +
         'Author is always "user". Optionally carries UI context (view_uuid, scroll_snapshot) ' +
         'so the app can restore scroll position when the comment is re-opened.',
       inputSchema: z.object({
         deck_id: z.string().describe('Deck the comment belongs to. Accepts UUID or slug.'),
         target: targetSchema.describe(
-          'What the comment pins to: a slide, a section, or a specific element identified by its data-edit-id.',
+          'What the comment pins to: a slide, a section, or a specific IR node by structural path.',
         ),
         kind: z
           .enum(['revision', 'question', 'approval', 'note'])
@@ -79,9 +89,10 @@ export function registerAddCommentFromAppTool(
             : target.kind === 'section'
               ? { kind: 'section', sectionId: sectionId(target.section_id) }
               : {
-                  kind: 'element',
+                  kind: 'ir_node',
                   containerId: target.container_id,
-                  editId: target.edit_id,
+                  irPath: target.ir_path,
+                  ...(target.preview ? { preview: target.preview } : {}),
                 };
 
         const comment = await container.commentService.add({

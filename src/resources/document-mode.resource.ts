@@ -199,7 +199,7 @@ and inserts it into the continuous document. Chromium paginates around it.
 
 Fetch \`pengui://schema/slide-ir\` for the full IR node grammar — sections share
 the same node union (hero / heading / prose / list / image / callout / quote /
-table / divider / two_column).
+table / divider / two_column / grid).
 
 ---
 

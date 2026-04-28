@@ -36,8 +36,15 @@ export {
   TableNodeSchema,
   LeafSlideNodeSchema,
   TwoColumnNodeSchema,
+  GridNodeSchema,
+  TocNodeSchema,
+  SectionDividerNodeSchema,
+  BibliographyNodeSchema,
+  PageBreakNodeSchema,
   SlideNodeSchema,
   SLIDE_NODE_TYPES,
+  SLIDE_ONLY_NODE_TYPES,
+  DOC_ONLY_NODE_TYPES,
   type ColorRole,
   type TextColorRole,
   type HeroNode,
@@ -51,6 +58,12 @@ export {
   type TableNode,
   type LeafSlideNode,
   type TwoColumnNode,
+  type GridNode,
+  type TocNode,
+  type SectionDividerNode,
+  type BibliographyNode,
+  type BibliographyEntry,
+  type PageBreakNode,
   type SlideNode,
   type SlideNodeType,
 } from './nodes.js';
@@ -77,3 +90,10 @@ export {
 } from './compile/index.js';
 
 export { replaceNodeAtPath, type IRPath } from './operations/replace-node.js';
+export { irPathToString, irPathFromString } from './path-encoding.js';
+
+export {
+  lintNodesForMode,
+  type AuthoringMode,
+  type ModeIssue,
+} from './mode-check.js';

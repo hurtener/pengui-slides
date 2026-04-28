@@ -29,8 +29,8 @@ Design Soul tokens. Two authoring models live inside it; pick the right one FIRS
 
 | \`authoringModel\` | Default for | You author | Exports |
 |-------------------|-------------|------------|---------|
-| \`"slides"\` | \`slides_16_9\` (and legacy print, opt-in) | A \`slide_ir\` tree (hero / heading / prose / list / image / callout / quote / table / divider / two_column nodes) per slide. The server compiles to a 1920×1080 (or print-sized) HTML page using soul tokens. | \`export_pptx\`, \`export_pdf\`, \`export_html\`, \`export_google_slides\`, \`render_preview\` |
-| \`"document"\` | \`print_a4_portrait\`, \`print_letter_portrait\` (v3 default) | A \`section_ir\` tree per content block. The server compiles to a single \`<section class="pengui-section pengui-{kind}">\` fragment. The exporter composes sections into one flowing HTML document and lets Chromium paginate. | \`export_pdf\` only |
+| \`"slides"\` | \`slides_16_9\` (and legacy print, opt-in) | A \`slide_ir\` tree (hero / heading / prose / list / image / callout / quote / table / divider / two_column / grid / section_divider nodes) per slide. The server compiles to a 1920×1080 (or print-sized) HTML page using soul tokens. | \`export_pptx\`, \`export_pdf\`, \`export_html\`, \`export_google_slides\`, \`render_preview\` |
+| \`"document"\` | \`print_a4_portrait\`, \`print_letter_portrait\` (v3 default) | A \`section_ir\` tree per content block (same node grammar as slides plus the doc-only nodes \`toc\`, \`bibliography\`, \`page_break\`). The server compiles to a single \`<section class="pengui-section pengui-{kind}">\` fragment. The exporter composes sections into one flowing HTML document and lets Chromium paginate. | \`export_pdf\` only |
 
 \`create_deck\` picks the default model from the \`format\` argument; pass
 \`authoring_model\` explicitly to override. After creation, call
@@ -43,7 +43,7 @@ slide verbs or section verbs.
 |---------|-----------|
 | **Design Soul** | A complete visual identity (colors, typography, spacing, shapes, depth, components, motion). Generates ~73 CSS custom-property tokens, 6 slide recipes, and 11 print recipes. Shared across both authoring models. |
 | **Deck** | An ordered collection of slides **or** sections tied to one Design Soul, with a \`format\` and an \`authoringModel\`. |
-| **SlideIR / SectionIR** | The agent-authored source of truth. A tree of nodes (hero, heading, prose, list, image, callout, quote, table, divider, two_column) referencing soul tokens by SEMANTIC role (\`background: "accent"\` → \`var(--color-accent-primary)\`). Fetch \`pengui://schema/slide-ir\` for the grammar. |
+| **SlideIR / SectionIR** | The agent-authored source of truth. A tree of nodes (hero, heading, prose, list, image, callout, quote, table, divider, two_column, grid, plus mode-specific section_divider / toc / bibliography / page_break) referencing soul tokens by SEMANTIC role (\`background: "accent"\` → \`var(--color-accent-primary)\`). Fetch \`pengui://schema/slide-ir\` for the grammar. |
 | **Slide / Section HTML** | The COMPILED snapshot. Stored alongside the IR for the App, exporters, and validators. Do NOT edit \`html\` directly — mutate the IR and let the server recompile. |
 | **Asset** | An uploaded image (PNG, SVG, JPEG). Referenced from IR by id (\`asset_id: "uuid"\`); the server resolves to data URIs at render/export time. |
 | **Recipe** | A validated layout template (HTML). Inspirational reference only — agents author via IR, not by copying recipe HTML. v4.6+ will add IR-native recipes. |
@@ -740,9 +740,15 @@ Step 2 — Common fixes (most legacy lints don't apply to IR slides — the
   - "schema validation: unknown node type" → fetch
     pengui://schema/slide-ir for the current node grammar
   - "two_column.left/right contains nested two_column" → flatten;
-    nested two_column is explicitly disallowed
+    nested layout containers are explicitly disallowed
+  - "grid.cells[i] contains nested grid / two_column" → flatten; cells
+    must hold leaf nodes only
+  - "grid.cells.length must be a multiple of columns" → pad with empty
+    cell arrays or change \`columns\`
   - (v4.7+) bold + italic + code + strike STACK on a single RichText run
     — no longer split into separate runs
+  - (v4.8) "Slide IR contains doc-only nodes" → \`toc\`, \`bibliography\`,
+    and \`page_break\` are doc-only; reach for headings + lists in slides
 Step 3 — Resubmit via update_slide. Or use validate_slide_ir for a
          schema-only pre-flight check (no storage side effects).
 \`\`\`
@@ -758,6 +764,11 @@ Step 2 — Common fixes (most legacy fragment-contract lints don't fire on
     pengui://schema/slide-ir for the current node grammar
   - "image asset not found" → upload_asset first, use the returned id
   - "two_column.left/right contains nested two_column" → flatten
+  - "grid.cells[i] contains nested grid / two_column" → flatten; cells
+    must hold leaf nodes only
+  - (v4.8) "Section IR contains slide-only nodes" → \`section_divider\`
+    is slide-only; for chapter breaks in documents add a section of
+    \`kind: "chapter_header"\` instead
 Step 3 — Resubmit via update_section. Or use validate_section_ir for a
          schema-only pre-flight check. Stage 2 (split-keep-together,
          orphan-heading) only runs at export_pdf time.

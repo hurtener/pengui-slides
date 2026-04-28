@@ -57,7 +57,7 @@ export function registerUpdateSlideTool(server: McpServer, container: ServiceCon
         '\n\n' +
         '**Read `pengui://schema/slide-ir`** for the node grammar before authoring `slide_ir`. ' +
         '\n\n' +
-        'INPUT — `slide_ir` is the structured tree (hero/prose/image/callout/two_column nodes). Token references are SEMANTIC (e.g. background: "accent"), so the same IR re-renders cleanly when the soul changes. ' +
+        'INPUT — `slide_ir` is the structured tree (hero/prose/image/callout/heading/list/divider/quote/table/two_column/grid/section_divider nodes — see `pengui://schema/slide-ir` for the full v4.8 grammar). Doc-only nodes (toc, bibliography, page_break) are rejected at update time by the slide-mode lint. Token references are SEMANTIC (e.g. background: "accent"), so the same IR re-renders cleanly when the soul changes. ' +
         '\n\n' +
         'PARTIAL UPDATES — omit `slide_ir` to update only metadata. Omit `metadata` to replace only the IR. Both may be set together. ' +
         '\n\n' +

@@ -11,8 +11,13 @@ export function targetLabel(t: CommentTarget): string {
       const id = t.section_id ?? '';
       return `section:${id.slice(0, 8)}`;
     }
-    case 'element':
-      return `${t.container_id.slice(0, 6)}#${t.edit_id}`;
+    case 'ir_node': {
+      // Show the node-relative tail of the path so it's readable in the
+      // drawer ("body,2,left,1" → "body,2,left,1"); the preview, when
+      // captured, sits next to it in the row layout already.
+      const path = t.ir_path.join(',');
+      return `${t.container_id.slice(0, 6)}#${path}`;
+    }
   }
 }
 

@@ -61,7 +61,7 @@ export function registerUpdateSectionTool(server: McpServer, container: ServiceC
         '\n\n' +
         '**Read `pengui://schema/slide-ir`** for the node grammar before authoring `section_ir` — sections share the slide IR. ' +
         '\n\n' +
-        'INPUT — `section_ir` is the structured tree (hero/prose/image/callout/two_column nodes). ' +
+        'INPUT — `section_ir` is the structured tree (hero/prose/image/callout/heading/list/divider/quote/table/two_column/grid/toc/bibliography/page_break — see `pengui://schema/slide-ir` for the full v4.8 grammar). Slide-only nodes (section_divider) are rejected at update time by the doc-mode lint. ' +
         'When provided, the HTML fragment is recompiled from the new IR. Token references are SEMANTIC ' +
         '(e.g. background: "accent"); the same IR re-renders cleanly when the soul changes. ' +
         '\n\n' +

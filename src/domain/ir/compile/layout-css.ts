@@ -268,6 +268,139 @@ export const NODE_CSS = `
   min-width: 0;
   justify-content: center;
 }
+
+.pengui-grid {
+  display: grid;
+  align-items: start;
+}
+.pengui-grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+.pengui-grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+.pengui-grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+.pengui-grid-align-start { align-items: start; }
+.pengui-grid-align-center { align-items: center; }
+.pengui-grid-align-stretch { align-items: stretch; }
+.pengui-grid-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+/* v4.8 mode-specific nodes */
+
+.pengui-toc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  font-family: var(--font-body);
+  color: var(--color-text-default);
+}
+.pengui-toc-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--letter-spacing-heading);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-default);
+}
+.pengui-toc-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.pengui-toc-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+  font-size: var(--text-body);
+  color: var(--color-text-default);
+  border-bottom: 1px dotted var(--color-border);
+  padding-bottom: var(--space-xs);
+}
+.pengui-toc-list a {
+  color: var(--color-text-default);
+  text-decoration: none;
+}
+
+.pengui-section-divider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-xl) var(--space-lg);
+  text-align: center;
+}
+.pengui-section-divider-label {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--letter-spacing-heading);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-default);
+  text-transform: uppercase;
+}
+.pengui-section-divider-ornament {
+  display: block;
+}
+.pengui-section-divider-ornament-rule {
+  width: 96px;
+  height: 0;
+  border-top: 2px solid var(--color-accent-primary);
+}
+.pengui-section-divider-ornament-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-accent-primary);
+}
+
+.pengui-bibliography {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.pengui-bibliography-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--letter-spacing-heading);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-default);
+}
+.pengui-bibliography-list {
+  margin: 0;
+  padding-left: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: var(--line-height-body);
+  color: var(--color-text-default);
+}
+.pengui-bibliography-item {
+  margin: 0;
+}
+.pengui-bibliography-item a {
+  color: var(--color-accent-primary);
+  text-decoration: underline;
+}
+
+.pengui-page-break {
+  break-after: page;
+  page-break-after: always;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
 `;
 
 /** Slide-mode wrapper CSS: page reset + .slide canvas sized to the
@@ -319,6 +452,10 @@ body {
   text-align: center;
 }
 .slide > .pengui-two-column {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.slide > .pengui-grid {
   flex: 1 1 auto;
   min-height: 0;
 }
