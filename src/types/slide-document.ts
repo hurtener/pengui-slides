@@ -181,7 +181,7 @@ export type SlideElement =
  *       compiler branch). Mode-specific nodes (toc, section_divider,
  *       bibliography, page_break) don't reach the slide-document path.
  */
-export const CURRENT_COMPILER_REVISION = 5;
+export const CURRENT_COMPILER_REVISION = 6;
 
 export interface SlideDocument {
   version: '1';

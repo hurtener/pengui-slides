@@ -141,7 +141,7 @@ export interface EditorSelectedSlide {
   slideId: string;
   position: number;
   html: string;
-  sourceKind?: 'legacy_html' | 'document_v1';
+  sourceKind?: 'legacy_html' | 'document_v1' | 'authored_ir';
   document?: SlideDocument | null;
   translationIssues?: SlideTranslationIssue[];
   editableExportReady?: boolean;

@@ -96,22 +96,40 @@ export function renderNode(node: SlideNode, path: IRPath = []): string {
   }
 }
 
+/**
+ * Build a `data-ir-rt-field="<name>"` attribute fragment. Used by the
+ * MCP App in v4.9c to make rich-text fields directly editable inline:
+ * a click on a marked element activates contentEditable; on commit the
+ * App posts the parsed body back through `apply_slide_field_edit` /
+ * `apply_section_field_edit`. The field name addresses one slot inside
+ * the IR node carrying the closest `data-ir-path` ancestor.
+ */
+function fieldAttr(field: string): string {
+  return ` data-ir-rt-field="${escapeAttr(field)}"`;
+}
+
 function renderHero(node: HeroNode, dataAttr: string): string {
   const align = node.align ?? 'left';
   const parts: string[] = [];
   if (node.eyebrow && node.eyebrow.length > 0) {
-    parts.push(`<p class="pengui-hero-eyebrow">${renderRichText(node.eyebrow)}</p>`);
+    parts.push(
+      `<p class="pengui-hero-eyebrow"${fieldAttr('eyebrow')}>${renderRichText(node.eyebrow)}</p>`,
+    );
   }
-  parts.push(`<h1 class="pengui-hero-title">${renderRichText(node.title)}</h1>`);
+  parts.push(
+    `<h1 class="pengui-hero-title"${fieldAttr('title')}>${renderRichText(node.title)}</h1>`,
+  );
   if (node.subtitle && node.subtitle.length > 0) {
-    parts.push(`<p class="pengui-hero-subtitle">${renderRichText(node.subtitle)}</p>`);
+    parts.push(
+      `<p class="pengui-hero-subtitle"${fieldAttr('subtitle')}>${renderRichText(node.subtitle)}</p>`,
+    );
   }
   return `<div class="pengui-hero pengui-align-${align}"${dataAttr}>${parts.join('')}</div>`;
 }
 
 function renderProse(node: ProseNode, dataAttr: string): string {
   const align = node.align ?? 'left';
-  return `<p class="pengui-prose pengui-align-${align}"${dataAttr}>${renderRichText(node.body)}</p>`;
+  return `<p class="pengui-prose pengui-align-${align}"${dataAttr}${fieldAttr('body')}>${renderRichText(node.body)}</p>`;
 }
 
 function renderImage(node: ImageNode, dataAttr: string): string {
@@ -126,7 +144,7 @@ function renderImage(node: ImageNode, dataAttr: string): string {
         : '';
   const captionHtml =
     node.caption && node.caption.length > 0
-      ? `<figcaption class="pengui-image-caption">${renderRichText(node.caption)}</figcaption>`
+      ? `<figcaption class="pengui-image-caption"${fieldAttr('caption')}>${renderRichText(node.caption)}</figcaption>`
       : '';
   return (
     `<figure class="pengui-image pengui-image-${fit}"${dataAttr}>` +
@@ -138,12 +156,12 @@ function renderImage(node: ImageNode, dataAttr: string): string {
 
 function renderCallout(node: CalloutNode, dataAttr: string): string {
   const titleHtml = node.title && node.title.length > 0
-    ? `<p class="pengui-callout-title">${renderRichText(node.title)}</p>`
+    ? `<p class="pengui-callout-title"${fieldAttr('title')}>${renderRichText(node.title)}</p>`
     : '';
   return (
     `<aside class="pengui-callout pengui-callout-${node.kind}"${dataAttr}>` +
     titleHtml +
-    `<div class="pengui-callout-body">${renderRichText(node.body)}</div>` +
+    `<div class="pengui-callout-body"${fieldAttr('body')}>${renderRichText(node.body)}</div>` +
     `</aside>`
   );
 }
@@ -151,13 +169,16 @@ function renderCallout(node: CalloutNode, dataAttr: string): string {
 function renderHeading(node: HeadingNode, dataAttr: string): string {
   const align = node.align ?? 'left';
   const tag = `h${node.level}`;
-  return `<${tag} class="pengui-heading pengui-heading-${node.level} pengui-align-${align}"${dataAttr}>${renderRichText(node.text)}</${tag}>`;
+  return `<${tag} class="pengui-heading pengui-heading-${node.level} pengui-align-${align}"${dataAttr}${fieldAttr('text')}>${renderRichText(node.text)}</${tag}>`;
 }
 
 function renderList(node: ListNode, dataAttr: string): string {
   const tag = node.style === 'numbered' ? 'ol' : 'ul';
   const items = node.items
-    .map((item) => `<li class="pengui-list-item">${renderRichText(item)}</li>`)
+    .map(
+      (item, i) =>
+        `<li class="pengui-list-item"${fieldAttr(`items[${i}]`)}>${renderRichText(item)}</li>`,
+    )
     .join('');
   return `<${tag} class="pengui-list pengui-list-${node.style}"${dataAttr}>${items}</${tag}>`;
 }
@@ -170,11 +191,11 @@ function renderDivider(node: DividerNode, dataAttr: string): string {
 function renderQuote(node: QuoteNode, dataAttr: string): string {
   const attribution =
     node.attribution && node.attribution.length > 0
-      ? `<cite class="pengui-quote-attribution">${renderRichText(node.attribution)}</cite>`
+      ? `<cite class="pengui-quote-attribution"${fieldAttr('attribution')}>${renderRichText(node.attribution)}</cite>`
       : '';
   return (
     `<blockquote class="pengui-quote"${dataAttr}>` +
-    `<p class="pengui-quote-body">${renderRichText(node.body)}</p>` +
+    `<p class="pengui-quote-body"${fieldAttr('body')}>${renderRichText(node.body)}</p>` +
     attribution +
     `</blockquote>`
   );

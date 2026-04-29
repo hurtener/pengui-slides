@@ -11,6 +11,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import CommentDrawer from '../lib/CommentDrawer.svelte';
+  import AssetPicker from '../lib/AssetPicker.svelte';
+  import BlockActionBar from '../lib/BlockActionBar.svelte';
   import { Button, Card, Pill } from '../lib/primitives/index';
   import type {
     McpDeckEditorBridge,
@@ -19,6 +21,8 @@
     SectionDetail,
     DesignSoul,
   } from '../lib/bridge';
+  import { STRUCTURE_BRIDGE_SCRIPT } from '../lib/structureBridge';
+  import { decodeIrPath, isPathInside } from '../lib/irPath';
 
   interface Props {
     bridge: McpDeckEditorBridge;
@@ -66,6 +70,77 @@
   let commentDraft = $state('');
   let commentKind = $state<'revision' | 'question' | 'approval' | 'note'>('note');
   let commentPending = $state(false);
+
+  // v4.9 edit-layout mode for sections: clicking a block in the
+  // section iframe selects it; a parent-DOM action bar (BlockActionBar)
+  // appears under the canvas with the actions targeting the selected
+  // block. Wired to the `*_section_node` MCP tools.
+  let structureMode = $state(false);
+  let structureStatus = $state('');
+  let structureStatusTimer: ReturnType<typeof setTimeout> | null = null;
+  let sectionFrameEl = $state<HTMLIFrameElement | null>(null);
+  let selectedIrPath = $state<string | null>(null);
+  let selectedPreview = $state<string>('');
+  let selectedSiblingIndex = $state<number>(-1);
+  let selectedSiblingCount = $state<number>(0);
+
+  function setStructureStatus(text: string): void {
+    structureStatus = text;
+    if (structureStatusTimer) clearTimeout(structureStatusTimer);
+    if (text) {
+      structureStatusTimer = setTimeout(() => {
+        structureStatus = '';
+        structureStatusTimer = null;
+      }, 3500);
+    }
+  }
+
+  // Image picker for sections — same component used in the slide editor.
+  interface PickerAsset {
+    asset_id: string;
+    label?: string;
+    name?: string;
+    filename?: string;
+    mime_type: string;
+    role: string;
+    data_base64?: string;
+  }
+  let assetPickerOpen = $state(false);
+  let assetPickerTargetPath = $state<ReadonlyArray<string | number> | null>(null);
+  let assetPickerTargetIndex = $state(0);
+
+  function openAssetPicker(parentPath: ReadonlyArray<string | number>, position: number): void {
+    assetPickerTargetPath = parentPath;
+    assetPickerTargetIndex = position;
+    assetPickerOpen = true;
+  }
+  function closeAssetPicker(): void {
+    assetPickerOpen = false;
+    assetPickerTargetPath = null;
+  }
+  async function handleAssetPick(a: PickerAsset): Promise<void> {
+    const path = assetPickerTargetPath;
+    const pos = assetPickerTargetIndex;
+    assetPickerOpen = false;
+    assetPickerTargetPath = null;
+    if (!path || !selectedId) return;
+    try {
+      await bridge.insertSectionNode({
+        deck_id: deckRef,
+        section_id: selectedId,
+        parent_path: path,
+        position: pos,
+        new_node: {
+          type: 'image',
+          asset_id: a.asset_id,
+          ...(a.label ? { alt: a.label } : {}),
+        },
+      });
+      setStructureStatus('Image added.');
+    } catch (err) {
+      setStructureStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
 
   // Local edit state for break hints (mirrors the server shape).
   let hintBreakBefore = $state<'' | 'auto' | 'page' | 'avoid'>('');
@@ -335,8 +410,300 @@
       <style>${fallback}</style>
       <style id="pengui-soul-tokens">${soulTokens}</style>
       <style>${shell}</style>
-    </head><body>${html}</body></html>`;
+    </head><body>${html}${STRUCTURE_BRIDGE_SCRIPT}</body></html>`;
   }
+
+  // ── Edit-layout iframe wiring ──────────────────────────────────────
+  // Sync the parent's mode flags into the iframe's documentElement
+  // dataset on every change, and route the bridge's select-block /
+  // structure-reorder / rt-field-commit / selection-info postMessages
+  // to the matching `*_section_node` MCP tools and local state.
+
+  function syncStructureModeToFrame(): void {
+    const doc = sectionFrameEl?.contentDocument;
+    if (!doc) return;
+    try {
+      doc.documentElement.dataset.penguiStructureMode = String(structureMode);
+      // Doc-mode supports image insertion the same way as slide-mode —
+      // the AssetPicker is wired below.
+      doc.documentElement.dataset.penguiAllowImageInsert = 'true';
+      // The section iframe is rendered at native size (no parent CSS
+      // scaling), so the bridge's inverse-scale is a no-op. Set the
+      // variable explicitly so the bridge has a consistent default.
+      doc.documentElement.style.setProperty('--pengui-frame-scale', '1');
+    } catch {
+      // ignore cross-frame access errors
+    }
+  }
+
+  $effect(() => {
+    void structureMode;
+    void detail;
+    syncStructureModeToFrame();
+  });
+
+  type SectionAction =
+    | 'delete'
+    | 'duplicate'
+    | 'move_up'
+    | 'move_down'
+    | 'insert_after'
+    | 'insert_image_after';
+
+  async function runBlockAction(action: SectionAction): Promise<void> {
+    if (!detail || !selectedId || !selectedIrPath) return;
+    const path = decodeIrPath(selectedIrPath);
+    if (path.length < 2) return;
+    const parentPath = path.slice(0, -1);
+    const lastSeg = path[path.length - 1];
+    if (typeof lastSeg !== 'number') return;
+
+    setStructureStatus('');
+    try {
+      switch (action) {
+        case 'delete':
+          await bridge.removeSectionNode({
+            deck_id: deckRef,
+            section_id: selectedId,
+            path,
+          });
+          setStructureStatus('Deleted.');
+          selectedIrPath = null;
+          selectedPreview = '';
+          break;
+        case 'duplicate':
+          await bridge.duplicateSectionNode({
+            deck_id: deckRef,
+            section_id: selectedId,
+            path,
+          });
+          setStructureStatus('Duplicated.');
+          break;
+        case 'move_up':
+          if (lastSeg === 0) {
+            setStructureStatus('Already at the top.');
+            return;
+          }
+          await bridge.moveSectionNode({
+            deck_id: deckRef,
+            section_id: selectedId,
+            from_path: path,
+            to_parent_path: parentPath,
+            to_position: lastSeg - 1,
+          });
+          setStructureStatus('Moved up.');
+          selectedIrPath = [...parentPath, lastSeg - 1].join(',');
+          break;
+        case 'move_down':
+          // `to_position` is interpreted PRE-removal in moveNodeAtPath:
+          // same-container forward moves decrement by 1 internally to
+          // honor "drop after the sibling currently at slot N" semantics.
+          // To skip past the immediate-next sibling we need lastSeg+2,
+          // not lastSeg+1 (which would land back at lastSeg — a no-op).
+          await bridge.moveSectionNode({
+            deck_id: deckRef,
+            section_id: selectedId,
+            from_path: path,
+            to_parent_path: parentPath,
+            to_position: lastSeg + 2,
+          });
+          setStructureStatus('Moved down.');
+          selectedIrPath = [...parentPath, lastSeg + 1].join(',');
+          break;
+        case 'insert_after':
+          await bridge.insertSectionNode({
+            deck_id: deckRef,
+            section_id: selectedId,
+            parent_path: parentPath,
+            position: lastSeg + 1,
+            new_node: {
+              type: 'prose',
+              body: [{ text: 'New paragraph — click to edit.' }],
+            },
+          });
+          setStructureStatus('Paragraph added.');
+          break;
+        case 'insert_image_after':
+          openAssetPicker(parentPath, lastSeg + 1);
+          break;
+      }
+    } catch (err) {
+      setStructureStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  function deselectBlock(): void {
+    selectedIrPath = null;
+    selectedPreview = '';
+    selectedSiblingIndex = -1;
+    selectedSiblingCount = 0;
+  }
+
+  function toggleStructureMode(): void {
+    structureMode = !structureMode;
+    setStructureStatus('');
+    if (!structureMode) {
+      selectedIrPath = null;
+      selectedPreview = '';
+      selectedSiblingIndex = -1;
+      selectedSiblingCount = 0;
+    }
+  }
+
+  // Sync selectedIrPath into the section iframe so the bridge paints
+  // the persistent selection outline.
+  $effect(() => {
+    void selectedIrPath;
+    void detail;
+    const doc = sectionFrameEl?.contentDocument;
+    if (!doc) return;
+    try {
+      if (selectedIrPath) {
+        doc.documentElement.dataset.penguiSelectedPath = selectedIrPath;
+      } else {
+        delete doc.documentElement.dataset.penguiSelectedPath;
+      }
+    } catch {
+      /* ignore cross-frame access */
+    }
+  });
+
+  // Rich-text field commit on doc-mode sections: routes through the new
+  // `apply_section_field_edit` tool, so every rich-text field on a
+  // section IR is editable inline (prose body, hero title/subtitle,
+  // heading text, list items, callout body, etc.).
+  async function handleSectionRichTextCommit(
+    irPath: string,
+    field: string,
+    body: ReadonlyArray<Record<string, unknown>>,
+  ): Promise<void> {
+    if (!selectedId) return;
+    const path = decodeIrPath(irPath);
+    if (path.length < 2) return;
+    const safeBody = body.length > 0 ? body : [{ text: '' }];
+    try {
+      await bridge.callTool('apply_section_field_edit', {
+        deck_id: deckRef,
+        section_id: selectedId,
+        path,
+        field,
+        value: safeBody,
+      });
+    } catch (err) {
+      setStructureStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function handleSectionStructureReorder(
+    srcIrPath: string,
+    destIrPath: string,
+    position: 'above' | 'below',
+  ): Promise<void> {
+    if (!detail || !selectedId) return;
+    const src = decodeIrPath(srcIrPath);
+    const dest = decodeIrPath(destIrPath);
+    if (src.length < 2 || dest.length < 2) return;
+    if (isPathInside(dest, src)) {
+      setStructureStatus("Can't drop a block onto itself.");
+      return;
+    }
+    const destParent = dest.slice(0, -1);
+    const destLast = dest[dest.length - 1];
+    if (typeof destLast !== 'number') return;
+    const toPosition = position === 'above' ? destLast : destLast + 1;
+
+    // No-op detection: same parent + landing on the source's current
+    // slot would do nothing. Surface a hint instead of looking broken.
+    const srcParent = src.slice(0, -1);
+    const srcLast = src[src.length - 1];
+    const sameParent =
+      srcParent.length === destParent.length &&
+      srcParent.every((seg, i) => seg === destParent[i]);
+    if (sameParent && typeof srcLast === 'number') {
+      const landing = toPosition > srcLast ? toPosition - 1 : toPosition;
+      if (landing === srcLast) {
+        setStructureStatus(
+          'Already in that slot — drop in the lower half to move down.'
+        );
+        return;
+      }
+    }
+
+    setStructureStatus('');
+    try {
+      await bridge.moveSectionNode({
+        deck_id: deckRef,
+        section_id: selectedId,
+        from_path: src,
+        to_parent_path: destParent,
+        to_position: toPosition,
+      });
+      setStructureStatus('Moved.');
+    } catch (err) {
+      setStructureStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  onMount(() => {
+    function onMessage(event: MessageEvent): void {
+      const data = event.data as {
+        source?: string;
+        type?: string;
+        irPath?: string | null;
+        preview?: string;
+        srcIrPath?: string;
+        destIrPath?: string;
+        position?: string;
+        field?: string;
+        body?: ReadonlyArray<Record<string, unknown>>;
+      } | null;
+      if (!data || data.source !== 'pengui-slide') return;
+      if (sectionFrameEl && event.source !== sectionFrameEl.contentWindow) return;
+
+      if (data.type === 'structure-reorder') {
+        if (typeof data.srcIrPath === 'string' && typeof data.destIrPath === 'string') {
+          const pos: 'above' | 'below' = data.position === 'above' ? 'above' : 'below';
+          void handleSectionStructureReorder(data.srcIrPath, data.destIrPath, pos);
+        }
+        return;
+      }
+
+      if (data.type === 'select-block') {
+        selectedIrPath = typeof data.irPath === 'string' ? data.irPath : null;
+        selectedPreview = typeof data.preview === 'string' ? data.preview : '';
+        selectedSiblingIndex =
+          typeof data.siblingIndex === 'number' ? data.siblingIndex : -1;
+        selectedSiblingCount =
+          typeof data.siblingCount === 'number' ? data.siblingCount : 0;
+        return;
+      }
+
+      // Bridge re-emits sibling-info every time it (re)applies the
+      // selection outline. Refresh the action-bar's edge state
+      // without clobbering the previously-clicked preview.
+      if (data.type === 'selection-info') {
+        if (typeof data.irPath === 'string') selectedIrPath = data.irPath;
+        if (typeof data.siblingIndex === 'number') selectedSiblingIndex = data.siblingIndex;
+        if (typeof data.siblingCount === 'number') selectedSiblingCount = data.siblingCount;
+        return;
+      }
+
+      if (data.type === 'rt-field-commit') {
+        if (
+          typeof data.irPath === 'string' &&
+          typeof data.field === 'string' &&
+          Array.isArray(data.body)
+        ) {
+          void handleSectionRichTextCommit(
+            data.irPath,
+            data.field,
+            data.body as ReadonlyArray<Record<string, unknown>>,
+          );
+        }
+        return;
+      }
+    };
+  });
 </script>
 
 <div class="doc-editor">
@@ -393,6 +760,19 @@
             <Pill tone={detail.last_validation?.passed ? 'success' : 'warning'} size="sm">
               {detail.last_validation?.passed ? 'Valid' : 'Needs review'}
             </Pill>
+            <Button
+              variant={structureMode ? 'primary' : 'ghost'}
+              size="sm"
+              onclick={toggleStructureMode}
+              title={structureMode
+                ? 'Exit edit-layout mode and return to text editing.'
+                : 'Rearrange, add, or delete blocks in this section.'}
+            >
+              {structureMode ? 'Done' : 'Edit layout'}
+            </Button>
+            {#if structureStatus}
+              <span class="structure-status">{structureStatus}</span>
+            {/if}
             <Button variant="ghost" size="sm" onclick={() => { commentDrawerOpen = !commentDrawerOpen; }}>
               Comments
             </Button>
@@ -407,13 +787,51 @@
           <div class="canvas-empty muted">Select a section from the left rail.</div>
         {:else}
           <iframe
+            bind:this={sectionFrameEl}
             class="section-frame"
             title="Section preview"
             srcdoc={previewSrcDoc}
-            sandbox="allow-same-origin"
+            sandbox="allow-same-origin allow-scripts"
+            onload={() => syncStructureModeToFrame()}
           ></iframe>
         {/if}
       </div>
+
+      {#if detail && structureMode}
+        <BlockActionBar
+          selectedIrPath={selectedIrPath}
+          selectedPreview={selectedPreview}
+          canMoveUp={selectedSiblingIndex > 0}
+          canMoveDown={
+            selectedSiblingIndex >= 0 &&
+            selectedSiblingCount > 0 &&
+            selectedSiblingIndex < selectedSiblingCount - 1
+          }
+          onMoveUp={() => runBlockAction('move_up')}
+          onMoveDown={() => runBlockAction('move_down')}
+          onDuplicate={() => runBlockAction('duplicate')}
+          onAddParagraph={() => runBlockAction('insert_after')}
+          onAddImage={() => runBlockAction('insert_image_after')}
+          onDelete={() => runBlockAction('delete')}
+          onDeselect={deselectBlock}
+        />
+      {/if}
+
+      {#if detail}
+        <p class="canvas-tip" role="note">
+          {#if structureMode}
+            {#if selectedIrPath}
+              Use the action bar above. Or drag a block to reorder — a mint line
+              shows where it will land.
+            {:else}
+              Click any block to select it. The action bar appears below.
+            {/if}
+          {:else}
+            Tip: click any text to edit it. Select text to format.
+            Use <strong>Edit layout</strong> to reorder, add or delete blocks.
+          {/if}
+        </p>
+      {/if}
     </Card>
 
     <!-- Comment composer (section-scoped by default) -->
@@ -563,6 +981,14 @@
     open={commentDrawerOpen}
     onClose={() => { commentDrawerOpen = false; }}
     onJump={handleCommentJump}
+  />
+
+  <!-- Image picker (opened by Edit-layout → Add image) -->
+  <AssetPicker
+    {bridge}
+    open={assetPickerOpen}
+    onPick={handleAssetPick}
+    onClose={closeAssetPicker}
   />
 </div>
 
@@ -771,6 +1197,25 @@
     min-height: 480px;
     background: #fafafa;
     display: block;
+  }
+
+  .canvas-tip {
+    margin: 0;
+    padding: var(--s-2) var(--s-4) var(--s-3);
+    color: var(--ink-3);
+    font-size: 12px;
+    line-height: 1.5;
+    border-top: 1px solid var(--border-hairline);
+  }
+
+  .canvas-tip strong {
+    color: var(--ink-2);
+    font-weight: 600;
+  }
+
+  .structure-status {
+    font-size: 11px;
+    color: var(--ink-3);
   }
 
   /* ── Comment composer (doc) ───────────────────────────────── */

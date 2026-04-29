@@ -6,6 +6,9 @@
 
 import { toast } from './toast.svelte';
 import type { DeckEditorBridge, EditorState, ToolCallResult } from '../lib/types';
+import type { McpDeckEditorBridge } from '../lib/bridge';
+
+export type IrPathArray = ReadonlyArray<string | number>;
 
 interface DeckStoreState {
   currentDeckId: string | null;
@@ -117,6 +120,125 @@ function createDeckStore(bridge: DeckEditorBridge) {
     await loadEditor(deckId, slideId);
   }
 
+  // ── Structural ops (v4.9) ──────────────────────────────────────────────
+  // Each wrapper sets `saving`, calls the raw bridge method, then reloads
+  // editor state so HTML / validation / pin decorations all refresh.
+  // Errors surface via toast and leave the editor state untouched.
+
+  function structuralBridge(): McpDeckEditorBridge | null {
+    return (bridge as unknown as McpDeckEditorBridge | null) ?? null;
+  }
+
+  async function withStructuralSave<T>(label: string, fn: () => Promise<T>): Promise<T | null> {
+    if (!state.editorState || state.saving) return null;
+    state.saving = true;
+    state.conflictMessage = '';
+    try {
+      const result = await fn();
+      await refresh();
+      return result;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`${label}: ${msg}`);
+      state.conflictMessage = msg;
+      return null;
+    } finally {
+      state.saving = false;
+    }
+  }
+
+  async function removeSlideNode(path: IrPathArray): Promise<void> {
+    const b = structuralBridge();
+    const es = state.editorState;
+    if (!b || !es) return;
+    await withStructuralSave('Delete failed', () =>
+      b.removeSlideNode({
+        deck_id: es.deck.id,
+        slide_id: es.selectedSlide.slideId,
+        path,
+      }),
+    );
+  }
+
+  async function duplicateSlideNode(path: IrPathArray, position?: number): Promise<void> {
+    const b = structuralBridge();
+    const es = state.editorState;
+    if (!b || !es) return;
+    await withStructuralSave('Duplicate failed', () =>
+      b.duplicateSlideNode({
+        deck_id: es.deck.id,
+        slide_id: es.selectedSlide.slideId,
+        path,
+        ...(typeof position === 'number' ? { position } : {}),
+      }),
+    );
+  }
+
+  async function moveSlideNode(
+    fromPath: IrPathArray,
+    toParentPath: IrPathArray,
+    toPosition: number,
+  ): Promise<void> {
+    const b = structuralBridge();
+    const es = state.editorState;
+    if (!b || !es) return;
+    await withStructuralSave('Move failed', () =>
+      b.moveSlideNode({
+        deck_id: es.deck.id,
+        slide_id: es.selectedSlide.slideId,
+        from_path: fromPath,
+        to_parent_path: toParentPath,
+        to_position: toPosition,
+      }),
+    );
+  }
+
+  async function insertSlideNode(
+    parentPath: IrPathArray,
+    position: number,
+    newNode: Record<string, unknown>,
+  ): Promise<void> {
+    const b = structuralBridge();
+    const es = state.editorState;
+    if (!b || !es) return;
+    await withStructuralSave('Insert failed', () =>
+      b.insertSlideNode({
+        deck_id: es.deck.id,
+        slide_id: es.selectedSlide.slideId,
+        parent_path: parentPath,
+        position,
+        new_node: newNode,
+      }),
+    );
+  }
+
+  /**
+   * Commit a rich-text edit on one named field of an IR node (v4.9c).
+   * Routes through the new `apply_slide_field_edit` tool — only the
+   * addressed field is rewritten, every sibling field stays put.
+   * Works for prose body, hero title/subtitle/eyebrow, heading text,
+   * list items, callout title/body, quote body/attribution, image
+   * caption.
+   */
+  async function applyFieldRichTextEdit(
+    path: IrPathArray,
+    field: string,
+    body: ReadonlyArray<Record<string, unknown>>,
+  ): Promise<void> {
+    const b = structuralBridge();
+    const es = state.editorState;
+    if (!b || !es) return;
+    await withStructuralSave('Edit failed', () =>
+      b.callTool('apply_slide_field_edit', {
+        deck_id: es.deck.id,
+        slide_id: es.selectedSlide.slideId,
+        path,
+        field,
+        value: body,
+      }),
+    );
+  }
+
   function applyIncomingState(result: ToolCallResult<Record<string, unknown>>): void {
     const next = extractEditorState(result);
     if (next) {
@@ -140,6 +262,11 @@ function createDeckStore(bridge: DeckEditorBridge) {
     applyTextEdit,
     refresh,
     applyIncomingState,
+    removeSlideNode,
+    duplicateSlideNode,
+    moveSlideNode,
+    insertSlideNode,
+    applyFieldRichTextEdit,
   };
 }
 

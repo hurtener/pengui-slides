@@ -35,8 +35,13 @@ import { RevisionTracker } from '../decks/revision-tracker.js';
 import { embedSectionMeta } from './section-meta-embedder.js';
 import {
   compileSectionIRToHtml,
+  duplicateNodeAtPath,
+  insertNodeAtPath,
   lintNodesForMode,
+  moveNodeAtPath,
+  removeNodeAtPath,
   replaceNodeAtPath,
+  setNodeFieldAtPath,
   type IRPath,
 } from '../ir/index.js';
 import type { SlideNode } from '../ir/index.js';
@@ -394,6 +399,120 @@ export class DocumentService {
       ir: nextIR,
     });
     return result.section;
+  }
+
+  // ── v4.9 structural ops (section mirrors) ───────────────────────
+
+  /** Insert a node into a section's IR. */
+  async insertSectionNode(input: {
+    deckId: string;
+    sectionId: string;
+    parentPath: IRPath;
+    position: number;
+    newNode: SlideNode;
+  }): Promise<Section> {
+    const existing = await this.requireSection(input.sectionId);
+    const nextIR = insertNodeAtPath(existing.ir, input.parentPath, input.position, input.newNode);
+    const result = await this.updateSection({
+      deckId: input.deckId,
+      sectionId: input.sectionId,
+      ir: nextIR,
+    });
+    return result.section;
+  }
+
+  /** Remove a node from a section's IR. */
+  async removeSectionNode(input: {
+    deckId: string;
+    sectionId: string;
+    path: IRPath;
+  }): Promise<Section> {
+    const existing = await this.requireSection(input.sectionId);
+    const nextIR = removeNodeAtPath(existing.ir, input.path);
+    const result = await this.updateSection({
+      deckId: input.deckId,
+      sectionId: input.sectionId,
+      ir: nextIR,
+    });
+    return result.section;
+  }
+
+  /** Duplicate a node within its container. */
+  async duplicateSectionNode(input: {
+    deckId: string;
+    sectionId: string;
+    path: IRPath;
+    position?: number;
+  }): Promise<Section> {
+    const existing = await this.requireSection(input.sectionId);
+    const nextIR = duplicateNodeAtPath(existing.ir, input.path, input.position);
+    const result = await this.updateSection({
+      deckId: input.deckId,
+      sectionId: input.sectionId,
+      ir: nextIR,
+    });
+    return result.section;
+  }
+
+  /** Move a node within or across containers. Returns the new path. */
+  async moveSectionNode(input: {
+    deckId: string;
+    sectionId: string;
+    fromPath: IRPath;
+    toParentPath: IRPath;
+    toPosition: number;
+  }): Promise<{ section: Section; newPath: IRPath }> {
+    const existing = await this.requireSection(input.sectionId);
+    const { root: nextIR, newPath } = moveNodeAtPath(
+      existing.ir,
+      input.fromPath,
+      input.toParentPath,
+      input.toPosition,
+    );
+    const result = await this.updateSection({
+      deckId: input.deckId,
+      sectionId: input.sectionId,
+      ir: nextIR,
+    });
+    return { section: result.section, newPath };
+  }
+
+  /**
+   * v4.9c — write one named field of an IR node inside a section.
+   * Mirror of `DeckService.applySlideFieldEdit`. The MCP App calls
+   * this when the user finishes editing a `[data-ir-rt-field]`
+   * element inline.
+   */
+  async applySectionFieldEdit(input: {
+    deckId: string;
+    sectionId: string;
+    path: IRPath;
+    field: string;
+    value: unknown;
+  }): Promise<Section> {
+    const existing = await this.requireSection(input.sectionId);
+    if (!existing.ir) {
+      throw new PenguiError(
+        ErrorCode.SECTION_INVALID_FRAGMENT,
+        `Section "${input.sectionId}" has no IR; field edits require IR-authored sections.`,
+      );
+    }
+    const nextIR = setNodeFieldAtPath(existing.ir, input.path, input.field, input.value);
+    const result = await this.updateSection({
+      deckId: input.deckId,
+      sectionId: input.sectionId,
+      ir: nextIR,
+    });
+    return result.section;
+  }
+
+  private async requireSection(sectionIdStr: string): Promise<Section> {
+    const sid = sectionId(sectionIdStr);
+    const existing = await this.sectionStore.get(sid);
+    if (!existing) {
+      throw new SectionNotFoundError(sectionIdStr);
+    }
+    return existing;
   }
 
   // ── Remove Section ───────────────────────────────────────────────

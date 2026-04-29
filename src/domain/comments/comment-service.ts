@@ -26,6 +26,7 @@ import {
 import { generateCommentId, type Clock } from '../../infrastructure/index.js';
 import type { Logger } from '../../infrastructure/index.js';
 import type { DeckService } from '../decks/deck-service.js';
+import type { IRPath } from '../ir/index.js';
 
 export class CommentService {
   constructor(
@@ -97,6 +98,65 @@ export class CommentService {
   async deleteByDeck(deckId: DeckId): Promise<number> {
     return this.store.deleteByDeck(deckId);
   }
+
+  /**
+   * Apply a path-rewrite to every `ir_node` comment whose container
+   * matches `containerId` (slide id or section id). Returning `null`
+   * from the rewriter orphans the comment — its target downgrades to
+   * the slide / section as a whole so the body text stays visible.
+   *
+   * Called by the structural-op MCP tools after the underlying IR
+   * mutation so pinned comments follow shifted siblings or moved
+   * subtrees instead of silently pointing at the wrong node.
+   */
+  async migrateIrPathsForContainer(
+    deckRef: string,
+    containerId: string,
+    rewrite: (path: IRPath) => IRPath | null,
+  ): Promise<{ rewrittenCount: number; orphanedCount: number }> {
+    const did = await this.deckService.resolveRefOrThrow(deckRef);
+    const all = await this.store.listByDeck(did);
+    let rewritten = 0;
+    let orphaned = 0;
+    for (const c of all) {
+      if (c.target.kind !== 'ir_node') continue;
+      if (c.target.containerId !== containerId) continue;
+      const next = rewrite(c.target.irPath);
+      if (next === null) {
+        // Orphan: degrade target so the comment stays visible. The slide
+        // id is the containerId — keep the body, drop the path.
+        const updated: Comment = {
+          ...c,
+          target: { kind: 'slide', slideId: containerId as never },
+        };
+        await this.store.save(updated);
+        orphaned += 1;
+      } else if (!samePath(next, c.target.irPath)) {
+        const updated: Comment = {
+          ...c,
+          target: { ...c.target, irPath: next },
+        };
+        await this.store.save(updated);
+        rewritten += 1;
+      }
+    }
+    if (rewritten > 0 || orphaned > 0) {
+      this.logger.info('Migrated comment ir_paths for container', {
+        containerId,
+        rewrittenCount: rewritten,
+        orphanedCount: orphaned,
+      });
+    }
+    return { rewrittenCount: rewritten, orphanedCount: orphaned };
+  }
+}
+
+function samePath(a: IRPath, b: IRPath): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }
 
 /**

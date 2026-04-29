@@ -51,46 +51,72 @@ describe('section-mutation tool registry', () => {
   const repo = resolve(__dirname, '../../..');
   const toolDir = resolve(repo, 'src/tools/decks');
 
+  /** Build a map: registered tool name → list of `*.tool.ts` files where it appears. */
+  function indexRegisteredToolsInDeckDir(): Map<string, string[]> {
+    const map = new Map<string, string[]>();
+    const files = readdirSync(toolDir).filter((f) => f.endsWith('.tool.ts'));
+    const callRegex = /server\.registerTool\(\s*['"]([a-z0-9_]+)['"]/g;
+    for (const file of files) {
+      const src = readFileSync(resolve(toolDir, file), 'utf8');
+      let match: RegExpExecArray | null;
+      while ((match = callRegex.exec(src)) !== null) {
+        const name = match[1];
+        const arr = map.get(name) ?? [];
+        arr.push(file);
+        map.set(name, arr);
+      }
+    }
+    return map;
+  }
+
   it('every section-mutating tool source uses structuredResponse, not textResponse', () => {
+    const index = indexRegisteredToolsInDeckDir();
     const offenders: string[] = [];
     for (const toolName of SECTION_MUTATING_TOOL_NAMES) {
-      const fileName = toolName.replace(/_/g, '-') + '.tool.ts';
-      const path = resolve(toolDir, fileName);
-      const src = readFileSync(path, 'utf8');
-      if (!/\bstructuredResponse\s*\(/.test(src)) {
-        offenders.push(`${toolName} (${fileName}): missing structuredResponse() call`);
+      const files = index.get(toolName);
+      if (!files || files.length === 0) {
+        offenders.push(`${toolName}: no source file in src/tools/decks/ registers this tool name`);
+        continue;
       }
-      if (/\btextResponse\s*\(/.test(src)) {
-        offenders.push(`${toolName} (${fileName}): still uses textResponse() — switch to structuredResponse`);
+      for (const file of files) {
+        const src = readFileSync(resolve(toolDir, file), 'utf8');
+        if (!/\bstructuredResponse\s*\(/.test(src)) {
+          offenders.push(`${toolName} (${file}): missing structuredResponse() call`);
+        }
+        if (/\btextResponse\s*\(/.test(src)) {
+          offenders.push(`${toolName} (${file}): still uses textResponse() — switch to structuredResponse`);
+        }
       }
     }
     expect(offenders).toEqual([]);
   });
 
-  it('SECTION_MUTATING_TOOL_NAMES covers every register*.tool.ts file in src/tools/decks/ that names "section"', () => {
-    // Belt-and-braces: catch a future tool author who adds e.g. split_section.tool.ts
-    // and forgets to add it to the contract list. Heuristic: any *.tool.ts in
-    // src/tools/decks/ whose filename contains "section" and whose handler
-    // mutates state should be in the list. Read-only tools like
-    // get-section / list-sections are explicitly allowed (they don't mutate).
-    const READ_ONLY = new Set([
-      'get-section.tool.ts',
-      'list-sections.tool.ts',
+  it('SECTION_MUTATING_TOOL_NAMES covers every section-mutating tool registered in src/tools/decks/', () => {
+    // Belt-and-braces: catch a future tool author who registers a new
+    // `*_section*` tool and forgets to add it to the contract list.
+    // Heuristic: scan every *.tool.ts in src/tools/decks/ for
+    // `server.registerTool('NAME', ...)` calls. If the registered name
+    // contains 'section' and is not explicitly read-only, it must appear
+    // in SECTION_MUTATING_TOOL_NAMES.
+    const READ_ONLY_TOOLS = new Set([
+      'get_section',
+      'list_sections',
     ]);
-    // update-document-meta.tool.ts mutates deck-level chrome, not sections;
+    // update_document_meta mutates deck-level chrome, not sections;
     // documented as excluded in section-mutation-response.ts.
-    const EXCLUDED = new Set([
-      'update-document-meta.tool.ts',
+    const EXCLUDED_TOOLS = new Set([
+      'update_document_meta',
     ]);
 
-    const sectionFiles = readdirSync(toolDir).filter(
-      (f) => f.endsWith('.tool.ts') && f.includes('section') && !READ_ONLY.has(f) && !EXCLUDED.has(f),
+    const index = indexRegisteredToolsInDeckDir();
+    const registeredSectionTools = [...index.keys()].filter(
+      (name) =>
+        name.includes('section') &&
+        !READ_ONLY_TOOLS.has(name) &&
+        !EXCLUDED_TOOLS.has(name),
     );
 
-    const expectedToolNames = sectionFiles.map((f) =>
-      f.replace(/\.tool\.ts$/, '').replace(/-/g, '_'),
-    );
-    const missingFromContract = expectedToolNames.filter(
+    const missingFromContract = registeredSectionTools.filter(
       (n) => !SECTION_MUTATING_TOOL_NAMES.includes(n as (typeof SECTION_MUTATING_TOOL_NAMES)[number]),
     );
 

@@ -90,6 +90,17 @@ export {
 } from './compile/index.js';
 
 export { replaceNodeAtPath, type IRPath } from './operations/replace-node.js';
+export { insertNodeAtPath } from './operations/insert-node.js';
+export { removeNodeAtPath } from './operations/remove-node.js';
+export { duplicateNodeAtPath } from './operations/duplicate-node.js';
+export { moveNodeAtPath, type MoveResult } from './operations/move-node.js';
+export { setNodeFieldAtPath, parseFieldName } from './operations/set-field.js';
+export {
+  migratePathAfterInsert,
+  migratePathAfterRemove,
+  migratePathAfterMove,
+  migratePathAfterDuplicate,
+} from './operations/path-migration.js';
 export { irPathToString, irPathFromString } from './path-encoding.js';
 
 export {

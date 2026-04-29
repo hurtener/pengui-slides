@@ -51,8 +51,13 @@ import { SlugIndex } from '../_shared/slug-index.js';
 import type { SoulService } from '../souls/soul-service.js';
 import {
   compileSlideIRToHtml,
+  duplicateNodeAtPath,
+  insertNodeAtPath,
   lintNodesForMode,
+  moveNodeAtPath,
+  removeNodeAtPath,
   replaceNodeAtPath,
+  setNodeFieldAtPath,
   type IRPath,
 } from '../ir/index.js';
 import type { SlideNode } from '../ir/index.js';
@@ -531,6 +536,123 @@ export class DeckService {
       slideId: input.slideId,
       ir: nextIR,
     });
+  }
+
+  // ── v4.9 structural ops ─────────────────────────────────────────
+  //
+  // Each op recompiles the IR via the existing updateSlide pipeline so
+  // mode-aware lint, validation, and revision tracking all run as
+  // normal. Pin migration (rewriting comment ir_paths to follow shifted
+  // siblings or moved subtrees) is performed by the MCP tool layer
+  // after the service call returns — keeps DeckService free of a
+  // CommentService dependency and the cycle that would create.
+
+  /** Insert a node into a slide's IR. Indices ≥ position shift up by 1. */
+  async insertSlideNode(input: {
+    deckId: string;
+    slideId: string;
+    parentPath: IRPath;
+    position: number;
+    newNode: SlideNode;
+  }): Promise<Slide> {
+    const existing = await this.requireAuthoredIRSlide(input.slideId);
+    const nextIR = insertNodeAtPath(existing.ir!, input.parentPath, input.position, input.newNode);
+    return this.updateSlide({
+      deckId: input.deckId,
+      slideId: input.slideId,
+      ir: nextIR,
+    });
+  }
+
+  /** Remove a node. Indices > removed index shift down by 1. */
+  async removeSlideNode(input: {
+    deckId: string;
+    slideId: string;
+    path: IRPath;
+  }): Promise<Slide> {
+    const existing = await this.requireAuthoredIRSlide(input.slideId);
+    const nextIR = removeNodeAtPath(existing.ir!, input.path);
+    return this.updateSlide({
+      deckId: input.deckId,
+      slideId: input.slideId,
+      ir: nextIR,
+    });
+  }
+
+  /** Duplicate a node; clone lands at `position ?? sourceIndex + 1`. */
+  async duplicateSlideNode(input: {
+    deckId: string;
+    slideId: string;
+    path: IRPath;
+    position?: number;
+  }): Promise<Slide> {
+    const existing = await this.requireAuthoredIRSlide(input.slideId);
+    const nextIR = duplicateNodeAtPath(existing.ir!, input.path, input.position);
+    return this.updateSlide({
+      deckId: input.deckId,
+      slideId: input.slideId,
+      ir: nextIR,
+    });
+  }
+
+  /** Move a node within or across containers. Returns the new path. */
+  async moveSlideNode(input: {
+    deckId: string;
+    slideId: string;
+    fromPath: IRPath;
+    toParentPath: IRPath;
+    toPosition: number;
+  }): Promise<{ slide: Slide; newPath: IRPath }> {
+    const existing = await this.requireAuthoredIRSlide(input.slideId);
+    const { root: nextIR, newPath } = moveNodeAtPath(
+      existing.ir!,
+      input.fromPath,
+      input.toParentPath,
+      input.toPosition,
+    );
+    const slide = await this.updateSlide({
+      deckId: input.deckId,
+      slideId: input.slideId,
+      ir: nextIR,
+    });
+    return { slide, newPath };
+  }
+
+  /**
+   * v4.9c — write one named field of an IR node. The MCP App calls
+   * this when the user finishes editing a `[data-ir-rt-field]`
+   * element inline. Field grammar mirrors `setNodeFieldAtPath`:
+   * `"title"` for a top-level field, `"items[2]"` for an array slot.
+   */
+  async applySlideFieldEdit(input: {
+    deckId: string;
+    slideId: string;
+    path: IRPath;
+    field: string;
+    value: unknown;
+  }): Promise<Slide> {
+    const existing = await this.requireAuthoredIRSlide(input.slideId);
+    const nextIR = setNodeFieldAtPath(existing.ir!, input.path, input.field, input.value);
+    return this.updateSlide({
+      deckId: input.deckId,
+      slideId: input.slideId,
+      ir: nextIR,
+    });
+  }
+
+  private async requireAuthoredIRSlide(slideIdStr: string): Promise<Slide> {
+    const sid = slideId(slideIdStr);
+    const existing = await this.slideStore.get(sid);
+    if (!existing) {
+      throw new SlideNotFoundError(slideIdStr);
+    }
+    if (existing.sourceKind !== 'authored_ir' || !existing.ir) {
+      throw new PenguiError(
+        ErrorCode.SLIDE_INVALID_HTML,
+        `Slide "${slideIdStr}" has no IR (sourceKind=${existing.sourceKind}); structural ops require IR-authored slides.`,
+      );
+    }
+    return existing;
   }
 
   // ── Recompile slides for a soul (v4.6) ──────────────────────────

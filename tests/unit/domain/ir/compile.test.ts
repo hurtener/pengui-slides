@@ -131,9 +131,9 @@ describe('renderNodeList — per-node HTML emitters', () => {
       { type: 'hero', title: rt('Title'), eyebrow: rt('Eye'), subtitle: rt('Sub') },
     ]);
     expect(html).toContain('<div class="pengui-hero pengui-align-left"');
-    expect(html).toContain('<p class="pengui-hero-eyebrow">Eye</p>');
-    expect(html).toContain('<h1 class="pengui-hero-title">Title</h1>');
-    expect(html).toContain('<p class="pengui-hero-subtitle">Sub</p>');
+    expect(html).toContain('<p class="pengui-hero-eyebrow" data-ir-rt-field="eyebrow">Eye</p>');
+    expect(html).toContain('<h1 class="pengui-hero-title" data-ir-rt-field="title">Title</h1>');
+    expect(html).toContain('<p class="pengui-hero-subtitle" data-ir-rt-field="subtitle">Sub</p>');
     // ordering check
     const eIdx = html.indexOf('eyebrow');
     const tIdx = html.indexOf('title');
@@ -146,7 +146,7 @@ describe('renderNodeList — per-node HTML emitters', () => {
     const html = renderNodeList([{ type: 'hero', title: rt('Only') }]);
     expect(html).not.toContain('hero-eyebrow');
     expect(html).not.toContain('hero-subtitle');
-    expect(html).toContain('<h1 class="pengui-hero-title">Only</h1>');
+    expect(html).toContain('<h1 class="pengui-hero-title" data-ir-rt-field="title">Only</h1>');
   });
 
   it('prose carries align class and inline rich-text', () => {
@@ -162,7 +162,9 @@ describe('renderNodeList — per-node HTML emitters', () => {
       { type: 'image', asset_id: 'abc-123', caption: rt('My ', { text: 'cap', italic: true }) },
     ]);
     expect(html).toContain('<img src="asset://abc-123" alt="My cap" />');
-    expect(html).toContain('<figcaption class="pengui-image-caption">My <em>cap</em></figcaption>');
+    expect(html).toContain(
+      '<figcaption class="pengui-image-caption" data-ir-rt-field="caption">My <em>cap</em></figcaption>',
+    );
   });
 
   it('image without caption emits empty alt and no figcaption', () => {
@@ -183,8 +185,8 @@ describe('renderNodeList — per-node HTML emitters', () => {
       { type: 'callout', kind: 'warning', title: rt('Watch out'), body: rt('Body') },
     ]);
     expect(html).toContain('<aside class="pengui-callout pengui-callout-warning"');
-    expect(html).toContain('<p class="pengui-callout-title">Watch out</p>');
-    expect(html).toContain('<div class="pengui-callout-body">Body</div>');
+    expect(html).toContain('<p class="pengui-callout-title" data-ir-rt-field="title">Watch out</p>');
+    expect(html).toContain('<div class="pengui-callout-body" data-ir-rt-field="body">Body</div>');
   });
 
   it('heading emits the right tag + level class for each level', () => {
@@ -215,13 +217,15 @@ describe('renderNodeList — per-node HTML emitters', () => {
   it('quote emits body + optional attribution', () => {
     const noAttr = renderNodeList([{ type: 'quote', body: rt('Q') }]);
     expect(noAttr).toContain('<blockquote class="pengui-quote"');
-    expect(noAttr).toContain('<p class="pengui-quote-body">Q</p>');
+    expect(noAttr).toContain('<p class="pengui-quote-body" data-ir-rt-field="body">Q</p>');
     expect(noAttr).not.toContain('pengui-quote-attribution');
 
     const withAttr = renderNodeList([
       { type: 'quote', body: rt('Q'), attribution: rt('Author') },
     ]);
-    expect(withAttr).toContain('<cite class="pengui-quote-attribution">Author</cite>');
+    expect(withAttr).toContain(
+      '<cite class="pengui-quote-attribution" data-ir-rt-field="attribution">Author</cite>',
+    );
   });
 
   it('table emits caption, thead/th, tbody, and pads short rows', () => {
@@ -535,7 +539,7 @@ describe('compileSectionIRToHtml', () => {
 
   it('renders the IR body inside the root section', () => {
     const html = compileSectionIRToHtml({ ir, kind: 'prose' });
-    expect(html).toContain('<h1 class="pengui-hero-title">Chapter 1</h1>');
+    expect(html).toContain('<h1 class="pengui-hero-title" data-ir-rt-field="title">Chapter 1</h1>');
     expect(html).toContain('<p class="pengui-prose pengui-align-left"');
     expect(html).toContain('>Opening paragraph.</p>');
   });

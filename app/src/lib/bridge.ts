@@ -507,6 +507,96 @@ export class McpDeckEditorBridge implements DeckEditorBridge {
     return r.structuredContent;
   }
 
+  // ── Structural ops (v4.9): direct manipulation of slide / section IR ──
+  //
+  // Each tool wraps a pure IR operation server-side; the App calls one of
+  // these in response to a click on a hover overlay (delete / duplicate /
+  // move-up / move-down / insert-after) inside the canvas iframe, then
+  // calls `get_editor_state` to refresh. Comment migration runs in the
+  // tool layer so pinned comments follow shifted siblings.
+
+  async insertSlideNode(args: {
+    deck_id: string;
+    slide_id: string;
+    parent_path: ReadonlyArray<string | number>;
+    position: number;
+    new_node: Record<string, unknown>;
+  }): Promise<unknown> {
+    const r = await this.callTool('insert_slide_node', args);
+    return r.structuredContent;
+  }
+
+  async removeSlideNode(args: {
+    deck_id: string;
+    slide_id: string;
+    path: ReadonlyArray<string | number>;
+  }): Promise<unknown> {
+    const r = await this.callTool('remove_slide_node', args);
+    return r.structuredContent;
+  }
+
+  async duplicateSlideNode(args: {
+    deck_id: string;
+    slide_id: string;
+    path: ReadonlyArray<string | number>;
+    position?: number;
+  }): Promise<unknown> {
+    const r = await this.callTool('duplicate_slide_node', args);
+    return r.structuredContent;
+  }
+
+  async moveSlideNode(args: {
+    deck_id: string;
+    slide_id: string;
+    from_path: ReadonlyArray<string | number>;
+    to_parent_path: ReadonlyArray<string | number>;
+    to_position: number;
+  }): Promise<unknown> {
+    const r = await this.callTool('move_slide_node', args);
+    return r.structuredContent;
+  }
+
+  async insertSectionNode(args: {
+    deck_id: string;
+    section_id: string;
+    parent_path: ReadonlyArray<string | number>;
+    position: number;
+    new_node: Record<string, unknown>;
+  }): Promise<unknown> {
+    const r = await this.callTool('insert_section_node', args);
+    return r.structuredContent;
+  }
+
+  async removeSectionNode(args: {
+    deck_id: string;
+    section_id: string;
+    path: ReadonlyArray<string | number>;
+  }): Promise<unknown> {
+    const r = await this.callTool('remove_section_node', args);
+    return r.structuredContent;
+  }
+
+  async duplicateSectionNode(args: {
+    deck_id: string;
+    section_id: string;
+    path: ReadonlyArray<string | number>;
+    position?: number;
+  }): Promise<unknown> {
+    const r = await this.callTool('duplicate_section_node', args);
+    return r.structuredContent;
+  }
+
+  async moveSectionNode(args: {
+    deck_id: string;
+    section_id: string;
+    from_path: ReadonlyArray<string | number>;
+    to_parent_path: ReadonlyArray<string | number>;
+    to_position: number;
+  }): Promise<unknown> {
+    const r = await this.callTool('move_section_node', args);
+    return r.structuredContent;
+  }
+
   /** Add a comment authored by the user (from the app, not the model). */
   async addCommentFromApp(args: {
     deck_id: string;

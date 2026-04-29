@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { FormatKind } from './types';
+  import { STRUCTURE_BRIDGE_SCRIPT } from './structureBridge';
+  import { parseRichTextFromHtml, type TextRun } from './parseRichText';
 
   // Format geometry registry (mirrors FORMAT_REGISTRY on the backend).
   const FORMAT_DIMS: Record<FormatKind, { width: number; height: number }> = {
@@ -31,8 +33,59 @@
      * user doesn't forget what they picked while writing their note.
      */
     draftPinnedIrPath?: string | null;
+    /**
+     * v4.9: when true, hovering an `[data-ir-path]` element renders an
+     * action toolbar (delete / duplicate / move-up / move-down / insert-
+     * after) inside the iframe. Mutually exclusive with `pinMode` —
+     * structure mode wins if both are set. Inline text-edit is
+     * disabled while structure mode is active so a click on text can
+     * land on the action toolbar without being intercepted.
+     */
+    structureMode?: boolean;
     oncommit?: (detail: { editId: string; text: string }) => void;
     onpintarget?: (detail: { irPath: string; preview?: string }) => void;
+    /**
+     * v4.9c: emitted when the user finishes editing a rich-text field
+     * inline. The parent submits via `apply_slide_field_edit` with
+     * `{ path, field, value: body }` — patching just that field of the
+     * IR node carrying the closest `data-ir-path` ancestor. Works for
+     * prose body, hero title/subtitle/eyebrow, heading text, list
+     * items, callout title/body, quote body/attribution, image caption.
+     */
+    oncommitrichtext?: (detail: {
+      irPath: string;
+      field: string;
+      body: TextRun[];
+    }) => void;
+    /**
+     * v4.9 drag-and-drop reorder. Fired from the iframe bridge on a
+     * successful `dragend` over a `[data-ir-path]` target. `position`
+     * is `'above'` when the user dropped on the upper half of the
+     * target, `'below'` for the lower half. The parent routes through
+     * `move_slide_node` after computing the resulting `to_position`.
+     */
+    onstructurereorder?: (detail: {
+      srcIrPath: string;
+      destIrPath: string;
+      position: 'above' | 'below';
+    }) => void;
+    /**
+     * v4.9c: emitted when the user clicks a block in Edit-layout mode.
+     * `irPath` is null when they click empty canvas (used to clear the
+     * selection).
+     */
+    onselectblock?: (detail: {
+      irPath: string | null;
+      preview?: string;
+      siblingIndex?: number;
+      siblingCount?: number;
+    }) => void;
+    /**
+     * v4.9c: write the parent's `selectedIrPath` into the iframe's
+     * documentElement so the bridge paints the persistent selection
+     * outline. The iframe's MutationObserver picks the change up.
+     */
+    selectedIrPath?: string | null;
     onerror?: (detail: { message: string }) => void;
   }
 
@@ -45,8 +98,13 @@
     pinMode = false,
     pinnedIrPaths = [],
     draftPinnedIrPath = null,
+    structureMode = false,
     oncommit,
     onpintarget,
+    oncommitrichtext,
+    onstructurereorder,
+    onselectblock,
+    selectedIrPath = null,
     onerror,
   }: Props = $props();
 
@@ -64,49 +122,10 @@
   // v4.8.5: pin mode targets `data-ir-path` (the structural pointer the
   // IR compiler emits on every node root). Inline text-edit mode still
   // targets `data-edit-id` — that's a separate feature (text-only swaps).
-  const BRIDGE_SCRIPT = `<script>(function(){
-  var root = document.documentElement;
-  function resolveIrPath(e){
-    var t = e.target && e.target.closest ? e.target.closest('[data-ir-path]') : null;
-    if (t) return t;
-    var stack = document.elementsFromPoint(e.clientX, e.clientY) || [];
-    for (var i = 0; i < stack.length; i++) {
-      if (stack[i].dataset && stack[i].dataset.irPath) return stack[i];
-    }
-    return null;
-  }
-  function preview(t){
-    if (!t) return '';
-    var raw = (t.innerText || t.textContent || '').replace(/\\s+/g, ' ').trim();
-    return raw.length > 80 ? raw.slice(0, 77) + '…' : raw;
-  }
-  document.addEventListener('click', function(e){
-    var t = resolveIrPath(e);
-    var irPath = t ? t.dataset.irPath : null;
-    var text = preview(t);
-    var pinMode = root.dataset.penguiPinMode === 'true';
-    window.parent.postMessage({
-      source: 'pengui-slide',
-      type: 'click-debug',
-      pinMode: pinMode,
-      irPath: irPath,
-      preview: text,
-      targetTag: e.target ? (e.target.tagName || '') : '',
-      clientX: e.clientX, clientY: e.clientY,
-      ts: Date.now()
-    }, '*');
-    if (pinMode && irPath) {
-      e.preventDefault();
-      e.stopPropagation();
-      window.parent.postMessage({
-        source: 'pengui-slide',
-        type: 'pintarget',
-        irPath: irPath,
-        preview: text
-      }, '*');
-    }
-  }, true);
-})();<\/script>`;
+  // The in-iframe bridge (pin-mode click events + structure-mode hover
+  // toolbar) is shared between SlideCanvas and DocumentEditor — see
+  // `lib/structureBridge.ts`.
+  const BRIDGE_SCRIPT = STRUCTURE_BRIDGE_SCRIPT;
 
   function enrichHtml(raw: string): string {
     if (!raw) return raw;
@@ -126,7 +145,10 @@
   // attached from $effects. An $effect syncs them below.
   let pinModeState = $state(false);
   let disabledState = $state(false);
+  let structureModeState = $state(false);
   let onpintargetRef = $state<Props['onpintarget']>(undefined);
+  let onstructurereorderRef = $state<Props['onstructurereorder']>(undefined);
+  let onselectblockRef = $state<Props['onselectblock']>(undefined);
 
   // Debug panel state — opt-in via `localStorage.setItem('pengui-pin-debug', '1')`
   // so we can re-enable it the next time pin-mode behaves oddly without
@@ -203,17 +225,59 @@
   // ── Prop → $state syncs ─────────────────────────────────────────────────
   $effect(() => { pinModeState = pinMode; });
   $effect(() => { disabledState = disabled; });
+  $effect(() => { structureModeState = structureMode; });
   $effect(() => { onpintargetRef = onpintarget; });
+  $effect(() => { onstructurereorderRef = onstructurereorder; });
+  $effect(() => { onselectblockRef = onselectblock; });
 
-  // Sync pin-mode into the iframe's documentElement dataset so the
-  // in-iframe bridge script can read the current mode on every click.
+  // Push selectedIrPath into the iframe so the bridge paints the
+  // persistent selection outline. Cleared when null.
+  $effect(() => {
+    void iframeReady;
+    void selectedIrPath;
+    const doc = iframeEl?.contentDocument;
+    if (!doc) return;
+    try {
+      if (selectedIrPath) {
+        doc.documentElement.dataset.penguiSelectedPath = selectedIrPath;
+      } else {
+        delete doc.documentElement.dataset.penguiSelectedPath;
+      }
+    } catch {
+      // ignore cross-frame access failures
+    }
+  });
+
+  // Sync pin-mode + edit-layout (a.k.a. structure) mode into the iframe's
+  // documentElement dataset so the in-iframe bridge script can react on
+  // every click / hover. The slide editor always allows image inserts —
+  // it's wired to the asset picker in `Editor.svelte`.
   $effect(() => {
     void iframeReady;
     void pinModeState;
+    void structureModeState;
     const doc = iframeEl?.contentDocument;
     if (!doc) return;
     try {
       doc.documentElement.dataset.penguiPinMode = String(pinModeState);
+      doc.documentElement.dataset.penguiStructureMode = String(structureModeState);
+      doc.documentElement.dataset.penguiAllowImageInsert = 'true';
+    } catch {
+      // ignore cross-frame access failures
+    }
+  });
+
+  // Push the parent's CSS scale into the iframe so the floating
+  // toolbars (action toolbar + rich-text toolbar) can inverse-scale
+  // themselves. Without this they shrink along with the slide and
+  // become unclickable on small canvases.
+  $effect(() => {
+    void iframeReady;
+    void scale;
+    const doc = iframeEl?.contentDocument;
+    if (!doc) return;
+    try {
+      doc.documentElement.style.setProperty('--pengui-frame-scale', String(scale || 1));
     } catch {
       // ignore cross-frame access failures
     }
@@ -228,6 +292,14 @@
       preview?: string;
       targetTag?: string;
       pinMode?: boolean;
+      action?: string;
+      srcIrPath?: string;
+      destIrPath?: string;
+      siblingIndex?: number;
+      siblingCount?: number;
+      position?: string;
+      field?: string;
+      html?: string;
       clientX?: number;
       clientY?: number;
       ts?: number;
@@ -238,6 +310,56 @@
 
     if (data.type === 'pintarget' && typeof data.irPath === 'string') {
       onpintargetRef?.({ irPath: data.irPath, preview: data.preview ?? '' });
+      return;
+    }
+
+    if (data.type === 'select-block') {
+      onselectblockRef?.({
+        irPath: typeof data.irPath === 'string' ? data.irPath : null,
+        preview: typeof data.preview === 'string' ? data.preview : '',
+        siblingIndex:
+          typeof data.siblingIndex === 'number' ? data.siblingIndex : undefined,
+        siblingCount:
+          typeof data.siblingCount === 'number' ? data.siblingCount : undefined,
+      });
+      return;
+    }
+
+    // Bridge re-emits sibling-info every time it (re)applies the
+    // selection outline (after structural edits, slide nav, etc.) —
+    // we relay through onselectblock with the same shape, dropping
+    // the preview so it doesn't clobber the previously-clicked
+    // preview text.
+    if (data.type === 'selection-info') {
+      onselectblockRef?.({
+        irPath: typeof data.irPath === 'string' ? data.irPath : null,
+        siblingIndex:
+          typeof data.siblingIndex === 'number' ? data.siblingIndex : undefined,
+        siblingCount:
+          typeof data.siblingCount === 'number' ? data.siblingCount : undefined,
+      });
+      return;
+    }
+
+    if (data.type === 'rt-field-commit') {
+      const irPath = (data as { irPath?: string }).irPath;
+      const field = (data as { field?: string }).field;
+      const html = (data as { html?: string }).html;
+      if (typeof irPath === 'string' && typeof field === 'string' && typeof html === 'string') {
+        const body = parseRichTextFromHtml(html);
+        oncommitrichtext?.({ irPath, field, body });
+      }
+      return;
+    }
+
+    if (data.type === 'structure-reorder') {
+      const src = (data as { srcIrPath?: string }).srcIrPath;
+      const dest = (data as { destIrPath?: string }).destIrPath;
+      const positionRaw = (data as { position?: string }).position;
+      const position = positionRaw === 'above' ? 'above' : 'below';
+      if (typeof src === 'string' && typeof dest === 'string') {
+        onstructurereorderRef?.({ srcIrPath: src, destIrPath: dest, position });
+      }
       return;
     }
 
@@ -271,6 +393,7 @@
     void iframeReady;
     void disabledState;
     void pinModeState;
+    void structureModeState;
 
     const doc = iframeEl?.contentDocument;
     if (!doc) return;
@@ -278,8 +401,9 @@
     detachClickHandler();
 
     const handler = (event: MouseEvent) => {
-      // Pin-mode clicks are handled by the in-iframe bridge; skip here.
-      if (pinModeState) return;
+      // Pin-mode and structure-mode clicks are owned by the in-iframe
+      // bridge; skip here so we don't take over text editing.
+      if (pinModeState || structureModeState) return;
       if (disabledState) return;
       const target = resolveEditableTarget(event, doc);
       if (!target) return;
@@ -307,14 +431,20 @@
   });
 
   /**
-   * Resolve a click inside the slide iframe to a specific `[data-edit-id]`
-   * element. Text elements often sit behind shapes in z-order, so
-   * closest() alone can miss them — fall back to elementsFromPoint.
+   * Resolve a click inside the slide iframe to an editable element.
+   *
+   * SlideCanvas only handles the legacy `data-edit-id` plain-text
+   * path (used by SlideDocument-compiled slides). Rich-text edits on
+   * IR-authored slides — via `[data-ir-rt-field]` — are owned by the
+   * in-iframe bridge, which postMessages `rt-field-commit` directly.
+   *
+   * Text elements often sit behind shapes in z-order, so `closest()`
+   * alone can miss them — fall back to `elementsFromPoint`.
    */
   function resolveEditableTarget(event: MouseEvent, doc: Document): HTMLElement | null {
     if (event.target instanceof Element) {
-      const direct = event.target.closest<HTMLElement>('[data-edit-id]');
-      if (direct) return direct;
+      const directEdit = event.target.closest<HTMLElement>('[data-edit-id]');
+      if (directEdit) return directEdit;
     }
     if (typeof doc.elementsFromPoint !== 'function') return null;
     const stack = doc.elementsFromPoint(event.clientX, event.clientY);

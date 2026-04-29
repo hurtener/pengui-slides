@@ -35,7 +35,21 @@ import { registerListSectionsTool } from './decks/list-sections.tool.js';
 import { registerUpdateDocumentMetaTool } from './decks/update-document-meta.tool.js';
 import { registerApplySlideNodeEditTool } from './decks/apply-slide-node-edit.tool.js';
 import { registerApplySectionNodeEditTool } from './decks/apply-section-node-edit.tool.js';
+import { registerApplySlideFieldEditTool } from './decks/apply-slide-field-edit.tool.js';
+import { registerApplySectionFieldEditTool } from './decks/apply-section-field-edit.tool.js';
 import { registerApplyRecipeTool } from './decks/apply-recipe.tool.js';
+import {
+  registerInsertSlideNodeTool,
+  registerRemoveSlideNodeTool,
+  registerDuplicateSlideNodeTool,
+  registerMoveSlideNodeTool,
+} from './decks/slide-structural-ops.tool.js';
+import {
+  registerInsertSectionNodeTool,
+  registerRemoveSectionNodeTool,
+  registerDuplicateSectionNodeTool,
+  registerMoveSectionNodeTool,
+} from './decks/section-structural-ops.tool.js';
 
 // Validation tools
 import { registerValidateSlideTool } from './validation/validate-slide.tool.js';
@@ -102,7 +116,12 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerGetDeckSummaryTool(server, container);
   registerListDecksTool(server, container);
   registerApplySlideNodeEditTool(server, container);
+  registerApplySlideFieldEditTool(server, container);
   registerApplyRecipeTool(server, container);
+  registerInsertSlideNodeTool(server, container);
+  registerRemoveSlideNodeTool(server, container);
+  registerDuplicateSlideNodeTool(server, container);
+  registerMoveSlideNodeTool(server, container);
 
   // Document (continuous-document mode) tools
   registerAddSectionTool(server, container);
@@ -113,6 +132,11 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerListSectionsTool(server, container);
   registerUpdateDocumentMetaTool(server, container);
   registerApplySectionNodeEditTool(server, container);
+  registerApplySectionFieldEditTool(server, container);
+  registerInsertSectionNodeTool(server, container);
+  registerRemoveSectionNodeTool(server, container);
+  registerDuplicateSectionNodeTool(server, container);
+  registerMoveSectionNodeTool(server, container);
 
   // Asset tools
   registerUploadAssetTool(server, container);

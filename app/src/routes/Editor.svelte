@@ -9,7 +9,10 @@
   import IssueList from '../lib/IssueList.svelte';
   import FormatBadge from '../lib/FormatBadge.svelte';
   import CommentDrawer from '../lib/CommentDrawer.svelte';
+  import AssetPicker from '../lib/AssetPicker.svelte';
+  import BlockActionBar from '../lib/BlockActionBar.svelte';
   import { Button, Card, Pill, Tabs, Textarea } from '../lib/primitives/index';
+  import { decodeIrPath, isPathInside } from '../lib/irPath';
   import { buildRevisionFallback } from '../lib/revise';
   import type { DeckStore } from '../stores/deck.svelte';
   import type { ValidationPresentation, ValidationIssue, ValidationIssueSummary, SlideHealth, FormatKind } from '../lib/types';
@@ -37,6 +40,79 @@
   let pinMode = $state(false);
   let pinnedIrPath = $state<string | null>(null);
   let pinnedPreview = $state<string>('');
+  // v4.9 edit-layout mode: clicking a block in the canvas selects it;
+  // a parent-DOM action bar (BlockActionBar) appears under the canvas
+  // with move / duplicate / add / delete buttons targeting the
+  // selected block. Mutually exclusive with pin mode.
+  let structureMode = $state(false);
+  let structureStatus = $state('');
+  let structureStatusTimer: ReturnType<typeof setTimeout> | null = null;
+  let selectedIrPath = $state<string | null>(null);
+  let selectedPreview = $state<string>('');
+  let selectedSiblingIndex = $state<number>(-1);
+  let selectedSiblingCount = $state<number>(0);
+
+  function setStructureStatus(text: string): void {
+    structureStatus = text;
+    if (structureStatusTimer) clearTimeout(structureStatusTimer);
+    if (text) {
+      structureStatusTimer = setTimeout(() => {
+        structureStatus = '';
+        structureStatusTimer = null;
+      }, 3500);
+    }
+  }
+
+  // Asset picker (modal): opens when the user clicks "Add image" on
+  // the edit-layout toolbar. The picker remembers where to insert and
+  // closes on choice or Escape.
+  interface PickerAsset {
+    asset_id: string;
+    label?: string;
+    name?: string;
+    filename?: string;
+    mime_type: string;
+    role: string;
+    width?: number;
+    height?: number;
+    data_base64?: string;
+  }
+  let assetPickerOpen = $state(false);
+  let assetPickerTargetPath = $state<ReadonlyArray<string | number> | null>(null);
+  let assetPickerTargetIndex = $state(0);
+
+  function openAssetPicker(parentPath: ReadonlyArray<string | number>, position: number): void {
+    if (!bridge) {
+      setStructureStatus('The image picker is only available inside the MCP App.');
+      return;
+    }
+    assetPickerTargetPath = parentPath;
+    assetPickerTargetIndex = position;
+    assetPickerOpen = true;
+  }
+
+  async function handleAssetPick(a: PickerAsset): Promise<void> {
+    const path = assetPickerTargetPath;
+    const pos = assetPickerTargetIndex;
+    assetPickerOpen = false;
+    assetPickerTargetPath = null;
+    if (!path) return;
+    try {
+      await deck.insertSlideNode(path, pos, {
+        type: 'image',
+        asset_id: a.asset_id,
+        ...(a.label ? { alt: a.label } : {}),
+      });
+      setStructureStatus('Image added.');
+    } catch (err) {
+      setStructureStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  function closeAssetPicker(): void {
+    assetPickerOpen = false;
+    assetPickerTargetPath = null;
+  }
   // Stringified IR paths of elements that already have (unresolved)
   // comments — drives the dashed mint outline decoration on the canvas.
   let commentedIrPaths = $state<string[]>([]);
@@ -47,20 +123,66 @@
 
   function togglePinMode(): void {
     pinMode = !pinMode;
+    if (pinMode) structureMode = false;
     if (!pinMode) {
       pinnedIrPath = null;
       pinnedPreview = '';
     }
   }
 
-  /**
-   * Decode a `data-ir-path` attribute value (`"body,2,left,1"`) into the
-   * structural array the MCP tools accept. Inverse of the compiler's
-   * `irPathToString`. Numeric segments come back as numbers.
-   */
-  function decodeIrPath(s: string): ReadonlyArray<string | number> {
-    return s.split(',').map((seg) => (/^\d+$/.test(seg) ? Number(seg) : seg));
+  function toggleStructureMode(): void {
+    structureMode = !structureMode;
+    setStructureStatus('');
+    if (structureMode) {
+      pinMode = false;
+      pinnedIrPath = null;
+      pinnedPreview = '';
+    } else {
+      selectedIrPath = null;
+      selectedPreview = '';
+    }
   }
+
+  function handleSelectBlock(detail: {
+    irPath: string | null;
+    preview?: string;
+    siblingIndex?: number;
+    siblingCount?: number;
+  }): void {
+    selectedIrPath = detail.irPath;
+    // Preview only updates when explicitly provided (click events).
+    // Bridge `selection-info` relays omit preview to keep the
+    // previously-clicked label stable across structural reloads.
+    if (typeof detail.preview === 'string') {
+      selectedPreview = detail.preview.trim();
+    } else if (!detail.irPath) {
+      selectedPreview = '';
+    }
+    if (typeof detail.siblingIndex === 'number') selectedSiblingIndex = detail.siblingIndex;
+    if (typeof detail.siblingCount === 'number') selectedSiblingCount = detail.siblingCount;
+    if (!detail.irPath) {
+      selectedSiblingIndex = -1;
+      selectedSiblingCount = 0;
+    }
+  }
+
+  function deselectBlock(): void {
+    selectedIrPath = null;
+    selectedPreview = '';
+    selectedSiblingIndex = -1;
+    selectedSiblingCount = 0;
+  }
+
+  // Auto-clear the selection when leaving Edit-layout mode or
+  // navigating to a slide that doesn't support it.
+  $effect(() => {
+    if (!structureMode || !canEditLayout) {
+      selectedIrPath = null;
+      selectedPreview = '';
+      selectedSiblingIndex = -1;
+      selectedSiblingCount = 0;
+    }
+  });
 
   function handlePinTarget(detail: { irPath: string; preview?: string }): void {
     pinnedIrPath = detail.irPath;
@@ -68,7 +190,146 @@
     pinMode = false;
     commentStatus = pinnedPreview
       ? `Pinning to: “${pinnedPreview}”`
-      : `Pinning to node: ${detail.irPath}`;
+      : 'Pinning to the selected block.';
+  }
+
+  /**
+   * Convert a structure-mode action emitted by the canvas iframe into a
+   * deck-store call. Move-up / move-down compute the target position
+   * from the addressed sibling index. Insert-after stamps a default
+   * prose node at `parentPath / index + 1`. Delete confirms in the
+   * iframe before postMessaging.
+   */
+  /**
+   * Compute the move target for a drag-and-drop. The user drops `src`
+   * onto `dest`; the iframe bridge tells us whether the cursor was in
+   * the upper ('above') or lower ('below') half of the target. We
+   * interpret that as "land BEFORE dest" or "land AFTER dest"
+   * respectively — matching the visual cue painted on the drop target.
+   *
+   * Cross-container moves use the dest's parent path; same-container
+   * moves let `move_slide_node` handle the post-removal index
+   * adjustment internally.
+   */
+  async function handleStructureReorder(detail: {
+    srcIrPath: string;
+    destIrPath: string;
+    position: 'above' | 'below';
+  }): Promise<void> {
+    const src = decodeIrPath(detail.srcIrPath);
+    const dest = decodeIrPath(detail.destIrPath);
+    if (src.length < 2 || dest.length < 2) return;
+
+    if (isPathInside(dest, src)) {
+      setStructureStatus("Can't drop a block onto itself.");
+      return;
+    }
+
+    const destParent = dest.slice(0, -1);
+    const destLast = dest[dest.length - 1];
+    if (typeof destLast !== 'number') return;
+    const toPosition = detail.position === 'above' ? destLast : destLast + 1;
+
+    // No-op detection: same parent + drop slot equals the source's
+    // current index would land it back where it started. The most
+    // common case is dragging downward and releasing in the upper half
+    // of the immediate-next-sibling. Bail with a hint so the move
+    // doesn't appear to silently fail.
+    const srcParent = src.slice(0, -1);
+    const srcLast = src[src.length - 1];
+    const sameParent =
+      srcParent.length === destParent.length &&
+      srcParent.every((seg, i) => seg === destParent[i]);
+    if (sameParent && typeof srcLast === 'number') {
+      // moveNodeAtPath decrements toPosition by 1 internally for
+      // same-container forward moves, so the post-removal landing
+      // index is `toPosition - 1` when toPosition > srcLast, else
+      // `toPosition`.
+      const landing = toPosition > srcLast ? toPosition - 1 : toPosition;
+      if (landing === srcLast) {
+        setStructureStatus(
+          'Already in that slot — drop in the lower half to move down.'
+        );
+        return;
+      }
+    }
+
+    setStructureStatus('');
+    try {
+      await deck.moveSlideNode(src, destParent, toPosition);
+      setStructureStatus('Moved.');
+    } catch (err) {
+      setStructureStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  type BlockAction =
+    | 'delete'
+    | 'duplicate'
+    | 'move_up'
+    | 'move_down'
+    | 'insert_after'
+    | 'insert_image_after';
+
+  async function runBlockAction(action: BlockAction): Promise<void> {
+    if (!selectedIrPath) return;
+    const path = decodeIrPath(selectedIrPath);
+    if (path.length < 2) return;
+    const parentPath = path.slice(0, -1);
+    const lastSeg = path[path.length - 1];
+    if (typeof lastSeg !== 'number') return;
+
+    setStructureStatus('');
+    try {
+      switch (action) {
+        case 'delete':
+          await deck.removeSlideNode(path);
+          setStructureStatus('Deleted.');
+          // The deleted block can't stay selected. The block-id
+          // sequence shifted; safer to clear and let the user pick
+          // again from the refreshed canvas.
+          selectedIrPath = null;
+          selectedPreview = '';
+          break;
+        case 'duplicate':
+          await deck.duplicateSlideNode(path);
+          setStructureStatus('Duplicated.');
+          break;
+        case 'move_up':
+          if (lastSeg === 0) {
+            setStructureStatus('Already at the top.');
+            return;
+          }
+          await deck.moveSlideNode(path, parentPath, lastSeg - 1);
+          setStructureStatus('Moved up.');
+          // The moved block now lives at parentPath/lastSeg-1; update
+          // the selection so the action bar keeps targeting it.
+          selectedIrPath = [...parentPath, lastSeg - 1].join(',');
+          break;
+        case 'move_down':
+          // `to_position` is interpreted PRE-removal in moveNodeAtPath:
+          // same-container forward moves decrement by 1 internally to
+          // honor "drop after the sibling currently at slot N" semantics.
+          // To skip past the immediate-next sibling we need lastSeg+2,
+          // not lastSeg+1 (which would land back at lastSeg — a no-op).
+          await deck.moveSlideNode(path, parentPath, lastSeg + 2);
+          setStructureStatus('Moved down.');
+          selectedIrPath = [...parentPath, lastSeg + 1].join(',');
+          break;
+        case 'insert_after':
+          await deck.insertSlideNode(parentPath, lastSeg + 1, {
+            type: 'prose',
+            body: [{ text: 'New paragraph — click to edit.' }],
+          });
+          setStructureStatus('Paragraph added.');
+          break;
+        case 'insert_image_after':
+          openAssetPicker(parentPath, lastSeg + 1);
+          break;
+      }
+    } catch (err) {
+      setStructureStatus(err instanceof Error ? err.message : String(err));
+    }
   }
 
   async function submitComment(): Promise<void> {
@@ -151,11 +412,15 @@
     }
   }
 
-  // Refresh node-level pin decorations whenever the selected slide or
-  // the bridge changes.
+  // Refresh node-level pin decorations whenever the selected slide, its
+  // revision hash, or the bridge changes. v4.9: revision hash bumps
+  // after structural ops (insert / delete / duplicate / move) and the
+  // server-side comment migrator may have rewritten pinned `ir_path`s,
+  // so the decoration set needs to track that.
   $effect(() => {
     if (bridge && deck.editorState) {
       void deck.editorState.selectedSlide.slideId;
+      void deck.editorState.selectedSlide.revisionHash;
       void refreshCommentedIrPaths();
     }
   });
@@ -180,6 +445,21 @@
 
   const deckFormat = $derived<FormatKind>(deck.editorState?.deck.format ?? 'slides_16_9');
   const isPrint = $derived(deckFormat !== 'slides_16_9');
+  // Edit-layout (drag/insert/delete blocks) only works on IR-authored
+  // slides. Legacy HTML imports don't carry `data-ir-path` markers, so
+  // the toolbar would have no targets to bind to.
+  const canEditLayout = $derived(
+    deck.editorState?.selectedSlide.sourceKind === 'authored_ir',
+  );
+
+  // Auto-exit Edit-layout when navigating to a slide that doesn't
+  // support it; otherwise the toggle stays "on" but does nothing.
+  $effect(() => {
+    if (!canEditLayout && structureMode) {
+      structureMode = false;
+      setStructureStatus('');
+    }
+  });
   const selectedSlide = $derived(deck.editorState?.selectedSlide);
   const thumbnails = $derived(deck.editorState?.thumbnails ?? []);
   const selectedPresentation = $derived(selectedSlide?.validationPresentation ?? null);
@@ -237,6 +517,23 @@
 
   async function handleTextCommit(detail: { editId: string; text: string }): Promise<void> {
     await deck.applyTextEdit(detail.editId, detail.text);
+    if (deck.conflictMessage) {
+      canvasNonce += 1;
+    }
+  }
+
+  async function handleRichTextCommit(detail: {
+    irPath: string;
+    field: string;
+    body: ReadonlyArray<Record<string, unknown>>;
+  }): Promise<void> {
+    const path = decodeIrPath(detail.irPath);
+    if (path.length < 2) return;
+    // If the user wiped all the text, fall back to a single empty run
+    // so RichText schema (`TextRun[]`) still validates and the field
+    // stays targetable for re-editing.
+    const body = detail.body.length > 0 ? detail.body : [{ text: '' }];
+    await deck.applyFieldRichTextEdit(path, detail.field, body);
     if (deck.conflictMessage) {
       canvasNonce += 1;
     }
@@ -325,6 +622,21 @@
             {#if deck.conflictMessage}
               <span class="canvas-note conflict">{deck.conflictMessage}</span>
             {/if}
+            {#if structureMode && structureStatus}
+              <span class="canvas-note">{structureStatus}</span>
+            {/if}
+            {#if canEditLayout}
+              <Button
+                variant={structureMode ? 'primary' : 'ghost'}
+                size="sm"
+                onclick={toggleStructureMode}
+                title={structureMode
+                  ? 'Exit edit-layout mode and return to text editing.'
+                  : 'Rearrange, add, or delete blocks on this slide.'}
+              >
+                {structureMode ? 'Done' : 'Edit layout'}
+              </Button>
+            {/if}
             <Button variant="ghost" size="sm" onclick={() => detailsOpen = !detailsOpen}>
               {detailsOpen ? 'Hide details' : 'Slide details'}
             </Button>
@@ -346,11 +658,55 @@
             pinMode={pinMode}
             pinnedIrPaths={commentedIrPaths}
             draftPinnedIrPath={pinnedIrPath}
+            structureMode={structureMode}
+            selectedIrPath={selectedIrPath}
             oncommit={handleTextCommit}
+            oncommitrichtext={handleRichTextCommit}
             onpintarget={handlePinTarget}
+            onselectblock={handleSelectBlock}
+            onstructurereorder={handleStructureReorder}
             onerror={(d) => console.error(d.message)}
           />
         </div>
+
+        {#if canEditLayout && structureMode}
+          <BlockActionBar
+            selectedIrPath={selectedIrPath}
+            selectedPreview={selectedPreview}
+            canMoveUp={selectedSiblingIndex > 0}
+            canMoveDown={
+              selectedSiblingIndex >= 0 &&
+              selectedSiblingCount > 0 &&
+              selectedSiblingIndex < selectedSiblingCount - 1
+            }
+            onMoveUp={() => runBlockAction('move_up')}
+            onMoveDown={() => runBlockAction('move_down')}
+            onDuplicate={() => runBlockAction('duplicate')}
+            onAddParagraph={() => runBlockAction('insert_after')}
+            onAddImage={() => runBlockAction('insert_image_after')}
+            onDelete={() => runBlockAction('delete')}
+            onDeselect={deselectBlock}
+          />
+        {/if}
+
+        {#if canEditLayout}
+          <p class="canvas-tip" role="note">
+            {#if structureMode}
+              {#if selectedIrPath}
+                Use the action bar above. Or drag a block to reorder — a mint
+                line shows where it will land.
+              {:else}
+                Click any block to select it. The action bar appears below
+                the canvas.
+              {/if}
+            {:else if pinMode}
+              Click a block in the slide to pin a comment to it.
+            {:else}
+              Tip: click any text to edit it. Select text to format.
+              Use <strong>Edit layout</strong> to reorder, add or delete blocks.
+            {/if}
+          </p>
+        {/if}
 
       </Card>
 
@@ -384,7 +740,7 @@
                 </span>
                 <button type="button" class="cc-clear" onclick={() => { pinnedIrPath = null; pinnedPreview = ''; commentStatus = ''; }}>clear</button>
               {:else if pinMode}
-                <span class="cc-pin-active">Click a node in the slide…</span>
+                <span class="cc-pin-active">Click a block in the slide…</span>
                 <button type="button" class="cc-clear" onclick={togglePinMode}>cancel</button>
               {:else}
                 <span class="cc-target-note">whole slide</span>
@@ -393,7 +749,7 @@
                   class={`cc-pin-btn ${pinMode ? 'active' : ''}`}
                   onclick={togglePinMode}
                 >
-                  Pin to node
+                  Pin to a block
                 </button>
               {/if}
             </div>
@@ -403,7 +759,7 @@
               placeholder={pinnedIrPath
                 ? (pinnedPreview
                     ? `Write a note about “${pinnedPreview}”.`
-                    : 'Write a note about the selected node.')
+                    : 'Write a note about the selected block.')
                 : 'Write a note about this page for the agent to address.'}
             />
             <div class="cc-actions">
@@ -596,6 +952,16 @@
       />
     {/if}
 
+    <!-- v4.9 image picker (opened by Edit-layout → Add image) -->
+    {#if bridge}
+      <AssetPicker
+        bridge={bridge}
+        open={assetPickerOpen}
+        onPick={handleAssetPick}
+        onClose={closeAssetPicker}
+      />
+    {/if}
+
   </div>
 {/if}
 
@@ -769,6 +1135,20 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
+  }
+
+  .canvas-tip {
+    margin: 0;
+    padding: var(--s-2) var(--s-5) var(--s-3);
+    color: var(--ink-3);
+    font-size: 12px;
+    line-height: 1.5;
+    border-top: 1px solid var(--border-hairline);
+  }
+
+  .canvas-tip strong {
+    color: var(--ink-2);
+    font-weight: 600;
   }
 
   /* ── Comment composer (v4) ────────────────────────────────── */
