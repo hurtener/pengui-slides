@@ -184,3 +184,101 @@ App changes:
 The action bar buttons appear at native-DOM size, drag-and-drop has a custom "Moving: …" preview chip (from v4.9b), and clicking *any* visible text on an IR-authored slide now enters rich-text edit mode.
 
 Tests: 103 files / 1080 passing. New `tests/unit/domain/ir/operations/set-field.test.ts` (9 tests) covers field-set semantics. Existing compile tests updated for the new `data-ir-rt-field` attributes.
+
+## v4.9e — Node-type picker + block-type changer (planned, 2026-04-29)
+
+v4.9d closed the direct-manipulation primitives (select, edit text, color, move, delete, insert paragraph/image). v4.9e closes the **breadth gap**: today the canvas can only insert two block types and can't morph what's already there. After v4.9e the user picks from the full leaf catalogue when inserting, and reshapes a selected block into any compatible sibling without leaving direct manipulation.
+
+This is squarely on the WYSIWYG-compound axis (memory: `feedback_wysiwyg_compound_filter.md`). Each new affordance is a structured-block primitive, not a HTML-style toolbar.
+
+### Goal
+
+Replace `BlockActionBar`'s `+ Paragraph` / `+ Image` pair with a single `+ Block ▾` opening a contextual node-type picker, and add a `Change ▾` button that morphs the selected block to a compatible target type, preserving its primary RichText content.
+
+### Scope
+
+**1. Node-type picker (insert).**
+- New `app/src/lib/NodeTypePicker.svelte` — modal/popover similar in style to `AssetPicker.svelte`. Grouped tile grid:
+  - **Text:** Paragraph · Heading (h2 default + h1/h3/h4 sub-options) · List (bullet/numbered/checklist) · Quote · Callout (note/tip/warning/important)
+  - **Media:** Image · Divider
+- Replaces the two existing buttons with one `+ Block ▾`. Picking a type composes a default IR node with placeholder RichText and calls `insert_*_node` at `parent + lastSeg + 1`. Image picks open the existing `AssetPicker` as a second step.
+- After the insert returns, the new block becomes selected (parent reuses the existing select-block dataset push), so `Change ▾` and rich-text edit are immediately available.
+
+**2. Block-type changer (morph).**
+- New `Change ▾` button in `BlockActionBar`, visible only on a block whose type is in the morphable set.
+- Opens a sibling popover listing **compatible** target types only — the App's pre-filter mirrors the server's leaf-only rules but is purely advisory; the server stays the gate.
+- Picking a target composes a `new_node` payload that ports the source block's primary RichText field, then routes through `apply_slide_node_edit` / `apply_section_node_edit`. No new MCP tool — the existing `apply_*_node_edit` already replaces a node in place.
+- Default morph mappings (preserve content):
+
+| Source field          | → Target              | Mapping                                         |
+|-----------------------|----------------------|-------------------------------------------------|
+| `prose.body`          | `heading.text`       | RichText copied verbatim, `level=2` default     |
+| `heading.text`        | `prose.body`         | RichText copied verbatim, `align` dropped       |
+| `prose.body`          | `quote.body`         | RichText copied; `attribution` left empty       |
+| `quote.body`          | `prose.body`         | RichText copied; attribution discarded (warn)   |
+| `prose.body`          | `list.items[0]`      | New list with one item == source body, bullet   |
+| `list.items[N]`       | `prose.body`         | Items joined with newline runs                  |
+| `prose.body`          | `callout.body`       | RichText → body; `kind=note` default; no title  |
+| `callout.body`        | `prose.body`         | body copied; `title` + `kind` dropped (warn)    |
+| `heading.text` ↔ `quote.body` ↔ `callout.body` | (all combinations) | Routed via the four cases above |
+
+- A short `setStructureStatus(...)` toast surfaces "Title dropped." / "Attribution dropped." when a morph discards data the user might miss.
+
+**3. Container-aware filter.**
+- `parent_path` segment dictates which leaf types the picker offers:
+  - `body[]` — full leaf list except hero (hero is cover-slide territory).
+  - `two_column.{left|right}` — leaf-only filter (already enforced server-side); same allow-list.
+  - `grid.cells[]` — leaf-only.
+  - `toc` / `bibliography` — pickers hidden (composite content owned by their parent).
+- Filter rules live in a new `app/src/lib/nodeCatalogue.ts` so both editors share them.
+
+### Out of scope (defer)
+
+- **Inserting compound layouts** (`two_column`, `grid`) from the picker — needs sub-positioning UX, deferred to v4.10 alongside charts.
+- **Inserting `table`** — needs row/col input dialog. Sticks with agent-driven creation for now; once placed, cell-level rich-text editing remains a v5.0 question.
+- **Auto-enter rich-text edit on insert.** Tempting (insert a heading → cursor lands inside, ready to type), but commits would race with the structural insert that just happened. Stage as a v4.9f polish if users ask.
+- **List-item nesting (Tab / Shift-Tab).** Lists stay flat in v4.9e. Nested lists are a v5.0 question.
+- **Hero morph.** Hero is a cover-slide primitive; promoting/demoting hero ↔ heading is more about slide semantics than block editing. Skip until needed.
+- **`compile_markdown` tool** — still slotted for v4.10 (memory: `project_markdown_plan.md`). Doesn't compete with the manipulation loop.
+
+### Server work
+
+- **No new IR ops, no new MCP tools.** Insert reuses `insert_*_node`; morph reuses `apply_*_node_edit`.
+- **No compiler revision bump** — this round emits no new HTML attributes; the IR contract is unchanged.
+- One review pass on the leaf-only validators to confirm they reject any picker-composed node that lands in a wrong container (e.g., trying to insert `two_column` into `two_column.left`). Already covered by existing tests; spot-check.
+
+### App work
+
+- `app/src/lib/nodeCatalogue.ts` — new module exporting:
+  - `LeafNodeKind` enum (paragraph / heading / list / quote / callout / image / divider).
+  - `defaultNodePayload(kind, options)` — placeholder content composers.
+  - `morphTo(sourceNode, targetKind)` — returns `{ newNode, droppedFields }`.
+  - `availableForParent(parentPathTail)` — array of allowed kinds for a given container.
+- `app/src/lib/NodeTypePicker.svelte` — popover grid, keyboard-navigable (arrow keys + Enter), `data-pengui-overlay="1"` so the bridge ignores its clicks.
+- `app/src/lib/BlockActionBar.svelte` — replace the two `+` buttons with `+ Block ▾`; add `Change ▾`. Hide `Change ▾` when the selected block isn't morphable (image / divider / table — for now).
+- `Editor.svelte` / `DocumentEditor.svelte` — new `runInsertPicker()` and `runMorph()` handlers; dropped-field toasts via existing `setStructureStatus`.
+- The bridge needs no changes — picker lives in parent DOM, like the action bar.
+
+### Acceptance criteria
+
+1. Selecting a paragraph → `Change ▾` → `Heading h2` → IR replaces the `prose` with a `heading` whose `text` equals the source `body`. Block stays selected at the same `data-ir-path`. Rich-text edit on the new heading works immediately.
+2. `+ Block ▾` between two siblings shows the catalogue. Picking `Quote` inserts a `quote` block with `body = [{ text: "Quoted text" }]`, no attribution, and selects it.
+3. In a `two_column.left` container, `+ Block ▾` does **not** offer `two_column` / `grid` / `toc` (leaf-only).
+4. Morphing a `quote` with non-empty `attribution` to `prose` shows `"Attribution dropped."` for ~3.5s.
+5. Section parity: every behaviour above works identically in `DocumentEditor.svelte`.
+6. Tests: `+15-25` unit tests for `nodeCatalogue.ts` (default payloads + morph mappings + container filtering). Existing 1080 still pass.
+
+### Open questions
+
+1. **Default heading level on insert/morph.** `h2` matches the most common content-slide pattern, but heading-from-prose in a slide that already has an `h1` could look weird. Lean: always default `h2`, let the user step it via a level selector inside the heading picker entry.
+2. **List style on insert/morph.** Default `bullet`. The picker offers `bullet | numbered | checklist` as a sub-radio inside the list tile — small enough not to need a separate dialog.
+3. **Callout kind on insert.** Default `note`. Same sub-radio pattern as list style.
+4. **Picker UX: tile grid vs flat menu.** Tile grid is friendlier for first-time use (icons + labels), flat menu is faster for repeat use. Lean tile grid with keyboard shortcut hints (`P` for paragraph, `H` for heading, etc.) for power users — implementation cost the same.
+
+### Pre-flight tasks
+
+- [ ] App: scaffold `nodeCatalogue.ts` with payload composers + morph mappings, fully unit-tested before any UI work.
+- [ ] App: build `NodeTypePicker.svelte` with hard-coded catalogue first, wire to the catalogue module second.
+- [ ] App: replace `BlockActionBar` `+ Paragraph` / `+ Image` with `+ Block ▾`. Keep `+ Image` as a quick-action shortcut iff it's a high-frequency insert (revisit after dogfooding).
+- [ ] App: add `Change ▾` with the morph short-list. Toast on dropped-field morphs.
+- [ ] Manual round-trip in Claude Desktop: paragraph → heading → list → quote → callout → paragraph; commits stay clean, IR diffs make sense.

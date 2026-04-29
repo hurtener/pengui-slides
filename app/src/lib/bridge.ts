@@ -597,6 +597,18 @@ export class McpDeckEditorBridge implements DeckEditorBridge {
     return r.structuredContent;
   }
 
+  /** Replace the section IR node at `ir_path` with a different one
+   *  (v4.9e morph flow). Routes through `apply_section_node_edit`. */
+  async applySectionNodeEdit(args: {
+    deck_id: string;
+    section_id: string;
+    ir_path: ReadonlyArray<string | number>;
+    new_node: Record<string, unknown>;
+  }): Promise<unknown> {
+    const r = await this.callTool('apply_section_node_edit', args);
+    return r.structuredContent;
+  }
+
   /** Add a comment authored by the user (from the app, not the model). */
   async addCommentFromApp(args: {
     deck_id: string;

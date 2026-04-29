@@ -213,6 +213,30 @@ function createDeckStore(bridge: DeckEditorBridge) {
   }
 
   /**
+   * Replace the IR node at `path` with a different one (v4.9e). Used
+   * by the block-type changer to morph paragraph ↔ heading ↔ list ↔
+   * quote ↔ callout while preserving the user's primary RichText.
+   * Routes through the existing `apply_slide_node_edit` tool — the
+   * server still runs leaf-only validation and mode-aware lint.
+   */
+  async function applySlideNodeEdit(
+    path: IrPathArray,
+    newNode: Record<string, unknown>,
+  ): Promise<void> {
+    const b = structuralBridge();
+    const es = state.editorState;
+    if (!b || !es) return;
+    await withStructuralSave('Change failed', () =>
+      b.callTool('apply_slide_node_edit', {
+        deck_id: es.deck.id,
+        slide_id: es.selectedSlide.slideId,
+        ir_path: path,
+        new_node: newNode,
+      }),
+    );
+  }
+
+  /**
    * Commit a rich-text edit on one named field of an IR node (v4.9c).
    * Routes through the new `apply_slide_field_edit` tool — only the
    * addressed field is rewritten, every sibling field stays put.
@@ -266,6 +290,7 @@ function createDeckStore(bridge: DeckEditorBridge) {
     duplicateSlideNode,
     moveSlideNode,
     insertSlideNode,
+    applySlideNodeEdit,
     applyFieldRichTextEdit,
   };
 }

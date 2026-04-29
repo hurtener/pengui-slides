@@ -12,6 +12,14 @@
   import { onMount } from 'svelte';
   import CommentDrawer from '../lib/CommentDrawer.svelte';
   import AssetPicker from '../lib/AssetPicker.svelte';
+  import NodeTypePicker from '../lib/NodeTypePicker.svelte';
+  import {
+    defaultNodePayload,
+    kindOfNode,
+    morphTargetsFor,
+    morphTo,
+    type LeafNodeKind,
+  } from '../lib/nodeCatalogue';
   import BlockActionBar from '../lib/BlockActionBar.svelte';
   import { Button, Card, Pill } from '../lib/primitives/index';
   import type {
@@ -446,9 +454,7 @@
     | 'delete'
     | 'duplicate'
     | 'move_up'
-    | 'move_down'
-    | 'insert_after'
-    | 'insert_image_after';
+    | 'move_down';
 
   async function runBlockAction(action: SectionAction): Promise<void> {
     if (!detail || !selectedId || !selectedIrPath) return;
@@ -510,26 +516,165 @@
           setStructureStatus('Moved down.');
           selectedIrPath = [...parentPath, lastSeg + 1].join(',');
           break;
-        case 'insert_after':
-          await bridge.insertSectionNode({
-            deck_id: deckRef,
-            section_id: selectedId,
-            parent_path: parentPath,
-            position: lastSeg + 1,
-            new_node: {
-              type: 'prose',
-              body: [{ text: 'New paragraph — click to edit.' }],
-            },
-          });
-          setStructureStatus('Paragraph added.');
-          break;
-        case 'insert_image_after':
-          openAssetPicker(parentPath, lastSeg + 1);
-          break;
       }
     } catch (err) {
       setStructureStatus(err instanceof Error ? err.message : String(err));
     }
+  }
+
+  // ── v4.9e: + Block ▾ insert + Change ▾ morph ──────────────────────
+  let insertPickerOpen = $state(false);
+  let morphPickerOpen = $state(false);
+  let morphTargets = $state<ReadonlyArray<LeafNodeKind>>([]);
+  let morphSourceNode = $state<Record<string, unknown> | null>(null);
+
+  function openInsertPicker(): void {
+    if (!selectedIrPath) return;
+    insertPickerOpen = true;
+  }
+  function closeInsertPicker(): void {
+    insertPickerOpen = false;
+  }
+
+  async function handleInsertPick(kind: LeafNodeKind): Promise<void> {
+    if (!detail || !selectedId || !selectedIrPath) {
+      insertPickerOpen = false;
+      return;
+    }
+    const path = decodeIrPath(selectedIrPath);
+    if (path.length < 2) {
+      insertPickerOpen = false;
+      return;
+    }
+    const parentPath = path.slice(0, -1);
+    const lastSeg = path[path.length - 1];
+    if (typeof lastSeg !== 'number') {
+      insertPickerOpen = false;
+      return;
+    }
+    const insertIndex = lastSeg + 1;
+    insertPickerOpen = false;
+
+    if (kind === 'image') {
+      openAssetPicker(parentPath, insertIndex);
+      return;
+    }
+
+    const payload = defaultNodePayload(kind);
+    if (!payload) {
+      setStructureStatus("Couldn't compose that block.");
+      return;
+    }
+    setStructureStatus('');
+    try {
+      await bridge.insertSectionNode({
+        deck_id: deckRef,
+        section_id: selectedId,
+        parent_path: parentPath,
+        position: insertIndex,
+        new_node: payload,
+      });
+      setStructureStatus(`${humanLabel(kind)} added.`);
+      selectedIrPath = [...parentPath, insertIndex].join(',');
+    } catch (err) {
+      setStructureStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function openMorphPicker(): Promise<void> {
+    if (!detail || !selectedId || !selectedIrPath) return;
+    const path = decodeIrPath(selectedIrPath);
+    if (path.length < 2) return;
+    setStructureStatus('Loading…');
+    try {
+      const result = await bridge.callTool<{ section?: { ir?: unknown } }>(
+        'get_section',
+        {
+          deck_id: deckRef,
+          section_id: selectedId,
+        },
+      );
+      const ir = result.structuredContent?.section?.ir as
+        | Record<string, unknown>
+        | undefined;
+      const node = ir ? walkIrPath(ir, path) : null;
+      if (!node || typeof node !== 'object') {
+        setStructureStatus("Couldn't read this block — try reselecting.");
+        return;
+      }
+      const sourceKind = kindOfNode(node);
+      if (!sourceKind) {
+        setStructureStatus("This block can't be changed to a different type.");
+        return;
+      }
+      morphSourceNode = node;
+      morphTargets = morphTargetsFor(sourceKind);
+      morphPickerOpen = true;
+      setStructureStatus('');
+    } catch (err) {
+      setStructureStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  function closeMorphPicker(): void {
+    morphPickerOpen = false;
+    morphSourceNode = null;
+    morphTargets = [];
+  }
+
+  async function handleMorphPick(target: LeafNodeKind): Promise<void> {
+    if (!detail || !selectedId || !selectedIrPath || !morphSourceNode) {
+      closeMorphPicker();
+      return;
+    }
+    const path = decodeIrPath(selectedIrPath);
+    const result = morphTo(morphSourceNode, target);
+    closeMorphPicker();
+    if (!result) {
+      setStructureStatus("Couldn't change this block.");
+      return;
+    }
+    try {
+      await bridge.applySectionNodeEdit({
+        deck_id: deckRef,
+        section_id: selectedId,
+        ir_path: path,
+        new_node: result.newNode,
+      });
+      const dropped = result.droppedFields;
+      if (dropped.length > 0) {
+        setStructureStatus(
+          `Changed to ${humanLabel(target)}. ${capitalize(dropped.join(', '))} dropped.`,
+        );
+      } else {
+        setStructureStatus(`Changed to ${humanLabel(target)}.`);
+      }
+    } catch (err) {
+      setStructureStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  function humanLabel(kind: LeafNodeKind): string {
+    switch (kind) {
+      case 'paragraph': return 'Paragraph';
+      case 'heading':   return 'Heading';
+      case 'list':      return 'List';
+      case 'quote':     return 'Quote';
+      case 'callout':   return 'Callout';
+      case 'image':     return 'Image';
+      case 'divider':   return 'Divider';
+    }
+  }
+  function capitalize(s: string): string {
+    return s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1);
+  }
+  function walkIrPath(root: unknown, path: ReadonlyArray<string | number>): unknown {
+    let cur: unknown = root;
+    for (const seg of path) {
+      if (cur == null) return null;
+      cur = (cur as Record<string | number, unknown>)[seg];
+    }
+    return cur;
   }
 
   function deselectBlock(): void {
@@ -807,11 +952,12 @@
             selectedSiblingCount > 0 &&
             selectedSiblingIndex < selectedSiblingCount - 1
           }
+          canChangeType={true}
           onMoveUp={() => runBlockAction('move_up')}
           onMoveDown={() => runBlockAction('move_down')}
           onDuplicate={() => runBlockAction('duplicate')}
-          onAddParagraph={() => runBlockAction('insert_after')}
-          onAddImage={() => runBlockAction('insert_image_after')}
+          onInsertBlock={openInsertPicker}
+          onChangeType={() => void openMorphPicker()}
           onDelete={() => runBlockAction('delete')}
           onDeselect={deselectBlock}
         />
@@ -989,6 +1135,21 @@
     open={assetPickerOpen}
     onPick={handleAssetPick}
     onClose={closeAssetPicker}
+  />
+
+  <!-- v4.9e: + Block ▾ and Change ▾ pickers -->
+  <NodeTypePicker
+    open={insertPickerOpen}
+    title="Insert a block"
+    onPick={(kind) => void handleInsertPick(kind)}
+    onClose={closeInsertPicker}
+  />
+  <NodeTypePicker
+    open={morphPickerOpen}
+    title="Change to…"
+    availableKinds={morphTargets}
+    onPick={(kind) => void handleMorphPick(kind)}
+    onClose={closeMorphPicker}
   />
 </div>
 

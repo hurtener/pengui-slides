@@ -14,14 +14,19 @@
   interface Props {
     selectedIrPath: string | null;
     selectedPreview: string;
-    allowImageInsert?: boolean;
     canMoveUp?: boolean;
     canMoveDown?: boolean;
+    /** True when the selected block is a kind the user can morph into
+     *  another type (paragraph / heading / list / quote / callout).
+     *  False for image / divider — Change ▾ is hidden. */
+    canChangeType?: boolean;
     onMoveUp: () => void;
     onMoveDown: () => void;
     onDuplicate: () => void;
-    onAddParagraph: () => void;
-    onAddImage: () => void;
+    /** Open the node-type picker for "+ Block ▾" insert. */
+    onInsertBlock: () => void;
+    /** Open the node-type picker for "Change ▾" morph. */
+    onChangeType: () => void;
     onDelete: () => void;
     onDeselect: () => void;
   }
@@ -29,14 +34,14 @@
   let {
     selectedIrPath,
     selectedPreview,
-    allowImageInsert = true,
     canMoveUp = true,
     canMoveDown = true,
+    canChangeType = false,
     onMoveUp,
     onMoveDown,
     onDuplicate,
-    onAddParagraph,
-    onAddImage,
+    onInsertBlock,
+    onChangeType,
     onDelete,
     onDeselect,
   }: Props = $props();
@@ -118,12 +123,24 @@
       <button type="button" class="bar-btn" onclick={onDuplicate} title="Duplicate">
         ⧉ <span class="bar-btn-label">Duplicate</span>
       </button>
-      <button type="button" class="bar-btn" onclick={onAddParagraph} title="Add paragraph below">
-        + <span class="bar-btn-label">Paragraph</span>
+      <button
+        type="button"
+        class="bar-btn primary"
+        onclick={onInsertBlock}
+        title="Insert a new block below"
+      >
+        + <span class="bar-btn-label">Block</span>
+        <span class="bar-btn-caret" aria-hidden="true">▾</span>
       </button>
-      {#if allowImageInsert}
-        <button type="button" class="bar-btn" onclick={onAddImage} title="Add image below">
-          + <span class="bar-btn-label">Image</span>
+      {#if canChangeType}
+        <button
+          type="button"
+          class="bar-btn"
+          onclick={onChangeType}
+          title="Change this block's type"
+        >
+          ⇄ <span class="bar-btn-label">Change</span>
+          <span class="bar-btn-caret" aria-hidden="true">▾</span>
         </button>
       {/if}
       {#if confirmingDelete}
@@ -222,6 +239,23 @@
     background: var(--mint-tint);
     color: var(--mint-hover);
     outline: none;
+  }
+
+  .bar-btn.primary {
+    border-color: var(--mint);
+    background: var(--mint-tint);
+    color: var(--mint-hover);
+  }
+  .bar-btn.primary:hover,
+  .bar-btn.primary:focus-visible {
+    background: var(--mint);
+    color: var(--surface-1);
+  }
+
+  .bar-btn-caret {
+    font-size: 9px;
+    margin-left: 2px;
+    opacity: 0.7;
   }
 
   .bar-btn:disabled {
