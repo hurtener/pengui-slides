@@ -59,6 +59,11 @@
   let selectedPreview = $state<string>('');
   let selectedSiblingIndex = $state<number>(-1);
   let selectedSiblingCount = $state<number>(0);
+  // True when the selected block has at least one rich-text field
+  // descendant — i.e., it's a paragraph / heading / list / quote /
+  // callout. Drives whether `Change ▾` shows in the action bar.
+  // Image / divider blocks have no rt-fields and aren't morphable.
+  let selectedMorphable = $state<boolean>(false);
 
   function setStructureStatus(text: string): void {
     structureStatus = text;
@@ -68,6 +73,24 @@
         structureStatus = '';
         structureStatusTimer = null;
       }, 3500);
+    }
+  }
+  /** Like setStructureStatus but never auto-clears — used for
+   *  in-flight messages like "Loading…" where the round-trip can run
+   *  longer than the 3.5s auto-dismiss. The next regular call (or
+   *  clearStructureStatus) will sweep it. */
+  function setStructureStatusSticky(text: string): void {
+    structureStatus = text;
+    if (structureStatusTimer) {
+      clearTimeout(structureStatusTimer);
+      structureStatusTimer = null;
+    }
+  }
+  function clearStructureStatus(): void {
+    structureStatus = '';
+    if (structureStatusTimer) {
+      clearTimeout(structureStatusTimer);
+      structureStatusTimer = null;
     }
   }
 
@@ -112,6 +135,11 @@
         ...(a.label ? { alt: a.label } : {}),
       });
       setStructureStatus('Image added.');
+      // Parity with non-image inserts: select the new block so the
+      // user can immediately move / delete / change it. The bridge
+      // re-emits selection-info on iframe reload to refresh the
+      // action bar's edge state.
+      selectedIrPath = [...path, pos].join(',');
     } catch (err) {
       setStructureStatus(err instanceof Error ? err.message : String(err));
     }
@@ -156,6 +184,7 @@
     preview?: string;
     siblingIndex?: number;
     siblingCount?: number;
+    morphable?: boolean;
   }): void {
     selectedIrPath = detail.irPath;
     // Preview only updates when explicitly provided (click events).
@@ -168,9 +197,11 @@
     }
     if (typeof detail.siblingIndex === 'number') selectedSiblingIndex = detail.siblingIndex;
     if (typeof detail.siblingCount === 'number') selectedSiblingCount = detail.siblingCount;
+    if (typeof detail.morphable === 'boolean') selectedMorphable = detail.morphable;
     if (!detail.irPath) {
       selectedSiblingIndex = -1;
       selectedSiblingCount = 0;
+      selectedMorphable = false;
     }
   }
 
@@ -179,6 +210,7 @@
     selectedPreview = '';
     selectedSiblingIndex = -1;
     selectedSiblingCount = 0;
+    selectedMorphable = false;
   }
 
   // Auto-clear the selection when leaving Edit-layout mode or
@@ -189,6 +221,7 @@
       selectedPreview = '';
       selectedSiblingIndex = -1;
       selectedSiblingCount = 0;
+      selectedMorphable = false;
     }
   });
 
@@ -334,8 +367,11 @@
   let morphTargets = $state<ReadonlyArray<LeafNodeKind>>([]);
   // Cached source node for morph — populated when the user opens
   // Change ▾ so the picker can filter and the commit step doesn't
-  // re-fetch.
+  // re-fetch. Pinning the path here (instead of reading selectedIrPath
+  // on commit) prevents a mid-picker reselection from morphing the
+  // wrong block.
   let morphSourceNode = $state<Record<string, unknown> | null>(null);
+  let morphSourcePath = $state<ReadonlyArray<string | number> | null>(null);
 
   function openInsertPicker(): void {
     if (!selectedIrPath) return;
@@ -394,12 +430,21 @@
     if (!selectedIrPath || !bridge || !deck.editorState) return;
     const path = decodeIrPath(selectedIrPath);
     if (path.length < 2) return;
-    setStructureStatus('Loading…');
+    // Snapshot path so a mid-fetch reselection doesn't make us morph
+    // a different block than the user clicked Change ▾ on.
+    const requestedIrPath = selectedIrPath;
+    setStructureStatusSticky('Loading…');
     try {
       const result = await bridge.callTool<{ ir?: unknown }>('get_slide', {
         deck_id: deck.editorState.deck.id,
         slide_id: deck.editorState.selectedSlide.slideId,
       });
+      if (selectedIrPath !== requestedIrPath) {
+        // User selected a different block while we were fetching.
+        // Drop the result silently — they didn't ask for THIS morph.
+        clearStructureStatus();
+        return;
+      }
       const ir = result.structuredContent?.ir as Record<string, unknown> | undefined;
       const node = ir ? walkIrPath(ir, path) : null;
       if (!node || typeof node !== 'object') {
@@ -412,9 +457,10 @@
         return;
       }
       morphSourceNode = node;
+      morphSourcePath = path;
       morphTargets = morphTargetsFor(sourceKind);
       morphPickerOpen = true;
-      setStructureStatus('');
+      clearStructureStatus();
     } catch (err) {
       setStructureStatus(err instanceof Error ? err.message : String(err));
     }
@@ -423,15 +469,16 @@
   function closeMorphPicker(): void {
     morphPickerOpen = false;
     morphSourceNode = null;
+    morphSourcePath = null;
     morphTargets = [];
   }
 
   async function handleMorphPick(target: LeafNodeKind): Promise<void> {
-    if (!selectedIrPath || !morphSourceNode) {
+    if (!morphSourceNode || !morphSourcePath) {
       closeMorphPicker();
       return;
     }
-    const path = decodeIrPath(selectedIrPath);
+    const path = morphSourcePath;
     const result = morphTo(morphSourceNode, target);
     closeMorphPicker();
     if (!result) {
@@ -828,7 +875,7 @@
               selectedSiblingCount > 0 &&
               selectedSiblingIndex < selectedSiblingCount - 1
             }
-            canChangeType={true}
+            canChangeType={selectedMorphable}
             onMoveUp={() => runBlockAction('move_up')}
             onMoveDown={() => runBlockAction('move_down')}
             onDuplicate={() => runBlockAction('duplicate')}

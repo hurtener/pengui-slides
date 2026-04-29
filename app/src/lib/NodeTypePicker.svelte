@@ -58,6 +58,17 @@
     // Modifier keys must be off so we don't fight typed text in
     // contentEditable elsewhere on the page.
     if (event.metaKey || event.ctrlKey || event.altKey) return;
+    // Don't hijack typing in inputs / textareas / contentEditable —
+    // even though the picker scrim *should* eat focus, focus may
+    // already be in a form control somewhere else in the document
+    // (e.g. an iframe-hosted contentEditable, the comment textarea,
+    // or revision instruction). Bail when target looks editable.
+    const target = event.target as HTMLElement | null;
+    if (target) {
+      const tag = target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (target.isContentEditable) return;
+    }
     const key = event.key.toLowerCase();
     const match = entries.find((entry) => entry.shortcut === key);
     if (match) {

@@ -214,6 +214,11 @@ export interface SectionDetail {
   deck_id: string;
   position: number;
   kind: string;
+  /** Raw section IR — used by the v4.9e morph flow to read the source
+   *  node's primary RichText before composing the replacement. The
+   *  shape is `{ body: [...nodes] }` for content sections (and tagged
+   *  variants for toc / bibliography / page_break / section_divider). */
+  ir?: unknown;
   html: string;
   break_hints?: SectionBreakHints;
   metadata: {

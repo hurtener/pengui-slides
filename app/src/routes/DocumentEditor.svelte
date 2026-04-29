@@ -91,6 +91,9 @@
   let selectedPreview = $state<string>('');
   let selectedSiblingIndex = $state<number>(-1);
   let selectedSiblingCount = $state<number>(0);
+  // True when the selected block has at least one rich-text field
+  // descendant — drives canChangeType for the action bar.
+  let selectedMorphable = $state<boolean>(false);
 
   function setStructureStatus(text: string): void {
     structureStatus = text;
@@ -100,6 +103,21 @@
         structureStatus = '';
         structureStatusTimer = null;
       }, 3500);
+    }
+  }
+  /** No-auto-dismiss variant for in-flight messages like "Loading…". */
+  function setStructureStatusSticky(text: string): void {
+    structureStatus = text;
+    if (structureStatusTimer) {
+      clearTimeout(structureStatusTimer);
+      structureStatusTimer = null;
+    }
+  }
+  function clearStructureStatus(): void {
+    structureStatus = '';
+    if (structureStatusTimer) {
+      clearTimeout(structureStatusTimer);
+      structureStatusTimer = null;
     }
   }
 
@@ -145,6 +163,9 @@
         },
       });
       setStructureStatus('Image added.');
+      // Parity with non-image inserts: select the new block so the
+      // user can immediately move / delete / change it.
+      selectedIrPath = [...path, pos].join(',');
     } catch (err) {
       setStructureStatus(err instanceof Error ? err.message : String(err));
     }
@@ -527,6 +548,8 @@
   let morphPickerOpen = $state(false);
   let morphTargets = $state<ReadonlyArray<LeafNodeKind>>([]);
   let morphSourceNode = $state<Record<string, unknown> | null>(null);
+  // Pinned path-at-open-time — see Editor.svelte for rationale.
+  let morphSourcePath = $state<ReadonlyArray<string | number> | null>(null);
 
   function openInsertPicker(): void {
     if (!selectedIrPath) return;
@@ -585,18 +608,19 @@
     if (!detail || !selectedId || !selectedIrPath) return;
     const path = decodeIrPath(selectedIrPath);
     if (path.length < 2) return;
-    setStructureStatus('Loading…');
+    // Snapshot the path so a mid-fetch reselection can't make us
+    // read one block's IR and morph another's.
+    const requestedIrPath = selectedIrPath;
+    setStructureStatusSticky('Loading…');
     try {
-      const result = await bridge.callTool<{ section?: { ir?: unknown } }>(
-        'get_section',
-        {
-          deck_id: deckRef,
-          section_id: selectedId,
-        },
-      );
-      const ir = result.structuredContent?.section?.ir as
-        | Record<string, unknown>
-        | undefined;
+      const response = await bridge.getSection(selectedId);
+      if (selectedIrPath !== requestedIrPath) {
+        // User selected a different block while we were fetching.
+        // Bail silently — they didn't ask for THIS morph anymore.
+        clearStructureStatus();
+        return;
+      }
+      const ir = response.section.ir as Record<string, unknown> | undefined;
       const node = ir ? walkIrPath(ir, path) : null;
       if (!node || typeof node !== 'object') {
         setStructureStatus("Couldn't read this block — try reselecting.");
@@ -608,9 +632,10 @@
         return;
       }
       morphSourceNode = node;
+      morphSourcePath = path;
       morphTargets = morphTargetsFor(sourceKind);
       morphPickerOpen = true;
-      setStructureStatus('');
+      clearStructureStatus();
     } catch (err) {
       setStructureStatus(err instanceof Error ? err.message : String(err));
     }
@@ -619,15 +644,16 @@
   function closeMorphPicker(): void {
     morphPickerOpen = false;
     morphSourceNode = null;
+    morphSourcePath = null;
     morphTargets = [];
   }
 
   async function handleMorphPick(target: LeafNodeKind): Promise<void> {
-    if (!detail || !selectedId || !selectedIrPath || !morphSourceNode) {
+    if (!detail || !selectedId || !morphSourceNode || !morphSourcePath) {
       closeMorphPicker();
       return;
     }
-    const path = decodeIrPath(selectedIrPath);
+    const path = morphSourcePath;
     const result = morphTo(morphSourceNode, target);
     closeMorphPicker();
     if (!result) {
@@ -682,6 +708,7 @@
     selectedPreview = '';
     selectedSiblingIndex = -1;
     selectedSiblingCount = 0;
+    selectedMorphable = false;
   }
 
   function toggleStructureMode(): void {
@@ -692,6 +719,7 @@
       selectedPreview = '';
       selectedSiblingIndex = -1;
       selectedSiblingCount = 0;
+      selectedMorphable = false;
     }
   }
 
@@ -820,6 +848,8 @@
           typeof data.siblingIndex === 'number' ? data.siblingIndex : -1;
         selectedSiblingCount =
           typeof data.siblingCount === 'number' ? data.siblingCount : 0;
+        selectedMorphable =
+          typeof data.morphable === 'boolean' ? data.morphable : false;
         return;
       }
 
@@ -830,6 +860,7 @@
         if (typeof data.irPath === 'string') selectedIrPath = data.irPath;
         if (typeof data.siblingIndex === 'number') selectedSiblingIndex = data.siblingIndex;
         if (typeof data.siblingCount === 'number') selectedSiblingCount = data.siblingCount;
+        if (typeof data.morphable === 'boolean') selectedMorphable = data.morphable;
         return;
       }
 
@@ -952,7 +983,7 @@
             selectedSiblingCount > 0 &&
             selectedSiblingIndex < selectedSiblingCount - 1
           }
-          canChangeType={true}
+          canChangeType={selectedMorphable}
           onMoveUp={() => runBlockAction('move_up')}
           onMoveDown={() => runBlockAction('move_down')}
           onDuplicate={() => runBlockAction('duplicate')}

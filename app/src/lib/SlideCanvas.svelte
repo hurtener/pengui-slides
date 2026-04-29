@@ -79,6 +79,7 @@
       preview?: string;
       siblingIndex?: number;
       siblingCount?: number;
+      morphable?: boolean;
     }) => void;
     /**
      * v4.9c: write the parent's `selectedIrPath` into the iframe's
@@ -297,6 +298,7 @@
       destIrPath?: string;
       siblingIndex?: number;
       siblingCount?: number;
+      morphable?: boolean;
       position?: string;
       field?: string;
       html?: string;
@@ -321,6 +323,8 @@
           typeof data.siblingIndex === 'number' ? data.siblingIndex : undefined,
         siblingCount:
           typeof data.siblingCount === 'number' ? data.siblingCount : undefined,
+        morphable:
+          typeof data.morphable === 'boolean' ? data.morphable : undefined,
       });
       return;
     }
@@ -337,6 +341,8 @@
           typeof data.siblingIndex === 'number' ? data.siblingIndex : undefined,
         siblingCount:
           typeof data.siblingCount === 'number' ? data.siblingCount : undefined,
+        morphable:
+          typeof data.morphable === 'boolean' ? data.morphable : undefined,
       });
       return;
     }

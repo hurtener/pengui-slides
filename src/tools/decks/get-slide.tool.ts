@@ -7,7 +7,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServiceContainer } from '../../container.js';
-import { textResponse } from '../_shared/responses.js';
+import { structuredResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
 import { SlideNotFoundError } from '../../types/errors.js';
 
@@ -29,7 +29,11 @@ export function registerGetSlideTool(server: McpServer, container: ServiceContai
           throw new SlideNotFoundError(slide_id);
         }
 
-        return textResponse({
+        // structuredResponse exposes the payload to App callers via
+        // structuredContent (the v4.9e morph flow needs slide.ir at
+        // runtime to compose the new node). The text content keeps the
+        // pretty-printed JSON for human / agent consumers.
+        return structuredResponse({
           html: slide.html,
           ir: slide.ir,
           source_kind: slide.sourceKind,

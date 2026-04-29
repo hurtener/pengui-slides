@@ -164,13 +164,20 @@ export const STRUCTURE_BRIDGE_SCRIPT = `<script>(function(){
       e.preventDefault();
       e.stopPropagation();
       var info = siblingInfoFor(irPath);
+      // v4.9e: a block is morphable iff it carries at least one
+      // [data-ir-rt-field] (rich-text-bearing) descendant. Image and
+      // divider blocks have no rt-fields, so Change ▾ stays hidden
+      // for them. The compiler emits these attributes on every text
+      // role (eyebrow / title / body / text / items[N] / etc.).
+      var morphable = !!(t && t.querySelector && t.querySelector('[data-ir-rt-field]'));
       window.parent.postMessage({
         source: 'pengui-slide',
         type: 'select-block',
         irPath: irPath,
         preview: text,
         siblingIndex: info.index,
-        siblingCount: info.count
+        siblingCount: info.count,
+        morphable: morphable
       }, '*');
     }
   }, true);
@@ -196,17 +203,19 @@ export const STRUCTURE_BRIDGE_SCRIPT = `<script>(function(){
       }
     }
     // Re-emit sibling-info so the parent action bar can refresh
-    // canMoveUp/canMoveDown after a structural change re-rendered
-    // the slide HTML (the parent's selectedIrPath survives across
-    // reloads but the cached siblingIndex/siblingCount go stale).
+    // canMoveUp/canMoveDown/canChangeType after a structural change
+    // re-rendered the slide HTML (the parent's selectedIrPath survives
+    // across reloads but the cached info goes stale).
     if (found) {
       var info = siblingInfoFor(path);
+      var morphable = !!(found.querySelector && found.querySelector('[data-ir-rt-field]'));
       window.parent.postMessage({
         source: 'pengui-slide',
         type: 'selection-info',
         irPath: path,
         siblingIndex: info.index,
-        siblingCount: info.count
+        siblingCount: info.count,
+        morphable: morphable
       }, '*');
     }
   }
