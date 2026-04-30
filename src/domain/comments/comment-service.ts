@@ -26,12 +26,15 @@ import {
 import { generateCommentId, type Clock } from '../../infrastructure/index.js';
 import type { Logger } from '../../infrastructure/index.js';
 import type { DeckService } from '../decks/deck-service.js';
+import type { DocumentService } from '../documents/document-service.js';
 import type { IRPath } from '../ir/index.js';
+import { SectionNotFoundError } from '../../types/errors.js';
 
 export class CommentService {
   constructor(
     private readonly store: ICommentStore,
     private readonly deckService: DeckService,
+    private readonly documentService: DocumentService,
     private readonly clock: Clock,
     private readonly logger: Logger,
   ) {}
@@ -118,16 +121,20 @@ export class CommentService {
     const all = await this.store.listByDeck(did);
     let rewritten = 0;
     let orphaned = 0;
+    // Probe the container kind once per migration. Orphans of section
+    // ir_node comments must downgrade to a section target — pre-v4.10
+    // they downgraded to {kind:'slide', slideId:<section_id>}, which
+    // produced an invalid target the renderer couldn't anchor.
+    const orphanTarget = await this.resolveOrphanTarget(containerId);
     for (const c of all) {
       if (c.target.kind !== 'ir_node') continue;
       if (c.target.containerId !== containerId) continue;
       const next = rewrite(c.target.irPath);
       if (next === null) {
-        // Orphan: degrade target so the comment stays visible. The slide
-        // id is the containerId — keep the body, drop the path.
+        // Orphan: degrade target so the comment stays visible.
         const updated: Comment = {
           ...c,
-          target: { kind: 'slide', slideId: containerId as never },
+          target: orphanTarget,
         };
         await this.store.save(updated);
         orphaned += 1;
@@ -148,6 +155,27 @@ export class CommentService {
       });
     }
     return { rewrittenCount: rewritten, orphanedCount: orphaned };
+  }
+
+  /**
+   * Decide what target an orphaned `ir_node` comment should downgrade
+   * to. Containers can be slides OR sections — probing the section
+   * store first and falling back to the slide kind keeps the existing
+   * slide-orphan behavior unchanged while routing section orphans to
+   * the correct kind. Brand casts mirror the downstream consumers.
+   */
+  private async resolveOrphanTarget(
+    containerId: string,
+  ): Promise<Comment['target']> {
+    try {
+      await this.documentService.getSection(containerId);
+      return { kind: 'section', sectionId: containerId as never };
+    } catch (err) {
+      if (err instanceof SectionNotFoundError) {
+        return { kind: 'slide', slideId: containerId as never };
+      }
+      throw err;
+    }
   }
 }
 

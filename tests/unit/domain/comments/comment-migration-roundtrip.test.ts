@@ -215,3 +215,157 @@ describe('Comment ir_path migration after structural slide ops', () => {
     expect(after?.target).toMatchObject({ irPath: ['body', 1] });
   });
 });
+
+// v4.10: orphan downgrade must respect container kind. Pre-fix the
+// migrator forced every orphan to {kind:'slide'}, which produced an
+// invalid target when the container was actually a section.
+describe('Comment ir_path migration — section orphan downgrade (v4.10)', () => {
+  let container: ReturnType<typeof createContainer>;
+  let deckId: string;
+  let sectionId: string;
+
+  beforeEach(async () => {
+    container = createContainer(loadConfig({ logLevel: 'error' }));
+    const soul = await container.soulService.register(sampleSoulInput);
+    await container.soulService.approve(soul.id);
+    const deck = await container.deckService.createDeck({
+      soulId: soul.id as string,
+      title: 'Section Pin Migration Deck',
+      format: 'print_a4_portrait',
+    });
+    deckId = deck.id as string;
+    const { section } = await container.documentService.addSection({
+      deckId,
+      kind: 'prose',
+      ir: {
+        kind: 'prose',
+        body: [
+          { type: 'prose', body: rt({ text: 'A' }) },
+          { type: 'prose', body: rt({ text: 'B' }) },
+          { type: 'prose', body: rt({ text: 'C' }) },
+        ],
+      },
+      metadata: { title: 'S', narrative: '' },
+    });
+    sectionId = section.id as string;
+  });
+
+  async function findComment(id: string) {
+    const all = await container.commentService.listByDeck(deckId);
+    return all.find((c) => c.id === id);
+  }
+
+  it('downgrades section ir_node orphans to {kind:section}, not {kind:slide}', async () => {
+    const pinned = await container.commentService.add({
+      deckId,
+      target: {
+        kind: 'ir_node',
+        containerId: sectionId as never,
+        irPath: ['body', 1],
+        preview: 'B',
+      },
+      author: 'user',
+      kind: 'revision',
+      body: 'rewrite this paragraph',
+    });
+
+    await container.documentService.removeSectionNode({
+      deckId,
+      sectionId,
+      path: ['body', 1],
+    });
+    const result = await container.commentService.migrateIrPathsForContainer(
+      deckId,
+      sectionId,
+      (p) => migratePathAfterRemove(p, ['body', 1]),
+    );
+
+    expect(result.orphanedCount).toBe(1);
+    const after = await findComment(pinned.id);
+    expect(after?.target).toMatchObject({
+      kind: 'section',
+      sectionId,
+    });
+    // Must NOT be a slide target with the section id stamped in.
+    expect(after?.target).not.toMatchObject({ kind: 'slide' });
+  });
+
+  it('keeps slide ir_node orphans on {kind:slide} (regression guard)', async () => {
+    // Same migration pipeline, but this time the container is a slide.
+    // The pre-v4.10 orphan path was correct for slides — make sure the
+    // detection branch didn't accidentally route slides to sections.
+    const slidesDeck = await container.deckService.createDeck({
+      soulId: (await container.soulService.list())[0].id as string,
+      title: 'Slide-only deck',
+    });
+    const slide = await container.deckService.addSlide({
+      deckId: slidesDeck.id as string,
+      ir: {
+        body: [{ type: 'prose', body: rt({ text: 'only' }) }],
+      },
+      metadata: { title: 'X', type: 'content', narrative: '' },
+    });
+    const slideId = slide.id as string;
+    const pinned = await container.commentService.add({
+      deckId: slidesDeck.id as string,
+      target: {
+        kind: 'ir_node',
+        containerId: slideId as never,
+        irPath: ['body', 0],
+        preview: 'only',
+      },
+      author: 'user',
+      kind: 'note',
+      body: 'about to disappear',
+    });
+    await container.deckService.removeSlideNode({
+      deckId: slidesDeck.id as string,
+      slideId,
+      path: ['body', 0],
+    });
+    const result = await container.commentService.migrateIrPathsForContainer(
+      slidesDeck.id as string,
+      slideId,
+      (p) => migratePathAfterRemove(p, ['body', 0]),
+    );
+    expect(result.orphanedCount).toBe(1);
+    const after = (await container.commentService.listByDeck(slidesDeck.id as string))
+      .find((c) => c.id === pinned.id);
+    expect(after?.target).toMatchObject({ kind: 'slide', slideId });
+  });
+
+  it('section comment that is rewritten (not orphaned) keeps ir_node target', async () => {
+    // Pin body[2], remove body[0] — pin should rewrite to body[1],
+    // not orphan. The fix shouldn't have changed rewrite behavior.
+    const pinned = await container.commentService.add({
+      deckId,
+      target: {
+        kind: 'ir_node',
+        containerId: sectionId as never,
+        irPath: ['body', 2],
+        preview: 'C',
+      },
+      author: 'user',
+      kind: 'note',
+      body: 'follows the trailing block',
+    });
+
+    await container.documentService.removeSectionNode({
+      deckId,
+      sectionId,
+      path: ['body', 0],
+    });
+    await container.commentService.migrateIrPathsForContainer(
+      deckId,
+      sectionId,
+      (p) => migratePathAfterRemove(p, ['body', 0]),
+    );
+
+    const after = await findComment(pinned.id);
+    expect(after?.target).toMatchObject({
+      kind: 'ir_node',
+      containerId: sectionId,
+      irPath: ['body', 1],
+    });
+  });
+});

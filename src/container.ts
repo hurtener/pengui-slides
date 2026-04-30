@@ -95,6 +95,7 @@ export function createContainer(config: PenguiConfig): ServiceContainer {
   const commentService = new CommentService(
     commentStore,
     deckService,
+    documentService,
     clock,
     logger.child('comments'),
   );

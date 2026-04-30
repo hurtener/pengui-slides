@@ -95,6 +95,17 @@
   // True when the selected block has at least one rich-text field
   // descendant — drives canChangeType for the action bar.
   let selectedMorphable = $state<boolean>(false);
+  // v4.10: pin-on-block for sections. Mirrors the slide-editor flow —
+  // the user toggles pin mode on the section toolbar, clicks a block
+  // in the canvas, and submits a comment that targets the specific
+  // ir_node instead of the section as a whole.
+  let pinMode = $state(false);
+  let pinnedIrPath = $state<string | null>(null);
+  let pinnedPreview = $state<string>('');
+  // String-encoded ir_paths of unresolved ir_node comments on the
+  // currently-selected section. Drives the dashed mint outline on
+  // pinned blocks via the shared structureBridge CSS.
+  let commentedIrPaths = $state<string[]>([]);
 
   function setStructureStatus(text: string): void {
     structureStatus = text;
@@ -350,12 +361,41 @@
     }
   }
 
-  // ── Comments (on sections) ──────────────────────────────────────────────
+  // ── Comments (on sections — v4.10 supports per-block pinning) ──────────
+  function togglePinMode(): void {
+    pinMode = !pinMode;
+    // Mutually exclusive with edit-layout — the iframe affordances
+    // (cursor: crosshair vs cursor: grab) are driven from the same
+    // dataset flags and would conflict if both were on.
+    if (pinMode) {
+      structureMode = false;
+      selectedIrPath = null;
+      selectedPreview = '';
+    } else {
+      pinnedIrPath = null;
+      pinnedPreview = '';
+    }
+  }
+
+  function handlePinTarget(detail: { irPath: string; preview?: string }): void {
+    pinnedIrPath = detail.irPath;
+    pinnedPreview = detail.preview?.trim() ?? '';
+    pinMode = false;
+  }
+
   async function submitComment(): Promise<void> {
     if (!detail || !commentDraft.trim()) return;
     commentPending = true;
     try {
-      const target: CommentTarget = { kind: 'section', section_id: detail.id };
+      const sectionId = detail.id;
+      const target: CommentTarget = pinnedIrPath
+        ? {
+            kind: 'ir_node',
+            container_id: sectionId,
+            ir_path: decodeIrPath(pinnedIrPath),
+            ...(pinnedPreview ? { preview: pinnedPreview } : {}),
+          }
+        : { kind: 'section', section_id: sectionId };
       await bridge.addCommentFromApp({
         deck_id: deckRef,
         target,
@@ -363,7 +403,10 @@
         body: commentDraft.trim(),
       });
       commentDraft = '';
+      pinnedIrPath = null;
+      pinnedPreview = '';
       commentDrawerOpen = true;
+      await refreshCommentedIrPaths();
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
     } finally {
@@ -375,6 +418,36 @@
     if (target.kind === 'section') {
       void selectSection(target.section_id);
       commentDrawerOpen = false;
+    } else if (target.kind === 'ir_node') {
+      // ir_node comments live on a specific section; navigate to it
+      // and let the bridge paint the outline once the iframe loads.
+      void selectSection(target.container_id);
+      commentDrawerOpen = false;
+    }
+  }
+
+  /** Refresh the dashed mint outline set for ir_node comments on the
+   *  currently-selected section. Mirrors Editor.svelte's flow. */
+  async function refreshCommentedIrPaths(): Promise<void> {
+    if (!detail) {
+      commentedIrPaths = [];
+      return;
+    }
+    try {
+      const result = await bridge.listComments(deckRef, {
+        resolved: 'unresolved',
+        target_kind: 'ir_node',
+      });
+      const sectionId = detail.id;
+      commentedIrPaths = result.comments
+        .filter(
+          (c) => c.target.kind === 'ir_node' && c.target.container_id === sectionId,
+        )
+        .map((c) =>
+          (c.target as { ir_path: ReadonlyArray<string | number> }).ir_path.join(','),
+        );
+    } catch {
+      commentedIrPaths = [];
     }
   }
 
@@ -454,6 +527,9 @@
     if (!doc) return;
     try {
       doc.documentElement.dataset.penguiStructureMode = String(structureMode);
+      // v4.10: pin-mode dataset drives the bridge's cursor:crosshair
+      // affordance + the click handler that emits `pintarget`.
+      doc.documentElement.dataset.penguiPinMode = String(pinMode);
       // Doc-mode supports image insertion the same way as slide-mode —
       // the AssetPicker is wired below.
       doc.documentElement.dataset.penguiAllowImageInsert = 'true';
@@ -466,10 +542,66 @@
     }
   }
 
+  /**
+   * v4.10: paint dashed mint outlines on every block carrying an
+   * unresolved ir_node comment, plus a heavier outline on the in-flight
+   * draft pin. Mirrors the slide-editor's applyPinDecorations.
+   */
+  function applyPinDecorations(): void {
+    const doc = sectionFrameEl?.contentDocument;
+    if (!doc) return;
+    const pinnable = doc.querySelectorAll<HTMLElement>('[data-ir-path]');
+    const pinnedSet = new Set(commentedIrPaths);
+    pinnable.forEach((el) => {
+      const irPath = el.dataset.irPath ?? '';
+      const isPinned = irPath ? pinnedSet.has(irPath) : false;
+      const isDraft = !!pinnedIrPath && irPath === pinnedIrPath;
+      if (isDraft) {
+        el.style.outline = '2px solid rgba(47, 184, 166, 0.95)';
+        el.style.outlineOffset = '3px';
+        el.style.backgroundColor = 'rgba(47, 184, 166, 0.12)';
+      } else if (pinMode) {
+        // The bridge handles the per-block hover outline + crosshair
+        // cursor in pin-mode; the parent only annotates persistent
+        // pinned blocks here.
+        el.style.outline = isPinned ? '1px dashed rgba(47, 184, 166, 0.55)' : '';
+        el.style.outlineOffset = isPinned ? '2px' : '';
+        el.style.backgroundColor = '';
+      } else {
+        el.style.outline = isPinned ? '1px dashed rgba(47, 184, 166, 0.55)' : '';
+        el.style.outlineOffset = isPinned ? '2px' : '';
+        el.style.backgroundColor = '';
+      }
+    });
+  }
+
   $effect(() => {
     void structureMode;
+    void pinMode;
     void detail;
     syncStructureModeToFrame();
+  });
+
+  // Paint pin decorations whenever the set of pinned paths changes,
+  // the user starts/stops drafting a new pin, or the section detail
+  // re-renders (revisionHash bump after a structural op).
+  $effect(() => {
+    void commentedIrPaths;
+    void pinnedIrPath;
+    void pinMode;
+    void detail;
+    applyPinDecorations();
+  });
+
+  // Refresh pinned paths whenever the selected section or its content
+  // changes — structural ops bump revisionHash and may have rewritten
+  // ir_paths via the server-side migrator.
+  $effect(() => {
+    if (detail) {
+      void detail.id;
+      void detail.html;
+      void refreshCommentedIrPaths();
+    }
   });
 
   type SectionAction =
@@ -715,7 +847,12 @@
   function toggleStructureMode(): void {
     structureMode = !structureMode;
     setStructureStatus('');
-    if (!structureMode) {
+    if (structureMode) {
+      // Mutually exclusive with pin mode.
+      pinMode = false;
+      pinnedIrPath = null;
+      pinnedPreview = '';
+    } else {
       selectedIrPath = null;
       selectedPreview = '';
       selectedSiblingIndex = -1;
@@ -837,6 +974,11 @@
       if (!data || data.source !== 'pengui-slide') return;
       if (sectionFrameEl && event.source !== sectionFrameEl.contentWindow) return;
 
+      if (data.type === 'pintarget' && typeof data.irPath === 'string') {
+        handlePinTarget({ irPath: data.irPath, preview: data.preview ?? '' });
+        return;
+      }
+
       if (data.type === 'structure-reorder') {
         if (typeof data.srcIrPath === 'string' && typeof data.destIrPath === 'string') {
           const pos: 'above' | 'below' = data.position === 'above' ? 'above' : 'below';
@@ -947,6 +1089,16 @@
               {detail.last_validation?.passed ? 'Valid' : 'Needs review'}
             </Pill>
             <Button
+              variant={pinMode ? 'primary' : 'ghost'}
+              size="sm"
+              onclick={togglePinMode}
+              title={pinMode
+                ? 'Click a block in the section to pin a comment to it.'
+                : 'Pin a comment to a specific block in this section.'}
+            >
+              {pinMode ? 'Pinning…' : 'Pin to a block'}
+            </Button>
+            <Button
               variant={structureMode ? 'primary' : 'ghost'}
               size="sm"
               onclick={toggleStructureMode}
@@ -1021,13 +1173,29 @@
       {/if}
     </Card>
 
-    <!-- Comment composer (section-scoped by default) -->
+    <!-- Comment composer (section-scoped by default; per-block when a pin is set) -->
     {#if detail}
       <Card padding="none" elevation="e1" class="doc-comment-card">
         <div class="cc-head">
-          <p class="eyebrow">Pin a Comment on this Section</p>
+          <p class="eyebrow">
+            {pinnedIrPath ? 'Pin a Comment on this Block' : 'Pin a Comment on this Section'}
+          </p>
         </div>
         <div class="cc-body">
+          {#if pinnedIrPath}
+            <div class="cc-pin-row">
+              <span class="cc-pin-chip" title={pinnedPreview ? `${pinnedIrPath} — ${pinnedPreview}` : pinnedIrPath}>
+                <span class="cc-pin-dot" aria-hidden="true">●</span>
+                <span class="cc-pin-label">{pinnedPreview || pinnedIrPath}</span>
+              </span>
+              <button
+                type="button"
+                class="cc-pin-clear"
+                onclick={() => { pinnedIrPath = null; pinnedPreview = ''; }}
+                title="Clear pin and comment on the whole section instead"
+              >Clear</button>
+            </div>
+          {/if}
           <div class="cc-kind-row">
             {#each (['revision', 'question', 'approval', 'note'] as const) as k}
               <button
@@ -1041,7 +1209,9 @@
             class="cc-textarea"
             bind:value={commentDraft}
             rows="2"
-            placeholder="Note something for the agent — pinned to this section (kind: {detail.kind})."
+            placeholder={pinnedIrPath
+              ? `Note something for the agent — pinned to this block (${pinnedPreview ? `"${pinnedPreview}"` : pinnedIrPath}).`
+              : `Note something for the agent — pinned to this section (kind: ${detail.kind}).`}
           ></textarea>
           <div class="cc-actions">
             <Button
@@ -1444,6 +1614,51 @@
     gap: var(--s-1);
     flex-wrap: wrap;
   }
+
+  .cc-pin-row {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    padding: 4px 6px;
+    background: var(--mint-tint);
+    border: 1px solid var(--mint);
+    border-radius: var(--r-md);
+  }
+
+  .cc-pin-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--mint-hover);
+    overflow: hidden;
+    flex: 1;
+  }
+
+  .cc-pin-dot {
+    color: var(--mint);
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  .cc-pin-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cc-pin-clear {
+    all: unset;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ink-3);
+    padding: 2px 8px;
+    border-radius: var(--r-pill);
+    border: 1px solid var(--border-subtle);
+    background: var(--surface-1);
+  }
+  .cc-pin-clear:hover { color: var(--ink-1); border-color: var(--mint); }
 
   .cc-kind {
     font-size: 11px;

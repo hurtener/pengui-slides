@@ -38,6 +38,7 @@ import { registerApplySectionNodeEditTool } from './decks/apply-section-node-edi
 import { registerApplySlideFieldEditTool } from './decks/apply-slide-field-edit.tool.js';
 import { registerApplySectionFieldEditTool } from './decks/apply-section-field-edit.tool.js';
 import { registerApplyRecipeTool } from './decks/apply-recipe.tool.js';
+import { registerCompileMarkdownTool } from './decks/compile-markdown.tool.js';
 import {
   registerInsertSlideNodeTool,
   registerRemoveSlideNodeTool,
@@ -118,6 +119,7 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerApplySlideNodeEditTool(server, container);
   registerApplySlideFieldEditTool(server, container);
   registerApplyRecipeTool(server, container);
+  registerCompileMarkdownTool(server, container);
   registerInsertSlideNodeTool(server, container);
   registerRemoveSlideNodeTool(server, container);
   registerDuplicateSlideNodeTool(server, container);
