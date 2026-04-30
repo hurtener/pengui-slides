@@ -31,6 +31,7 @@
   } from '../lib/bridge';
   import { STRUCTURE_BRIDGE_SCRIPT } from '../lib/structureBridge';
   import { decodeIrPath, isPathInside } from '../lib/irPath';
+  import { parseRichTextFromHtml } from '../lib/parseRichText';
 
   interface Props {
     bridge: McpDeckEditorBridge;
@@ -828,7 +829,10 @@
         destIrPath?: string;
         position?: string;
         field?: string;
-        body?: ReadonlyArray<Record<string, unknown>>;
+        html?: string;
+        siblingIndex?: number;
+        siblingCount?: number;
+        morphable?: boolean;
       } | null;
       if (!data || data.source !== 'pengui-slide') return;
       if (sectionFrameEl && event.source !== sectionFrameEl.contentWindow) return;
@@ -865,15 +869,21 @@
       }
 
       if (data.type === 'rt-field-commit') {
+        // The bridge sends raw `html` (the contentEditable's
+        // innerHTML on blur). We parse it to TextRun[] here, mirroring
+        // SlideCanvas's handling. Pre-fix the section variant was
+        // reading data.body — silently dropping every section RT
+        // edit because the bridge never sets that field.
         if (
           typeof data.irPath === 'string' &&
           typeof data.field === 'string' &&
-          Array.isArray(data.body)
+          typeof data.html === 'string'
         ) {
+          const body = parseRichTextFromHtml(data.html);
           void handleSectionRichTextCommit(
             data.irPath,
             data.field,
-            data.body as ReadonlyArray<Record<string, unknown>>,
+            body as ReadonlyArray<Record<string, unknown>>,
           );
         }
         return;
