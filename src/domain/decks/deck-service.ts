@@ -640,6 +640,39 @@ export class DeckService {
     });
   }
 
+  /**
+   * v4.10: bulk-insert N nodes contiguously into one container, with
+   * a single updateSlide / lint at the end. Used by `compile_markdown`
+   * when called with a target — avoids the agent having to echo the
+   * compiled IR through context and replay N insert tool calls.
+   *
+   * Each subsequent node lands at `position + i`; the IR mutation
+   * runs on the in-memory clone N times, then the slide is recompiled
+   * + revalidated once.
+   */
+  async insertSlideNodesBulk(input: {
+    deckId: string;
+    slideId: string;
+    parentPath: IRPath;
+    position: number;
+    nodes: ReadonlyArray<SlideNode>;
+  }): Promise<{ slide: Slide; insertedPaths: IRPath[] }> {
+    const existing = await this.requireAuthoredIRSlide(input.slideId);
+    let nextIR = existing.ir!;
+    const insertedPaths: IRPath[] = [];
+    for (let i = 0; i < input.nodes.length; i += 1) {
+      const at = input.position + i;
+      nextIR = insertNodeAtPath(nextIR, input.parentPath, at, input.nodes[i]);
+      insertedPaths.push([...input.parentPath, at]);
+    }
+    const slide = await this.updateSlide({
+      deckId: input.deckId,
+      slideId: input.slideId,
+      ir: nextIR,
+    });
+    return { slide, insertedPaths };
+  }
+
   private async requireAuthoredIRSlide(slideIdStr: string): Promise<Slide> {
     const sid = slideId(slideIdStr);
     const existing = await this.slideStore.get(sid);

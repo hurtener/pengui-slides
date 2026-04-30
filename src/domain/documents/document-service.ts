@@ -421,6 +421,34 @@ export class DocumentService {
     return result.section;
   }
 
+  /**
+   * v4.10: bulk-insert N nodes contiguously into one section
+   * container, recompile + revalidate once. Used by `compile_markdown`
+   * when called with a section target.
+   */
+  async insertSectionNodesBulk(input: {
+    deckId: string;
+    sectionId: string;
+    parentPath: IRPath;
+    position: number;
+    nodes: ReadonlyArray<SlideNode>;
+  }): Promise<{ section: Section; insertedPaths: IRPath[] }> {
+    const existing = await this.requireSection(input.sectionId);
+    let nextIR = existing.ir;
+    const insertedPaths: IRPath[] = [];
+    for (let i = 0; i < input.nodes.length; i += 1) {
+      const at = input.position + i;
+      nextIR = insertNodeAtPath(nextIR, input.parentPath, at, input.nodes[i]);
+      insertedPaths.push([...input.parentPath, at]);
+    }
+    const result = await this.updateSection({
+      deckId: input.deckId,
+      sectionId: input.sectionId,
+      ir: nextIR,
+    });
+    return { section: result.section, insertedPaths };
+  }
+
   /** Remove a node from a section's IR. */
   async removeSectionNode(input: {
     deckId: string;
