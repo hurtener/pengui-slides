@@ -1032,7 +1032,10 @@
         }
         return;
       }
-    };
+    }
+
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
   });
 </script>
 
