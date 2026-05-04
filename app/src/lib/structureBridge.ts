@@ -103,6 +103,19 @@ export const STRUCTURE_BRIDGE_SCRIPT = `<script>(function(){
     var raw = (t.innerText || t.textContent || '').replace(/\\s+/g, ' ').trim();
     return raw.length > 60 ? raw.slice(0, 57) + '…' : raw;
   }
+  // v4.11: bridge-side mirror of nodeCatalogue's morph predicate.
+  // Kept as a tiny in-iframe constant so the bridge stays self-
+  // contained (no postMessage round-trip just to ask "is this
+  // morphable?"). Source of truth for the App-side decision logic
+  // is still app/src/lib/nodeCatalogue.ts — this list must stay in
+  // sync with the leaf kinds that have non-empty morphTargets.
+  var MORPHABLE_NODE_TYPES = {
+    prose: 1, heading: 1, list: 1, quote: 1, callout: 1
+  };
+  function isMorphableNodeType(type){
+    return !!(type && Object.prototype.hasOwnProperty.call(MORPHABLE_NODE_TYPES, type));
+  }
+
   // Compute sibling-position info for a given IR path by walking all
   // [data-ir-path] elements in the slide and counting those that share
   // the same parent prefix. Used to disable Move-up at index 0 and
@@ -164,12 +177,14 @@ export const STRUCTURE_BRIDGE_SCRIPT = `<script>(function(){
       e.preventDefault();
       e.stopPropagation();
       var info = siblingInfoFor(irPath);
-      // v4.9e: a block is morphable iff it carries at least one
-      // [data-ir-rt-field] (rich-text-bearing) descendant. Image and
-      // divider blocks have no rt-fields, so Change ▾ stays hidden
-      // for them. The compiler emits these attributes on every text
-      // role (eyebrow / title / body / text / items[N] / etc.).
-      var morphable = !!(t && t.querySelector && t.querySelector('[data-ir-rt-field]'));
+      // v4.11: a block is morphable iff its data-ir-node-type maps
+      // to a kind that has at least one morph target. The compiler
+      // emits data-ir-node-type on every node root (since v4.11),
+      // so this is precise — image / divider / two_column / grid
+      // all answer "no" without false positives. (Pre-v4.11 we
+      // checked for [data-ir-rt-field] descendants, which compounds
+      // also have via their leaf children — false positive.)
+      var morphable = isMorphableNodeType(t && t.dataset && t.dataset.irNodeType);
       window.parent.postMessage({
         source: 'pengui-slide',
         type: 'select-block',
@@ -208,7 +223,7 @@ export const STRUCTURE_BRIDGE_SCRIPT = `<script>(function(){
     // across reloads but the cached info goes stale).
     if (found) {
       var info = siblingInfoFor(path);
-      var morphable = !!(found.querySelector && found.querySelector('[data-ir-rt-field]'));
+      var morphable = isMorphableNodeType(found.dataset && found.dataset.irNodeType);
       window.parent.postMessage({
         source: 'pengui-slide',
         type: 'selection-info',

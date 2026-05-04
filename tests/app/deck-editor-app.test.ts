@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import DeckEditorApp from '../../app/src/DeckEditorApp.svelte';
-import type { DeckEditorBridge, EditorState, RevisionPayload, ToolCallResult } from '../../app/src/lib/types';
+import type { DeckEditorBridge, EditorState, ToolCallResult } from '../../app/src/lib/types';
 
 class ResizeObserverStub {
   observe(): void {}
@@ -20,7 +20,6 @@ class MockBridge implements DeckEditorBridge {
   private toolInputHandlers = new Set<(args: Record<string, unknown>) => void>();
   private toolResultHandlers = new Set<(result: ToolCallResult<Record<string, unknown>>) => void>();
   public callResults = new Map<string, ToolCallResult<Record<string, unknown>>>();
-  public sentRevisionPayload: RevisionPayload | null = null;
 
   async connect(): Promise<void> {}
 
@@ -40,10 +39,6 @@ class MockBridge implements DeckEditorBridge {
   ): Promise<ToolCallResult<TStructured>> {
     const key = `${name}:${JSON.stringify(args)}`;
     return (this.callResults.get(key) ?? { structuredContent: {} }) as ToolCallResult<TStructured>;
-  }
-
-  async sendRevisionRequest(payload: RevisionPayload): Promise<void> {
-    this.sentRevisionPayload = payload;
   }
 
   emitToolInput(args: Record<string, unknown>): void {
@@ -260,22 +255,4 @@ describe('DeckEditorApp', () => {
     });
   });
 
-  it('emits a structured revision payload through the bridge', async () => {
-    const bridge = new MockBridge();
-    const view = render(DeckEditorApp, { props: { bridge } });
-    bridge.emitToolResult({ structuredContent: { editor_state: makeState('slide-1') } });
-
-    await waitFor(() => {
-      expect(view.getByRole('heading', { level: 2, name: 'Slide One' })).toBeTruthy();
-    });
-
-    const textarea = view.getByPlaceholderText(/remove the cta/i);
-    await fireEvent.input(textarea, { target: { value: 'Make the headline shorter.' } });
-    await fireEvent.click(view.getByRole('button', { name: /ask agent to revise/i }));
-
-    await waitFor(() => {
-      expect(bridge.sentRevisionPayload?.instruction).toBe('Make the headline shorter.');
-      expect(bridge.sentRevisionPayload?.slide_id).toBe('slide-1');
-    });
-  });
 });

@@ -14,11 +14,14 @@
   import AssetPicker from '../lib/AssetPicker.svelte';
   import NodeTypePicker from '../lib/NodeTypePicker.svelte';
   import {
+    CATALOGUE,
+    availableForParent,
     defaultNodePayload,
     kindOfNode,
     morphTargetsFor,
     morphTo,
     type LeafNodeKind,
+    type NodeKind,
   } from '../lib/nodeCatalogue';
   import BlockActionBar from '../lib/BlockActionBar.svelte';
   import { Button, Card, Pill } from '../lib/primitives/index';
@@ -678,6 +681,8 @@
 
   // ── v4.9e: + Block ▾ insert + Change ▾ morph ──────────────────────
   let insertPickerOpen = $state(false);
+  // v4.11 Track B: see Editor.svelte for rationale.
+  let insertAvailableKinds = $state<ReadonlyArray<NodeKind>>([]);
   let morphPickerOpen = $state(false);
   let morphTargets = $state<ReadonlyArray<LeafNodeKind>>([]);
   let morphSourceNode = $state<Record<string, unknown> | null>(null);
@@ -686,13 +691,16 @@
 
   function openInsertPicker(): void {
     if (!selectedIrPath) return;
+    const path = decodeIrPath(selectedIrPath);
+    const parentPath = path.length >= 2 ? path.slice(0, -1) : [];
+    insertAvailableKinds = availableForParent(parentPath).map((e) => e.kind);
     insertPickerOpen = true;
   }
   function closeInsertPicker(): void {
     insertPickerOpen = false;
   }
 
-  async function handleInsertPick(kind: LeafNodeKind): Promise<void> {
+  async function handleInsertPick(kind: NodeKind): Promise<void> {
     if (!detail || !selectedId || !selectedIrPath) {
       insertPickerOpen = false;
       return;
@@ -813,16 +821,10 @@
     }
   }
 
-  function humanLabel(kind: LeafNodeKind): string {
-    switch (kind) {
-      case 'paragraph': return 'Paragraph';
-      case 'heading':   return 'Heading';
-      case 'list':      return 'List';
-      case 'quote':     return 'Quote';
-      case 'callout':   return 'Callout';
-      case 'image':     return 'Image';
-      case 'divider':   return 'Divider';
-    }
+  function humanLabel(kind: NodeKind): string {
+    // v4.11: drive labels off the catalogue so adding new entries
+    // doesn't require touching humanLabel.
+    return CATALOGUE.find((e) => e.kind === kind)?.label ?? kind;
   }
   function capitalize(s: string): string {
     return s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1);
@@ -1352,6 +1354,7 @@
   <NodeTypePicker
     open={insertPickerOpen}
     title="Insert a block"
+    availableKinds={insertAvailableKinds}
     onPick={(kind) => void handleInsertPick(kind)}
     onClose={closeInsertPicker}
   />

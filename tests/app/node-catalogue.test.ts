@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { LeafSlideNodeSchema } from '../../src/domain/ir/nodes.js';
+import { LeafSlideNodeSchema, SlideNodeSchema } from '../../src/domain/ir/nodes.js';
 import {
   CATALOGUE,
   availableForParent,
@@ -9,13 +9,14 @@ import {
   kindOfNode,
   morphTargetsFor,
   morphTo,
+  type CompoundNodeKind,
   type LeafNodeKind,
 } from '../../app/src/lib/nodeCatalogue.ts';
 
 // Catalogue + default payloads ─────────────────────────────────────
 
 describe('CATALOGUE', () => {
-  it('lists every supported leaf kind exactly once', () => {
+  it('lists every supported leaf and compound kind exactly once', () => {
     const kinds = CATALOGUE.map((entry) => entry.kind);
     expect(new Set(kinds).size).toBe(kinds.length);
     expect(kinds).toEqual([
@@ -26,14 +27,42 @@ describe('CATALOGUE', () => {
       'callout',
       'image',
       'divider',
+      'two_column_1_1',
+      'two_column_1_2',
+      'two_column_2_1',
+      'grid_2x1',
+      'grid_2x2',
+      'grid_3x1',
     ]);
   });
 
-  it('keyboard shortcuts are unique single lowercase letters', () => {
-    const shortcuts = CATALOGUE.map((entry) => entry.shortcut);
+  it('groups leaves as block and compounds as layout', () => {
+    const blocks = CATALOGUE.filter((e) => e.group === 'block').map((e) => e.kind);
+    const layouts = CATALOGUE.filter((e) => e.group === 'layout').map((e) => e.kind);
+    expect(blocks).toEqual(['paragraph', 'heading', 'list', 'quote', 'callout', 'image', 'divider']);
+    expect(layouts).toEqual([
+      'two_column_1_1',
+      'two_column_1_2',
+      'two_column_2_1',
+      'grid_2x1',
+      'grid_2x2',
+      'grid_3x1',
+    ]);
+  });
+
+  it('leaf shortcuts are unique single lowercase letters', () => {
+    const shortcuts = CATALOGUE
+      .filter((e) => e.group === 'block')
+      .map((entry) => entry.shortcut);
     expect(new Set(shortcuts).size).toBe(shortcuts.length);
     for (const s of shortcuts) {
       expect(s).toMatch(/^[a-z]$/);
+    }
+  });
+
+  it('compound entries do not declare keyboard shortcuts', () => {
+    for (const entry of CATALOGUE.filter((e) => e.group === 'layout')) {
+      expect(entry.shortcut).toBeUndefined();
     }
   });
 });
@@ -85,6 +114,62 @@ describe('defaultNodePayload', () => {
     const payload = defaultNodePayload('callout', { calloutKind: 'warning' });
     expect(payload).toMatchObject({ type: 'callout', kind: 'warning' });
   });
+
+  // v4.11 compound presets — each must validate against the full
+  // SlideNodeSchema (compounds aren't leaves), and inner cells must
+  // hold leaf-only payloads so the IR's no-nesting rule holds.
+  const compoundChecks: ReadonlyArray<{
+    kind: CompoundNodeKind;
+    type: 'two_column' | 'grid';
+    extras: Record<string, unknown>;
+  }> = [
+    { kind: 'two_column_1_1', type: 'two_column', extras: { ratio: '1:1' } },
+    { kind: 'two_column_1_2', type: 'two_column', extras: { ratio: '1:2' } },
+    { kind: 'two_column_2_1', type: 'two_column', extras: { ratio: '2:1' } },
+    { kind: 'grid_2x1',       type: 'grid',       extras: { columns: 2 } },
+    { kind: 'grid_2x2',       type: 'grid',       extras: { columns: 2 } },
+    { kind: 'grid_3x1',       type: 'grid',       extras: { columns: 3 } },
+  ];
+
+  for (const { kind, type, extras } of compoundChecks) {
+    it(`${kind} default validates against SlideNodeSchema as ${type}`, () => {
+      const payload = defaultNodePayload(kind);
+      expect(payload).not.toBeNull();
+      expect(payload).toMatchObject({ type, ...extras });
+      const parsed = SlideNodeSchema.safeParse(payload);
+      expect(parsed.success).toBe(true);
+    });
+  }
+
+  it('two_column compound seeds left + right with one leaf paragraph each', () => {
+    const payload = defaultNodePayload('two_column_1_1') as {
+      left: ReadonlyArray<unknown>;
+      right: ReadonlyArray<unknown>;
+    };
+    expect(payload.left).toHaveLength(1);
+    expect(payload.right).toHaveLength(1);
+    // Each cell entry must validate as a leaf — no nesting allowed.
+    expect(LeafSlideNodeSchema.safeParse(payload.left[0]).success).toBe(true);
+    expect(LeafSlideNodeSchema.safeParse(payload.right[0]).success).toBe(true);
+  });
+
+  it('grid compounds seed columns × rows cells, each with one leaf', () => {
+    const cases: ReadonlyArray<{ kind: CompoundNodeKind; expected: number }> = [
+      { kind: 'grid_2x1', expected: 2 },
+      { kind: 'grid_2x2', expected: 4 },
+      { kind: 'grid_3x1', expected: 3 },
+    ];
+    for (const { kind, expected } of cases) {
+      const payload = defaultNodePayload(kind) as {
+        cells: ReadonlyArray<ReadonlyArray<unknown>>;
+      };
+      expect(payload.cells).toHaveLength(expected);
+      for (const cell of payload.cells) {
+        expect(cell).toHaveLength(1);
+        expect(LeafSlideNodeSchema.safeParse(cell[0]).success).toBe(true);
+      }
+    }
+  });
 });
 
 // kindOfNode + morphTargetsFor ─────────────────────────────────────
@@ -102,10 +187,17 @@ describe('kindOfNode', () => {
     expect(kindOfNode({ type })).toBe(kind);
   });
 
-  it('returns null for non-leaf compound types', () => {
-    expect(kindOfNode({ type: 'two_column' })).toBeNull();
-    expect(kindOfNode({ type: 'grid' })).toBeNull();
+  it('maps compound IR types to a representative compound preset kind', () => {
+    // v4.11: existing compound nodes carry their own ratio/dimensions
+    // in the payload; the catalogue kind is only used to look up morph
+    // targets (always empty for compounds), so a fixed default is OK.
+    expect(kindOfNode({ type: 'two_column' })).toBe('two_column_1_1');
+    expect(kindOfNode({ type: 'grid' })).toBe('grid_2x1');
+  });
+
+  it('returns null for unknown / unsupported types', () => {
     expect(kindOfNode({ type: 'hero' })).toBeNull();
+    expect(kindOfNode({ type: 'table' })).toBeNull();
   });
 
   it('returns null for malformed input', () => {
@@ -127,6 +219,20 @@ describe('morphTargetsFor', () => {
       const targets = morphTargetsFor(k);
       const expected = textKinds.filter((t) => t !== k);
       expect([...targets].sort()).toEqual([...expected].sort());
+    }
+  });
+
+  it('compound presets expose no morph targets', () => {
+    const compoundKinds: CompoundNodeKind[] = [
+      'two_column_1_1',
+      'two_column_1_2',
+      'two_column_2_1',
+      'grid_2x1',
+      'grid_2x2',
+      'grid_3x1',
+    ];
+    for (const k of compoundKinds) {
+      expect(morphTargetsFor(k)).toEqual([]);
     }
   });
 });
@@ -271,7 +377,13 @@ describe('classifyParent', () => {
     [['body'], 'body'],
     [['body', 2, 'left'], 'two_column'],
     [['body', 2, 'right'], 'two_column'],
-    [['body', 4, 'cells'], 'grid'],
+    // v4.11: the actual insertable grid container is a row, addressed
+    // as ['body', N, 'cells', R]. The bare 'cells' segment maps to the
+    // 2D shape and isn't a splice target — path-resolver rejects it,
+    // so the picker mirrors that with 'unsupported'.
+    [['body', 4, 'cells', 0], 'grid'],
+    [['body', 4, 'cells', 3], 'grid'],
+    [['body', 4, 'cells'], 'unsupported'],
     [['body', 5, 'rows'], 'unsupported'],
     [[], 'unsupported'],
   ])('%j → %s', (path, expected) => {
@@ -280,22 +392,41 @@ describe('classifyParent', () => {
 });
 
 describe('availableForParent', () => {
-  it('body container offers the full leaf catalogue', () => {
+  it('body container offers leaves AND compound layouts', () => {
     expect(availableForParent(['body']).map((e) => e.kind)).toEqual(
       CATALOGUE.map((e) => e.kind),
     );
   });
 
-  it('two_column.left offers the same leaf catalogue', () => {
-    expect(availableForParent(['body', 2, 'left']).map((e) => e.kind)).toEqual(
-      CATALOGUE.map((e) => e.kind),
+  it('two_column.left filters out compound layouts (no nesting)', () => {
+    const kinds = availableForParent(['body', 2, 'left']).map((e) => e.kind);
+    expect(kinds).toEqual(
+      CATALOGUE.filter((e) => e.group !== 'layout').map((e) => e.kind),
+    );
+    expect(kinds).not.toContain('two_column_1_1');
+    expect(kinds).not.toContain('grid_2x1');
+  });
+
+  it('two_column.right filters out compound layouts (no nesting)', () => {
+    const kinds = availableForParent(['body', 2, 'right']).map((e) => e.kind);
+    expect(kinds).toEqual(
+      CATALOGUE.filter((e) => e.group !== 'layout').map((e) => e.kind),
     );
   });
 
-  it('grid.cells offers the same leaf catalogue', () => {
-    expect(availableForParent(['body', 4, 'cells']).map((e) => e.kind)).toEqual(
-      CATALOGUE.map((e) => e.kind),
+  it('grid row (cells, R) filters out compound layouts (no nesting)', () => {
+    const kinds = availableForParent(['body', 4, 'cells', 0]).map((e) => e.kind);
+    expect(kinds).toEqual(
+      CATALOGUE.filter((e) => e.group !== 'layout').map((e) => e.kind),
     );
+    expect(kinds).not.toContain('two_column_1_1');
+    expect(kinds).not.toContain('grid_2x2');
+  });
+
+  it('bare cells path (without row index) is unsupported', () => {
+    // The 2D `cells` segment is not an insertable container — the
+    // server rejects it and the picker mirrors that.
+    expect(availableForParent(['body', 4, 'cells'])).toEqual([]);
   });
 
   it('unsupported parents (e.g. table rows) return an empty catalogue', () => {

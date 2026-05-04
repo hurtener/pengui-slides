@@ -576,7 +576,7 @@
   }
 </script>
 
-<div class={`canvas-shell ${format === 'slides_16_9' ? 'landscape' : 'portrait'}`} bind:this={containerEl}>
+<div class="canvas-shell" bind:this={containerEl}>
   {#key frameKey}
     <div class="scaled-stage" style="width: {scaledWidth}px; height: {scaledHeight}px;">
       <div class="scale-stage" style="transform: scale({scale}); width: {NATIVE_WIDTH}px; height: {NATIVE_HEIGHT}px;">
@@ -625,8 +625,14 @@
 <style>
   .canvas-shell {
     position: relative;
+    /* Fill the canvas-stage in both axes; the inner scaled-stage keeps the
+       slide's true aspect ratio via transform: scale(). Letting the shell
+       absorb both dimensions means the scale picks up extra height when
+       the parent frame has it, so cramped Claude Desktop frames and
+       generous popout windows both render the slide as large as fits. */
     width: 100%;
-    min-height: 280px;
+    height: 100%;
+    min-height: 240px;
     overflow: hidden;
     border-radius: var(--r-lg);
     display: grid;
@@ -637,16 +643,6 @@
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.65),
       inset 0 -1px 0 rgba(92, 64, 41, 0.08);
-  }
-
-  .landscape {
-    aspect-ratio: 16 / 9;
-    max-height: min(68vh, 860px);
-  }
-
-  .portrait {
-    aspect-ratio: auto;
-    max-height: min(80vh, 900px);
   }
 
   .scale-stage {
@@ -749,8 +745,7 @@
 
   @media (max-width: 860px) {
     .canvas-shell {
-      max-height: none;
-      min-height: 220px;
+      min-height: 200px;
     }
 
     .pin-debug {

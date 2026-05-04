@@ -11,7 +11,6 @@
   import Assets from './routes/Assets.svelte';
   import { createDeckStore } from './stores/deck.svelte';
   import type { DeckEditorBridge } from './lib/types';
-  import type { RevisionPayload } from './lib/types';
   import type { McpDeckEditorBridge } from './lib/bridge';
 
   import './styles/globals.css';
@@ -101,10 +100,6 @@
       deck.loading = false;
       errorMessage = error instanceof Error ? error.message : String(error);
     }
-  }
-
-  async function handleRevisionRequest(payload: RevisionPayload): Promise<void> {
-    await initialBridge.sendRevisionRequest(payload);
   }
 
   // v4: active-workspace tracking so Assets scopes uploads correctly and the
@@ -226,11 +221,7 @@
         {#if activeAuthoringModel === 'document' && activeDeckRef}
           <DocumentEditor bridge={mcpBridge} deckRef={activeDeckRef} />
         {:else}
-          <Editor
-            {deck}
-            bridge={mcpBridge}
-            onRevisionRequest={handleRevisionRequest}
-          />
+          <Editor {deck} bridge={mcpBridge} />
         {/if}
       {:else if route === 'export'}
         <Export {deck} {bridge} onSwitchDeck={handleRetargetDeck} />

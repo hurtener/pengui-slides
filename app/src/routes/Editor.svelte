@@ -13,15 +13,17 @@
   import BlockActionBar from '../lib/BlockActionBar.svelte';
   import NodeTypePicker from '../lib/NodeTypePicker.svelte';
   import {
+    CATALOGUE,
+    availableForParent,
     defaultNodePayload,
     kindOfNode,
     morphTargetsFor,
     morphTo,
     type LeafNodeKind,
+    type NodeKind,
   } from '../lib/nodeCatalogue';
   import { Button, Card, Pill, Tabs, Textarea } from '../lib/primitives/index';
   import { decodeIrPath, isPathInside } from '../lib/irPath';
-  import { buildRevisionFallback } from '../lib/revise';
   import type { DeckStore } from '../stores/deck.svelte';
   import type { ValidationPresentation, ValidationIssue, ValidationIssueSummary, SlideHealth, FormatKind } from '../lib/types';
   import type { McpDeckEditorBridge, CommentTarget } from '../lib/bridge';
@@ -29,10 +31,9 @@
   interface Props {
     deck: DeckStore;
     bridge?: McpDeckEditorBridge;
-    onRevisionRequest?: (payload: unknown) => Promise<void>;
   }
 
-  let { deck, bridge, onRevisionRequest }: Props = $props();
+  let { deck, bridge }: Props = $props();
 
   // ── Comment drawer state (v4.8.5) ────────────────────────────────────────
   let commentDrawerOpen = $state(false);
@@ -363,6 +364,12 @@
 
   // ── v4.9e: + Block ▾ insert + Change ▾ morph ──────────────────────
   let insertPickerOpen = $state(false);
+  // v4.11 Track B: kinds the picker offers for the *current* insertion
+  // context. body[] gets the full catalogue (leaves + compound layouts);
+  // inner compound containers (two_column.{left,right}, grid.cells) get
+  // leaves only — `availableForParent` enforces the IR's no-nesting rule.
+  // Recomputed each time the picker opens against the live selection.
+  let insertAvailableKinds = $state<ReadonlyArray<NodeKind>>([]);
   let morphPickerOpen = $state(false);
   let morphTargets = $state<ReadonlyArray<LeafNodeKind>>([]);
   // Cached source node for morph — populated when the user opens
@@ -375,6 +382,11 @@
 
   function openInsertPicker(): void {
     if (!selectedIrPath) return;
+    // The selected block is the *anchor*; the picker inserts a sibling
+    // immediately after it, so the parent container is `path.slice(0, -1)`.
+    const path = decodeIrPath(selectedIrPath);
+    const parentPath = path.length >= 2 ? path.slice(0, -1) : [];
+    insertAvailableKinds = availableForParent(parentPath).map((e) => e.kind);
     insertPickerOpen = true;
   }
 
@@ -382,7 +394,7 @@
     insertPickerOpen = false;
   }
 
-  async function handleInsertPick(kind: LeafNodeKind): Promise<void> {
+  async function handleInsertPick(kind: NodeKind): Promise<void> {
     if (!selectedIrPath) {
       insertPickerOpen = false;
       return;
@@ -500,16 +512,11 @@
     }
   }
 
-  function humanLabel(kind: LeafNodeKind): string {
-    switch (kind) {
-      case 'paragraph': return 'Paragraph';
-      case 'heading':   return 'Heading';
-      case 'list':      return 'List';
-      case 'quote':     return 'Quote';
-      case 'callout':   return 'Callout';
-      case 'image':     return 'Image';
-      case 'divider':   return 'Divider';
-    }
+  function humanLabel(kind: NodeKind): string {
+    // v4.11: drive labels off the catalogue so adding a new entry
+    // doesn't require touching humanLabel — catalogue is the single
+    // source of truth.
+    return CATALOGUE.find((e) => e.kind === kind)?.label ?? kind;
   }
 
   function capitalize(s: string): string {
@@ -634,9 +641,6 @@
 
   let detailsOpen = $state(false);
   let activePanel = $state<'overview' | 'checks' | 'details'>('overview');
-  let reviseInstruction = $state('');
-  let reviseStatus = $state('');
-  let reviseFallbackPayload = $state('');
   let canvasNonce = $state(0);
 
   const deckFormat = $derived<FormatKind>(deck.editorState?.deck.format ?? 'slides_16_9');
@@ -735,34 +739,7 @@
     }
   }
 
-  async function handleRevise(): Promise<void> {
-    if (!deck.editorState || !reviseInstruction.trim()) return;
-    reviseStatus = '';
-    reviseFallbackPayload = '';
 
-    const payload = {
-      deck_id: deck.editorState.deck.id,
-      deck_title: deck.editorState.deck.title,
-      slide_id: deck.editorState.selectedSlide.slideId,
-      slide_title: deck.editorState.selectedSlide.metadata.title,
-      instruction: reviseInstruction.trim(),
-      html: deck.editorState.selectedSlide.html,
-      metadata: deck.editorState.selectedSlide.metadata,
-      validation: deck.editorState.selectedSlide.lastValidation,
-      revision_hash: deck.editorState.selectedSlide.revisionHash,
-    };
-
-    try {
-      if (onRevisionRequest) {
-        await onRevisionRequest(payload);
-      }
-      reviseStatus = 'Revision request sent to the host agent.';
-      reviseInstruction = '';
-    } catch (error) {
-      reviseFallbackPayload = buildRevisionFallback(payload);
-      reviseStatus = error instanceof Error ? error.message : String(error);
-    }
-  }
 </script>
 
 {#if deck.editorState}
@@ -976,38 +953,6 @@
         </Card>
       {/if}
 
-      <!-- Revision composer -->
-      <Card padding="none" elevation="e1" class="composer-card">
-        <div class="composer-head">
-          <p class="eyebrow">Ask Agent To Revise</p>
-          {#if reviseStatus}
-            <p class="revise-status">{reviseStatus}</p>
-          {/if}
-        </div>
-        <div class="composer-body">
-          <Textarea
-            bind:value={reviseInstruction}
-            rows={2}
-            placeholder="Remove the CTA and make the closing copy more direct."
-          />
-          <div class="composer-actions">
-            <Button
-              variant="primary"
-              size="md"
-              onclick={handleRevise}
-              disabled={!reviseInstruction.trim() || deck.saving}
-            >
-              Ask agent to revise
-            </Button>
-          </div>
-        </div>
-        {#if reviseFallbackPayload}
-          <details class="fallback-details">
-            <summary>Revision payload</summary>
-            <pre class="fallback-pre">{reviseFallbackPayload}</pre>
-          </details>
-        {/if}
-      </Card>
     </div>
 
     <!-- Inspector panel (slides only on desktop; print keeps it as overlay too) -->
@@ -1163,6 +1108,7 @@
     <NodeTypePicker
       open={insertPickerOpen}
       title="Insert a block"
+      availableKinds={insertAvailableKinds}
       onPick={(kind) => void handleInsertPick(kind)}
       onClose={closeInsertPicker}
     />
@@ -1340,12 +1286,13 @@
   }
 
   .canvas-stage {
-    padding: var(--s-3);
+    padding: var(--s-2);
     min-height: 0;
     min-width: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    /* Block layout (not flex) so the canvas-shell fills the row both
+       horizontally and vertically. SlideCanvas centers the scaled stage
+       internally, so we don't need flex-centering here. */
+    display: block;
     overflow: hidden;
   }
 
@@ -1497,55 +1444,6 @@
     color: var(--ink-3);
     text-decoration: underline;
     cursor: pointer;
-  }
-
-  /* ── Composer card internals ──────────────────────────────── */
-  :global(.composer-card) {
-    display: grid !important;
-    grid-template-rows: auto 1fr auto !important;
-    overflow: hidden;
-  }
-
-  .composer-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--s-4);
-    padding: var(--s-4) var(--s-5) var(--s-3);
-    border-bottom: 1px solid var(--border-hairline);
-  }
-
-  .revise-status {
-    font-size: 12px;
-    color: var(--ink-3);
-  }
-
-  .composer-body {
-    padding: var(--s-3) var(--s-5) var(--s-4);
-    display: flex;
-    flex-direction: column;
-    gap: var(--s-3);
-  }
-
-  .composer-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--s-3);
-  }
-
-  .fallback-details {
-    margin: 0 var(--s-5) var(--s-4);
-    font-size: 12px;
-  }
-
-  .fallback-pre {
-    overflow-x: auto;
-    background: var(--surface-2);
-    border-radius: var(--r-sm);
-    padding: var(--s-3);
-    font-size: 11px;
-    font-family: var(--font-mono);
-    color: var(--ink-2);
   }
 
   /* ── Inspector ────────────────────────────────────────────── */

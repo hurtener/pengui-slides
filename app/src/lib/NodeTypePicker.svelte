@@ -18,7 +18,8 @@
   import {
     CATALOGUE,
     type CatalogueEntry,
-    type LeafNodeKind,
+    type CatalogueGroup,
+    type NodeKind,
   } from './nodeCatalogue';
 
   interface Props {
@@ -28,8 +29,8 @@
      *  list render. The morph path always passes a list; the insert
      *  path may pass undefined to mean "everything the catalogue
      *  knows about". */
-    availableKinds?: ReadonlyArray<LeafNodeKind>;
-    onPick: (kind: LeafNodeKind) => void;
+    availableKinds?: ReadonlyArray<NodeKind>;
+    onPick: (kind: NodeKind) => void;
     onClose: () => void;
   }
 
@@ -45,6 +46,17 @@
     availableKinds === undefined
       ? CATALOGUE
       : CATALOGUE.filter((entry) => availableKinds!.includes(entry.kind)),
+  );
+
+  // v4.11: split entries into groups so the picker can render block
+  // tiles and layout tiles under separate headers. We only show a
+  // group's section if it has at least one visible entry — keeps the
+  // picker compact when (e.g.) the morph path passes leaf-only kinds.
+  const groupedEntries = $derived<ReadonlyArray<{ group: CatalogueGroup; label: string; items: ReadonlyArray<CatalogueEntry> }>>(
+    [
+      { group: 'block' as const,  label: 'Blocks',  items: entries.filter((e) => e.group === 'block') },
+      { group: 'layout' as const, label: 'Layouts', items: entries.filter((e) => e.group === 'layout') },
+    ].filter((g) => g.items.length > 0),
   );
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -97,22 +109,29 @@
           body, or close this and use a different selection.
         </p>
       {:else}
-        <div class="picker-grid">
-          {#each entries as entry (entry.kind)}
-            <button
-              type="button"
-              class="picker-tile"
-              onclick={() => onPick(entry.kind)}
-              aria-label={`${entry.label} — ${entry.hint}`}
-              title={`${entry.label} (${entry.shortcut.toUpperCase()})`}
-            >
-              <span class="tile-glyph" aria-hidden="true">{entry.glyph}</span>
-              <span class="tile-label">{entry.label}</span>
-              <span class="tile-hint">{entry.hint}</span>
-              <span class="tile-shortcut" aria-hidden="true">{entry.shortcut.toUpperCase()}</span>
-            </button>
-          {/each}
-        </div>
+        {#each groupedEntries as section (section.group)}
+          {#if groupedEntries.length > 1}
+            <p class="group-label">{section.label}</p>
+          {/if}
+          <div class="picker-grid">
+            {#each section.items as entry (entry.kind)}
+              <button
+                type="button"
+                class="picker-tile"
+                onclick={() => onPick(entry.kind)}
+                aria-label={`${entry.label} — ${entry.hint}`}
+                title={entry.shortcut ? `${entry.label} (${entry.shortcut.toUpperCase()})` : entry.label}
+              >
+                <span class="tile-glyph" aria-hidden="true">{entry.glyph}</span>
+                <span class="tile-label">{entry.label}</span>
+                <span class="tile-hint">{entry.hint}</span>
+                {#if entry.shortcut}
+                  <span class="tile-shortcut" aria-hidden="true">{entry.shortcut.toUpperCase()}</span>
+                {/if}
+              </button>
+            {/each}
+          </div>
+        {/each}
       {/if}
     </div>
   </div>
@@ -177,6 +196,19 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: var(--s-2);
+  }
+
+  .group-label {
+    margin: var(--s-3) 0 var(--s-2);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--ink-3);
+  }
+
+  .group-label:first-child {
+    margin-top: 0;
   }
 
   .picker-tile {

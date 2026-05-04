@@ -5,8 +5,7 @@ import {
   applyHostFonts,
   applyHostStyleVariables,
 } from '@modelcontextprotocol/ext-apps';
-import { buildRevisionPrompt } from './revise';
-import type { DeckEditorBridge, RevisionPayload, ToolCallResult } from './types';
+import type { DeckEditorBridge, ToolCallResult } from './types';
 
 // ── v4 Wave 2 typed responses ───────────────────────────────────────────────
 
@@ -290,29 +289,6 @@ export class McpDeckEditorBridge implements DeckEditorBridge {
       name,
       arguments: args,
     }) as ToolCallResult<TStructured>;
-  }
-
-  async sendRevisionRequest(payload: RevisionPayload): Promise<void> {
-    const hostCapabilities = this.app.getHostCapabilities();
-    if (!hostCapabilities?.message) {
-      throw new Error('This host does not support sending chat messages from MCP Apps.');
-    }
-
-    if (hostCapabilities.updateModelContext) {
-      await this.app.updateModelContext({
-        structuredContent: {
-          revision_request: payload,
-        },
-      });
-    }
-
-    await this.app.sendMessage({
-      role: 'user',
-      content: [{
-        type: 'text',
-        text: buildRevisionPrompt(payload),
-      }],
-    });
   }
 
   /**

@@ -52,6 +52,20 @@ function pathAttr(path: IRPath): string {
 }
 
 /**
+ * Build a `data-ir-node-type="<type>"` fragment. v4.11 — gives the
+ * editor's bridge a precise signal for "is this block a leaf the user
+ * can morph?" without having to reason about descendant rt-fields
+ * (which compounds also have through their leaf children).
+ *
+ * Editor-only attribute: rendered output looks identical to humans;
+ * the export pipeline ignores unknown data-* attributes. No
+ * CURRENT_COMPILER_REVISION bump needed.
+ */
+function typeAttr(type: SlideNode['type']): string {
+  return ` data-ir-node-type="${escapeAttr(type)}"`;
+}
+
+/**
  * Compile a single SlideNode at the given IR path.
  *
  * `path` is the structural pointer that addresses this node inside the
@@ -61,7 +75,7 @@ function pathAttr(path: IRPath): string {
  * coordinate system.
  */
 export function renderNode(node: SlideNode, path: IRPath = []): string {
-  const attr = pathAttr(path);
+  const attr = pathAttr(path) + typeAttr(node.type);
   switch (node.type) {
     case 'hero':
       return renderHero(node, attr);

@@ -370,7 +370,7 @@ describe('renderNodeList — per-node HTML emitters', () => {
   it('page_break emits a zero-height marker div with the IR path', () => {
     const html = renderNodeList([{ type: 'page_break' }]);
     expect(html).toBe(
-      '<div class="pengui-page-break" aria-hidden="true" data-ir-path="body,0"></div>',
+      '<div class="pengui-page-break" aria-hidden="true" data-ir-path="body,0" data-ir-node-type="page_break"></div>',
     );
   });
 
@@ -434,6 +434,68 @@ describe('renderNodeList — per-node HTML emitters', () => {
     expect(html).toMatch(/data-ir-path="body,0,cells,2,0"/);
     // The `.pengui-grid-cell` layout wrappers are not IR nodes.
     expect(html).not.toMatch(/<div class="pengui-grid-cell"[^>]*data-ir-path/);
+  });
+
+  // ── v4.11: data-ir-node-type emission ─────────────────────────
+  // The bridge uses this attribute (not a [data-ir-rt-field] descendant
+  // probe) to decide whether the selected block is morphable. Compounds
+  // own rt-field descendants via their leaf children, so the descendant
+  // probe was a false positive. The attribute is editor-only — added to
+  // the node root alongside data-ir-path, no PPTX/export consequence.
+
+  it('every leaf node root carries data-ir-node-type matching its IR type', () => {
+    const html = renderNodeList([
+      { type: 'hero', title: rt('T') },
+      { type: 'prose', body: rt('p') },
+      { type: 'heading', level: 2, text: rt('H') },
+      { type: 'list', style: 'bullet', items: [rt('x')] },
+      { type: 'quote', body: rt('q') },
+      { type: 'callout', kind: 'note', body: rt('c') },
+      { type: 'divider' },
+    ]);
+    expect(html).toMatch(/data-ir-path="body,0"[^>]*data-ir-node-type="hero"/);
+    expect(html).toMatch(/data-ir-path="body,1"[^>]*data-ir-node-type="prose"/);
+    expect(html).toMatch(/data-ir-path="body,2"[^>]*data-ir-node-type="heading"/);
+    expect(html).toMatch(/data-ir-path="body,3"[^>]*data-ir-node-type="list"/);
+    expect(html).toMatch(/data-ir-path="body,4"[^>]*data-ir-node-type="quote"/);
+    expect(html).toMatch(/data-ir-path="body,5"[^>]*data-ir-node-type="callout"/);
+    expect(html).toMatch(/data-ir-path="body,6"[^>]*data-ir-node-type="divider"/);
+  });
+
+  it('two_column root carries data-ir-node-type="two_column"', () => {
+    const html = renderNodeList([
+      {
+        type: 'two_column',
+        ratio: '1:1',
+        left: [{ type: 'prose', body: rt('L') }],
+        right: [{ type: 'prose', body: rt('R') }],
+      },
+    ]);
+    // Compound root carries its type — bridge uses this to hide Change ▾.
+    expect(html).toMatch(/data-ir-path="body,0"[^>]*data-ir-node-type="two_column"/);
+    // Inner leaf carries its own type, NOT the parent's.
+    expect(html).toMatch(/data-ir-path="body,0,left,0"[^>]*data-ir-node-type="prose"/);
+    expect(html).toMatch(/data-ir-path="body,0,right,0"[^>]*data-ir-node-type="prose"/);
+    // Layout wrappers (pengui-two-column-left/right) are not IR nodes.
+    expect(html).not.toMatch(/<div class="pengui-two-column-left"[^>]*data-ir-node-type/);
+    expect(html).not.toMatch(/<div class="pengui-two-column-right"[^>]*data-ir-node-type/);
+  });
+
+  it('grid root carries data-ir-node-type="grid"', () => {
+    const html = renderNodeList([
+      {
+        type: 'grid',
+        columns: 2,
+        cells: [
+          [{ type: 'prose', body: rt('A') }],
+          [{ type: 'prose', body: rt('B') }],
+        ],
+      },
+    ]);
+    expect(html).toMatch(/data-ir-path="body,0"[^>]*data-ir-node-type="grid"/);
+    expect(html).toMatch(/data-ir-path="body,0,cells,0,0"[^>]*data-ir-node-type="prose"/);
+    expect(html).toMatch(/data-ir-path="body,0,cells,1,0"[^>]*data-ir-node-type="prose"/);
+    expect(html).not.toMatch(/<div class="pengui-grid-cell"[^>]*data-ir-node-type/);
   });
 });
 

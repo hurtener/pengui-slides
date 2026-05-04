@@ -159,18 +159,6 @@ export interface EditorState {
   selectedPreview: EditorThumbnail;
 }
 
-export interface RevisionPayload {
-  deck_id: string;
-  deck_title: string;
-  slide_id: string;
-  slide_title: string;
-  instruction: string;
-  html: string;
-  metadata: SlideMetadata;
-  validation: ValidationResult | null;
-  revision_hash: string;
-}
-
 export interface ToolCallResult<TStructured = Record<string, unknown>> {
   isError?: boolean;
   structuredContent?: TStructured;
@@ -182,5 +170,4 @@ export interface DeckEditorBridge {
   onToolInput(handler: (args: Record<string, unknown>) => void): () => void;
   onToolResult(handler: (result: ToolCallResult<Record<string, unknown>>) => void): () => void;
   callTool<TStructured>(name: string, args: Record<string, unknown>): Promise<ToolCallResult<TStructured>>;
-  sendRevisionRequest(payload: RevisionPayload): Promise<void>;
 }
