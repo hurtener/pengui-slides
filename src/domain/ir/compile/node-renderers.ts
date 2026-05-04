@@ -21,6 +21,7 @@
 import type {
   BibliographyNode,
   CalloutNode,
+  ChartNode,
   DividerNode,
   GridNode,
   HeadingNode,
@@ -95,6 +96,8 @@ export function renderNode(node: SlideNode, path: IRPath = []): string {
       return renderQuote(node, attr);
     case 'table':
       return renderTable(node, attr);
+    case 'chart':
+      return renderChart(node, attr);
     case 'two_column':
       return renderTwoColumn(node, path, attr);
     case 'grid':
@@ -246,6 +249,53 @@ function renderTable(node: TableNode, dataAttr: string): string {
     .join('')}</tbody>`;
 
   return `<table class="pengui-table"${dataAttr}>${captionHtml}${headHtml}${bodyHtml}</table>`;
+}
+
+/**
+ * Chart node — emits a `<figure>` wrapping the rendered SVG.
+ *
+ * The inner SVG body is produced by the server-side ECharts renderer
+ * (`src/domain/rendering/chart-renderer.ts`) at a render-boundary pass
+ * (`resolveChartRefs`, parallel to `resolveAssetRefs`). Compile here is
+ * synchronous + token-only, so we emit a placeholder body and a
+ * `data-pengui-chart-spec` attribute carrying base64-JSON of the
+ * structural payload — the resolver hands this to ChartRenderer along
+ * with the soul-derived ECharts theme.
+ *
+ * Visual classes (`pengui-chart-${chart_type}`) let the soul CSS hook
+ * type-specific layout knobs (e.g. squarish container for radar/heatmap).
+ */
+function renderChart(node: ChartNode, dataAttr: string): string {
+  const spec = {
+    chart_type: node.chart_type,
+    data: node.data,
+    series_labels: node.series_labels,
+    category_labels: node.category_labels,
+    x_axis_title: node.x_axis_title,
+    y_axis_title: node.y_axis_title,
+    show_legend: node.show_legend,
+    show_grid: node.show_grid,
+    value_format: node.value_format,
+  };
+  const specB64 = Buffer.from(JSON.stringify(spec), 'utf8').toString('base64');
+  const captionHtml =
+    node.caption && node.caption.length > 0
+      ? `<figcaption class="pengui-chart-caption"${fieldAttr('caption')}>${renderRichText(node.caption)}</figcaption>`
+      : '';
+  // Placeholder SVG kept token-clean (var(--color-*), var(--text-*)) so it
+  // passes diagram-legibility if the figure ever gets exported pre-resolve.
+  // Track C overwrites the placeholder body with real ECharts SVG.
+  const placeholder =
+    `<svg class="pengui-chart-svg" viewBox="0 0 800 480" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">` +
+    `<rect x="0" y="0" width="800" height="480" fill="var(--color-surface)" />` +
+    `<text x="400" y="240" text-anchor="middle" font-size="var(--text-md)" fill="var(--color-text-secondary)">chart pending</text>` +
+    `</svg>`;
+  return (
+    `<figure class="pengui-chart pengui-chart-${node.chart_type}"${dataAttr} data-pengui-chart-spec="${specB64}">` +
+    placeholder +
+    captionHtml +
+    `</figure>`
+  );
 }
 
 function renderTwoColumn(node: TwoColumnNode, path: IRPath, dataAttr: string): string {

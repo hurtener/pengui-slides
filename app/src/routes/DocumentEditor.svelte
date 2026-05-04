@@ -12,6 +12,7 @@
   import { onMount } from 'svelte';
   import CommentDrawer from '../lib/CommentDrawer.svelte';
   import AssetPicker from '../lib/AssetPicker.svelte';
+  import ChartSpecPicker from '../lib/ChartSpecPicker.svelte';
   import NodeTypePicker from '../lib/NodeTypePicker.svelte';
   import {
     CATALOGUE,
@@ -158,6 +159,43 @@
   function closeAssetPicker(): void {
     assetPickerOpen = false;
     assetPickerTargetPath = null;
+  }
+
+  // ── Chart picker (v4.12) ────────────────────────────────────────
+  let chartPickerOpen = $state(false);
+  let chartPickerTargetPath = $state<ReadonlyArray<string | number> | null>(null);
+  let chartPickerTargetIndex = $state(0);
+
+  function openChartPicker(parentPath: ReadonlyArray<string | number>, position: number): void {
+    chartPickerTargetPath = parentPath;
+    chartPickerTargetIndex = position;
+    chartPickerOpen = true;
+  }
+
+  function closeChartPicker(): void {
+    chartPickerOpen = false;
+    chartPickerTargetPath = null;
+  }
+
+  async function handleChartPick(payload: Record<string, unknown>): Promise<void> {
+    const path = chartPickerTargetPath;
+    const pos = chartPickerTargetIndex;
+    chartPickerOpen = false;
+    chartPickerTargetPath = null;
+    if (!path || !selectedId) return;
+    try {
+      await bridge.insertSectionNode({
+        deck_id: deckRef,
+        section_id: selectedId,
+        parent_path: path,
+        position: pos,
+        new_node: payload,
+      });
+      setStructureStatus('Chart added.');
+      selectedIrPath = [...path, pos].join(',');
+    } catch (err) {
+      setStructureStatus(err instanceof Error ? err.message : String(err));
+    }
   }
   async function handleAssetPick(a: PickerAsset): Promise<void> {
     const path = assetPickerTargetPath;
@@ -721,6 +759,11 @@
 
     if (kind === 'image') {
       openAssetPicker(parentPath, insertIndex);
+      return;
+    }
+
+    if (kind === 'chart') {
+      openChartPicker(parentPath, insertIndex);
       return;
     }
 
@@ -1351,6 +1394,13 @@
     open={assetPickerOpen}
     onPick={handleAssetPick}
     onClose={closeAssetPicker}
+  />
+
+  <!-- v4.12 chart sub-flow (opened from + Block ▾ → Chart) -->
+  <ChartSpecPicker
+    open={chartPickerOpen}
+    onPick={(payload) => void handleChartPick(payload)}
+    onClose={closeChartPicker}
   />
 
   <!-- v4.9e: + Block ▾ and Change ▾ pickers -->

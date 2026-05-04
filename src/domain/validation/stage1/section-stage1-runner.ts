@@ -40,6 +40,7 @@ export type { SectionStage1Context } from './section-structural.js';
 import { SectionWrapperClassCheck } from './section-wrapper-class.js';
 import { SectionFigureShapeCheck } from './section-figure-shape.js';
 import { SectionTableShapeCheck } from './section-table-shape.js';
+import { ChartShapeCheck } from './chart-shape.js';
 
 export interface SectionStage1Result {
   issues: ValidationIssue[];
@@ -68,6 +69,10 @@ export class SectionStage1Runner {
       new SectionWrapperClassCheck(sectionCtx),
       new SectionFigureShapeCheck(sectionCtx),
       new SectionTableShapeCheck(sectionCtx),
+      // v4.12: chart-shape applies to chart figures regardless of mode —
+      // section.html stores placeholders carrying data-pengui-chart-spec,
+      // and chart-shape reads the spec attribute (no SVG inspection).
+      new ChartShapeCheck(),
     ];
 
     for (const check of [...sectionChecks, ...sharedChecks]) {

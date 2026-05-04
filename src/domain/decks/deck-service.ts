@@ -60,6 +60,7 @@ import {
   setNodeFieldAtPath,
   type IRPath,
 } from '../ir/index.js';
+import { resolveChartRefs } from '../rendering/chart-resolver.js';
 import type { SlideNode } from '../ir/index.js';
 import { ErrorCode, PenguiError } from '../../types/errors.js';
 import { MetadataEmbedder } from '../metadata/metadata-embedder.js';
@@ -268,7 +269,10 @@ export class DeckService {
     // in via the compiler emitting var() references; no post-emit
     // substitution required.
     const geometry = getFormat(deck.format ?? DEFAULT_FORMAT).geometry;
-    const compiledHtml = compileSlideIRToHtml({ ir: input.ir, soul, geometry });
+    const rawHtml = compileSlideIRToHtml({ ir: input.ir, soul, geometry });
+    // v4.12: swap chart placeholders for real ECharts SVG. No-op when
+    // the slide has no chart nodes.
+    const compiledHtml = resolveChartRefs(rawHtml, soul.layers);
 
     // Build full metadata from input + auto-generated fields
     const metadata: SlideMetadata = {
@@ -400,7 +404,10 @@ export class DeckService {
       }
       const geometry = getFormat(deck.format ?? DEFAULT_FORMAT).geometry;
       slide.ir = input.ir;
-      slide.html = compileSlideIRToHtml({ ir: input.ir, soul, geometry });
+      slide.html = resolveChartRefs(
+        compileSlideIRToHtml({ ir: input.ir, soul, geometry }),
+        soul.layers,
+      );
       slide.metadata.revisionHash = sha256(slide.html);
       recompiled = true;
     }

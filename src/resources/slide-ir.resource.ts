@@ -27,14 +27,14 @@ export function registerSlideIRSchemaResource(server: McpServer): void {
     mimeType: 'application/json',
     description:
       'JSON Schema for the Slide / Section IR node tree. Lists every node type ' +
-      '(hero, prose, image, callout, heading, list, divider, quote, table, two_column, grid), ' +
+      '(hero, prose, image, callout, heading, list, divider, quote, table, chart, two_column, grid), ' +
       'their fields, the rich-text run shape, and the semantic token enums (background ' +
       'roles, color roles). Fetch this once per session and use it to compose `slide_ir` / ' +
       '`section_ir` arguments for add_slide, update_slide, add_section, update_section, ' +
       'validate_slide_ir, and validate_section_ir.',
     getText: () => {
       const payload = {
-        version: '4.8',
+        version: '4.12',
         node_types: SLIDE_NODE_TYPES,
         slide_ir: z.toJSONSchema(SlideIRSchema),
         section_ir: z.toJSONSchema(SectionIRSchema),
@@ -62,6 +62,16 @@ export function registerSlideIRSchemaResource(server: McpServer): void {
             'validation warning.',
           'Heading levels: h1 is reserved for hero/cover titles in practice; h2–h4 cover most ' +
             'content slide section headers; h5–h6 are uppercase eyebrow-style.',
+          'Chart nodes (v4.12): structured payload — `chart_type` (one of bar | stacked_bar | ' +
+            'line | area | scatter | pie | donut | histogram | heatmap | radar) + `data` (array ' +
+            'of numeric rows; one row per series for cartesian charts, one row of slice values ' +
+            'for pie/donut, paired [x, y, x, y, …] for scatter, rectangular grid for heatmap). ' +
+            'Optional `series_labels`, `category_labels`, `x_axis_title`, `y_axis_title`, ' +
+            '`caption`, `show_legend`, `show_grid`, `value_format` (number | percent | currency | ' +
+            'compact). The server renders chart_type via Apache ECharts (SVG, soul-themed). ' +
+            'Native PPTX chart parts are NOT supported in v4.12 — charts export as flattened ' +
+            'images in PPTX. Prefer the `compile_chart` tool to assemble chart payloads in one ' +
+            'round-trip; agents iterate on chart_type / value_format with preview mode.',
         ],
       };
       return JSON.stringify(payload, null, 2);

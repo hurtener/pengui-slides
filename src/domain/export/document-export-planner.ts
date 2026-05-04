@@ -453,6 +453,16 @@ export class DocumentExportPlanner {
         ].filter(Boolean).join(';');
 
         if (element.kind === 'image') {
+          // v4.12 chart placeholder: the chart's real SVG is already
+          // inlined in the slide HTML by `resolveChartRefs`. The
+          // synthesized-background path doesn't have access to the
+          // original SVG, so skip the placeholder rather than embed a
+          // broken `pengui-chart://` URL. The original-html background
+          // path (canUseOriginalHtmlBackground) handles charts via the
+          // inline SVG.
+          if (element.src.startsWith('pengui-chart://')) {
+            return '';
+          }
           return `<img src="${element.src}" style="${styles};object-fit:${element.style.objectFit ?? 'cover'}">`;
         }
         if (element.kind === 'text') {

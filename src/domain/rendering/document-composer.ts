@@ -52,6 +52,7 @@ import * as cheerio from 'cheerio';
 import type { Logger } from '../../infrastructure/logger.js';
 import type { AssetService } from '../assets/asset-service.js';
 import { resolveAssetRefs } from '../assets/asset-resolver.js';
+import { resolveChartRefs } from './chart-resolver.js';
 import { applyDefensiveDefaults } from '../validation/stage0/defensive-injector.js';
 import type { Section, SectionKind, SectionBreakHints } from '../../types/section.js';
 import { ALL_SECTION_KINDS } from '../../types/section.js';
@@ -356,6 +357,12 @@ export class DocumentComposer {
         if (resolveAssets && assetService) {
           fragmentHtml = await resolveAssetRefs(fragmentHtml, assetService);
         }
+
+        // v4.12: chart resolution. Section compile is soul-agnostic, so
+        // it stores the placeholder figure with `data-pengui-chart-spec`.
+        // Composer has the soul on hand — render real ECharts SVG here.
+        // No-op when the fragment carries no chart figures.
+        fragmentHtml = resolveChartRefs(fragmentHtml, soul.layers);
 
         return this.projectSectionAttributes(fragmentHtml, plan, warnings, domId);
       }),

@@ -180,8 +180,15 @@ export type SlideElement =
  *       leaves get their own native shape rect from layout, no special
  *       compiler branch). Mode-specific nodes (toc, section_divider,
  *       bibliography, page_break) don't reach the slide-document path.
+ *  - 6: prior baseline for v4.7 visual loop work.
+ *  - 7: v4.12 chart node renders to inline SVG (ECharts SSR) with
+ *       token-only fills + token-only text sizes; layout assigns its
+ *       own native shape rect (image-class) per cell. Chart placeholders
+ *       compiled at revision 6 contain only the placeholder body — they
+ *       must recompile so the editable PPTX path picks up the rendered
+ *       chart bytes.
  */
-export const CURRENT_COMPILER_REVISION = 6;
+export const CURRENT_COMPILER_REVISION = 7;
 
 export interface SlideDocument {
   version: '1';

@@ -106,6 +106,29 @@ export const NODE_CSS = `
   color: var(--color-text-muted);
 }
 
+/* v4.12: pengui-chart figure wraps the ECharts-rendered SVG. The SVG
+   author at 800×480 with a viewBox; CSS scales it to the container's
+   width and lets the height follow the aspect ratio. */
+.pengui-chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0;
+  width: 100%;
+}
+.pengui-chart-svg,
+.pengui-chart > svg {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+}
+.pengui-chart-caption {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  color: var(--color-text-secondary);
+}
+
 .pengui-callout {
   display: flex;
   flex-direction: column;

@@ -84,6 +84,19 @@ export class HtmlSlideDocumentCompiler {
     try {
       const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
       await page.setContent(html, { waitUntil: 'load' });
+      // Polyfill esbuild's `__name` helper inside the page context.
+      // When this compiler is loaded by a runtime that emits
+      // `--keep-names` shims (tsx, esbuild dev servers, some bundlers),
+      // function expressions get wrapped in `__name(fn, "x")`. Playwright
+      // serializes our evaluate fn via `.toString()` and ships it to
+      // Chromium — without `__name` defined in the same evaluation realm
+      // page.evaluate runs in, the first transformed identifier throws
+      // ReferenceError. addInitScript lands in a different world, so
+      // inject via addScriptTag (raw `content:` string) which runs in
+      // the page's main world before our evaluate calls.
+      await page.addScriptTag({
+        content: 'if (typeof globalThis.__name !== "function") { globalThis.__name = function (fn) { return fn; }; }',
+      });
       await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
 
       return await page.evaluate(() => {
@@ -108,6 +121,11 @@ export class HtmlSlideDocumentCompiler {
 
         const elements: SlideElement[] = [];
         const tableHandled = new Set<Element>();
+        // v4.12: chart figures emit a single background-disposed image
+        // element; their inner SVG nodes (rect/path/text) must NOT be
+        // walked individually or the editable PPTX export emits a
+        // floating shape per SVG element on top of the chart raster.
+        const chartHandled = new Set<Element>();
         // Marks descendants of a mixed-content text leaf so the walk loop
         // doesn't re-emit them as separate elements. Without this, a heading
         // like `<h1>The Art of <span class="pengui-text-accent-warm">Coffee</span></h1>`
@@ -628,9 +646,41 @@ export class HtmlSlideDocumentCompiler {
             return;
           }
 
+          if (chartHandled.has(element)) {
+            return;
+          }
+
           const computed = window.getComputedStyle(element);
           const rect = element.getBoundingClientRect();
           if (!isVisible(computed, rect)) {
+            return;
+          }
+
+          // v4.12 chart figure — flatten into the slide background. The
+          // existing slide-renderer screenshot path captures the SVG
+          // inline so the chart is visually present in the PPTX export;
+          // emitting per-SVG shapes would litter the slide with floating
+          // text/path shapes on top of the rendered chart.
+          if (element.classList?.contains('pengui-chart')) {
+            for (const desc of Array.from(element.querySelectorAll('*'))) {
+              chartHandled.add(desc);
+            }
+            const base = createBase(element, 'image', computed, rect, index) as Omit<SlideImageElement, 'src' | 'alt'>;
+            elements.push({
+              ...base,
+              kind: 'image',
+              src: 'pengui-chart://background',
+              alt: 'Chart',
+              exportDisposition: 'background' as const,
+              fallbackReason: 'non-fetchable-image',
+            });
+            pushIssue({
+              code: 'non-fetchable-image',
+              severity: 'warning',
+              selector,
+              message:
+                'Chart will be flattened into the slide background. Native PPTX chart parts are not supported in v4.12.',
+            });
             return;
           }
 

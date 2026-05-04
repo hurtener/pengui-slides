@@ -154,6 +154,47 @@ export type TableNode = z.infer<typeof TableNodeSchema>;
 // (renderTable throws via PenguiError) rather than in the Zod schema —
 // .refine() returns ZodEffects which discriminatedUnion does not accept.
 
+// ── v4.12 chart node ─────────────────────────────────────────────
+//
+// Data-driven chart rendered to inline SVG by ECharts at compile time.
+// Same pattern as TableNode: structured payload, leaf, no recursion.
+// The renderer reads soul tokens through the chart-theme-bridge so
+// the SVG output uses var(--color-*) references — the diagram-legibility
+// validator already covers token-clean SVG; chart-shape adds chart-specific
+// rules (slice limits, axis titles, color reuse) on top.
+//
+// Native PPTX `c:chart` parts are out of scope for v4.12 — the editable
+// PPTX path emits a single `image` shape with PNG bytes.
+
+export const ChartTypeSchema = z.enum([
+  'bar', 'stacked_bar', 'line', 'area',
+  'scatter', 'pie', 'donut', 'histogram', 'heatmap', 'radar',
+]);
+export type ChartType = z.infer<typeof ChartTypeSchema>;
+
+export const ChartNodeSchema = z
+  .object({
+    type: z.literal('chart'),
+    chart_type: ChartTypeSchema,
+    /** Per-series rows. Shape varies by chart_type — validated at render
+     *  time the same way TableNode validates row-vs-headers length
+     *  (Zod refine doesn't compose with discriminatedUnion). */
+    data: z.array(z.array(z.union([z.number(), z.string()]))).min(1),
+    /** Series names (one per row in `data`). */
+    series_labels: z.array(z.string()).optional(),
+    /** Category names — x-axis labels for cartesian, slice names for pie. */
+    category_labels: z.array(z.string()).optional(),
+    /** Plain-string axis titles. RichText is overkill for axes. */
+    x_axis_title: z.string().optional(),
+    y_axis_title: z.string().optional(),
+    caption: RichTextSchema.optional(),
+    show_legend: z.boolean().optional(),
+    show_grid: z.boolean().optional(),
+    value_format: z.enum(['number', 'percent', 'currency', 'compact']).optional(),
+  })
+  .strict();
+export type ChartNode = z.infer<typeof ChartNodeSchema>;
+
 // Leaf-only union — used inside two_column to prevent recursion.
 export const LeafSlideNodeSchema = z.discriminatedUnion('type', [
   HeroNodeSchema,
@@ -165,6 +206,7 @@ export const LeafSlideNodeSchema = z.discriminatedUnion('type', [
   DividerNodeSchema,
   QuoteNodeSchema,
   TableNodeSchema,
+  ChartNodeSchema,
 ]);
 export type LeafSlideNode = z.infer<typeof LeafSlideNodeSchema>;
 
@@ -281,6 +323,7 @@ export const SlideNodeSchema = z.discriminatedUnion('type', [
   DividerNodeSchema,
   QuoteNodeSchema,
   TableNodeSchema,
+  ChartNodeSchema,
   TwoColumnNodeSchema,
   GridNodeSchema,
   TocNodeSchema,
@@ -302,6 +345,7 @@ export const SLIDE_NODE_TYPES = [
   'divider',
   'quote',
   'table',
+  'chart',
   'two_column',
   'grid',
   'toc',

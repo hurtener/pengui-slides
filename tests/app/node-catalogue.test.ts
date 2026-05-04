@@ -27,6 +27,7 @@ describe('CATALOGUE', () => {
       'callout',
       'image',
       'divider',
+      'chart',
       'two_column_1_1',
       'two_column_1_2',
       'two_column_2_1',
@@ -39,7 +40,7 @@ describe('CATALOGUE', () => {
   it('groups leaves as block and compounds as layout', () => {
     const blocks = CATALOGUE.filter((e) => e.group === 'block').map((e) => e.kind);
     const layouts = CATALOGUE.filter((e) => e.group === 'layout').map((e) => e.kind);
-    expect(blocks).toEqual(['paragraph', 'heading', 'list', 'quote', 'callout', 'image', 'divider']);
+    expect(blocks).toEqual(['paragraph', 'heading', 'list', 'quote', 'callout', 'image', 'divider', 'chart']);
     expect(layouts).toEqual([
       'two_column_1_1',
       'two_column_1_2',
@@ -50,10 +51,13 @@ describe('CATALOGUE', () => {
     ]);
   });
 
-  it('leaf shortcuts are unique single lowercase letters', () => {
+  it('leaf shortcuts (when present) are unique single lowercase letters', () => {
+    // v4.12 chart joins compounds in deferring keyboard shortcuts —
+    // letter space is crowded. Unique constraint applies only to
+    // entries that declare a shortcut.
     const shortcuts = CATALOGUE
-      .filter((e) => e.group === 'block')
-      .map((entry) => entry.shortcut);
+      .filter((e) => e.group === 'block' && typeof e.shortcut === 'string')
+      .map((entry) => entry.shortcut!);
     expect(new Set(shortcuts).size).toBe(shortcuts.length);
     for (const s of shortcuts) {
       expect(s).toMatch(/^[a-z]$/);

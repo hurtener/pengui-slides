@@ -17,6 +17,7 @@ import { StructuralCheck } from './structural-check.js';
 import { NetworkIsolationCheck } from './network-isolation.js';
 import { SafeAreaCheck } from './safe-area-check.js';
 import { DiagramLegibilityCheck } from './diagram-legibility.js';
+import { ChartShapeCheck } from './chart-shape.js';
 import { UndefinedVariablesCheck } from './undefined-variables.js';
 
 export interface Stage1Result {
@@ -37,6 +38,7 @@ export class Stage1Runner {
       new SafeAreaCheck(),
       new UndefinedVariablesCheck(),
       new DiagramLegibilityCheck(),
+      new ChartShapeCheck(),
     ];
   }
 

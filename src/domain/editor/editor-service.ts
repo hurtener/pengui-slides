@@ -20,6 +20,7 @@ import {
 import type { ValidationResult } from '../../types/validation.js';
 import type { SlideDocumentService } from '../documents/index.js';
 import { compileSlideIRToHtml } from '../ir/index.js';
+import { resolveChartRefs } from '../rendering/chart-resolver.js';
 import { DEFAULT_FORMAT, getFormat } from '../formats/format-registry.js';
 import { MetadataEmbedder } from '../metadata/metadata-embedder.js';
 import { soulId } from '../../types/common.js';
@@ -342,7 +343,10 @@ export class EditorService {
       const got = await this.soulService.get(soulId(soulIdStr));
       if (!got) return null;
       const geometry = getFormat(summary.format ?? DEFAULT_FORMAT).geometry;
-      const compiledHtml = compileSlideIRToHtml({ ir: slide.ir, soul: got.soul, geometry });
+      const compiledHtml = resolveChartRefs(
+        compileSlideIRToHtml({ ir: slide.ir, soul: got.soul, geometry }),
+        got.soul.layers,
+      );
       const embedded = this.metadataEmbedder.embed(compiledHtml, slide.metadata);
       this.logger.info('Refreshed pre-v4.8.5 slide html in-memory', {
         slideId: slide.id,

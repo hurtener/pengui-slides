@@ -10,6 +10,7 @@
   import FormatBadge from '../lib/FormatBadge.svelte';
   import CommentDrawer from '../lib/CommentDrawer.svelte';
   import AssetPicker from '../lib/AssetPicker.svelte';
+  import ChartSpecPicker from '../lib/ChartSpecPicker.svelte';
   import BlockActionBar from '../lib/BlockActionBar.svelte';
   import NodeTypePicker from '../lib/NodeTypePicker.svelte';
   import {
@@ -149,6 +150,37 @@
   function closeAssetPicker(): void {
     assetPickerOpen = false;
     assetPickerTargetPath = null;
+  }
+
+  // ── Chart picker (v4.12) ────────────────────────────────────────
+  let chartPickerOpen = $state(false);
+  let chartPickerTargetPath = $state<ReadonlyArray<string | number> | null>(null);
+  let chartPickerTargetIndex = $state(0);
+
+  function openChartPicker(parentPath: ReadonlyArray<string | number>, position: number): void {
+    chartPickerTargetPath = parentPath;
+    chartPickerTargetIndex = position;
+    chartPickerOpen = true;
+  }
+
+  async function handleChartPick(payload: Record<string, unknown>): Promise<void> {
+    const path = chartPickerTargetPath;
+    const pos = chartPickerTargetIndex;
+    chartPickerOpen = false;
+    chartPickerTargetPath = null;
+    if (!path) return;
+    try {
+      await deck.insertSlideNode(path, pos, payload);
+      setStructureStatus('Chart added.');
+      selectedIrPath = [...path, pos].join(',');
+    } catch (err) {
+      setStructureStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  function closeChartPicker(): void {
+    chartPickerOpen = false;
+    chartPickerTargetPath = null;
   }
   // Stringified IR paths of elements that already have (unresolved)
   // comments — drives the dashed mint outline decoration on the canvas.
@@ -416,6 +448,12 @@
     if (kind === 'image') {
       // Asset picker handles the second step + the actual insert.
       openAssetPicker(parentPath, insertIndex);
+      return;
+    }
+
+    if (kind === 'chart') {
+      // ChartSpecPicker handles chart_type + data + insert.
+      openChartPicker(parentPath, insertIndex);
       return;
     }
 
@@ -1103,6 +1141,13 @@
         onClose={closeAssetPicker}
       />
     {/if}
+
+    <!-- v4.12 chart sub-flow (opened from + Block ▾ → Chart) -->
+    <ChartSpecPicker
+      open={chartPickerOpen}
+      onPick={(payload) => void handleChartPick(payload)}
+      onClose={closeChartPicker}
+    />
 
     <!-- v4.9e: + Block ▾ and Change ▾ pickers -->
     <NodeTypePicker

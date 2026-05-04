@@ -289,15 +289,32 @@ export function buildCategoryColorTokens(accentHex: string): TokenEntry[] {
 
   const LIGHTNESS_BASE = 0.72;  // category node base — clearly pastel but visible
   const LIGHTNESS_TINT = 0.85;  // leaf node tint — paler, subordinate
+  // v4.12: charts need at least 8 categorical colors (stacked bars,
+  // multi-series lines). Extend a–d (pastel rotation) with e–h, which
+  // reuse the same channel rotations but at a darker lightness pair.
+  // Keeps a–d byte-identical (existing diagram templates depend on the
+  // exact pastel palette) while giving charts 8 visually distinct colors.
+  // Adjacent indices alternate light↔dark so series ordering stays legible.
+  const LIGHTNESS_BASE_DARK = 0.30; // saturated counterpart to a–d
+  const LIGHTNESS_TINT_DARK = 0.50;
 
-  const categories = ['a', 'b', 'c', 'd'] as const;
+  const lightCats = ['a', 'b', 'c', 'd'] as const;
+  const darkCats = ['e', 'f', 'g', 'h'] as const;
 
   const entries: TokenEntry[] = [];
-  categories.forEach((label, i) => {
+  lightCats.forEach((label, i) => {
     const rotated = rotateChannels(base, i);
     const [r, g, b] = rotated;
     const baseHex = rgbToHex(lighten(r, LIGHTNESS_BASE), lighten(g, LIGHTNESS_BASE), lighten(b, LIGHTNESS_BASE));
     const tintHex = rgbToHex(lighten(r, LIGHTNESS_TINT), lighten(g, LIGHTNESS_TINT), lighten(b, LIGHTNESS_TINT));
+    entries.push({ name: `--color-category-${label}`, value: baseHex });
+    entries.push({ name: `--color-category-${label}-tint`, value: tintHex });
+  });
+  darkCats.forEach((label, i) => {
+    const rotated = rotateChannels(base, i);
+    const [r, g, b] = rotated;
+    const baseHex = rgbToHex(lighten(r, LIGHTNESS_BASE_DARK), lighten(g, LIGHTNESS_BASE_DARK), lighten(b, LIGHTNESS_BASE_DARK));
+    const tintHex = rgbToHex(lighten(r, LIGHTNESS_TINT_DARK), lighten(g, LIGHTNESS_TINT_DARK), lighten(b, LIGHTNESS_TINT_DARK));
     entries.push({ name: `--color-category-${label}`, value: baseHex });
     entries.push({ name: `--color-category-${label}-tint`, value: tintHex });
   });

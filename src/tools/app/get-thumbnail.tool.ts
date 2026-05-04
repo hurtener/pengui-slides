@@ -20,6 +20,8 @@ import { handleToolError } from '../_shared/error-handler.js';
 import { structuredResponse } from '../_shared/responses.js';
 import { PenguiError, ErrorCode } from '../../types/errors.js';
 import { getFormat } from '../../domain/formats/format-registry.js';
+import { resolveChartRefs } from '../../domain/rendering/chart-resolver.js';
+import { soulId as toSoulId } from '../../types/common.js';
 
 // Raster height for slides / short-edge for portrait pages. Sized so
 // the multi-page preview (PagePreview renders A4 at ~32 % scale → ~397
@@ -93,10 +95,16 @@ export function registerGetThumbnailTool(server: McpServer, container: ServiceCo
         const section = await container.documentService.getSection(section_id!);
         const revisionHash = createHash('sha256').update(section.html).digest('hex');
 
+        // v4.12: section.html stores chart placeholders (composer normally
+        // resolves them at render time). The thumbnail path bypasses the
+        // composer, so resolve here using the deck's soul.
+        const { soul } = await container.soulService.get(toSoulId(summary.soulId as string));
+        const resolvedSectionHtml = resolveChartRefs(section.html, soul.layers);
+
         // Wrap section HTML as a minimal slide for the renderer. We only
         // need the renderer to read `html` + format geometry, so the IR
         // field is set to an empty body — the renderer never inspects IR.
-        const wrappedHtml = `<section class="slide">${section.html}</section>`;
+        const wrappedHtml = `<section class="slide">${resolvedSectionHtml}</section>`;
         const fakeSlide = {
           id: section.id,
           deckId: section.deckId,

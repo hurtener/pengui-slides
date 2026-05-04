@@ -9,6 +9,8 @@ import {
   DividerNodeSchema,
   QuoteNodeSchema,
   TableNodeSchema,
+  ChartNodeSchema,
+  ChartTypeSchema,
   TwoColumnNodeSchema,
   GridNodeSchema,
   TocNodeSchema,
@@ -157,11 +159,12 @@ describe('SlideNodeSchema (top-level union)', () => {
     expect(() => SlideNodeSchema.parse({ type: 'metric_grid', items: [] })).toThrow();
   });
 
-  it('SLIDE_NODE_TYPES enumerates the v4.8 catalog', () => {
+  it('SLIDE_NODE_TYPES enumerates the v4.12 catalog (chart added)', () => {
     expect([...SLIDE_NODE_TYPES].sort()).toEqual(
       [
         'bibliography',
         'callout',
+        'chart',
         'divider',
         'grid',
         'heading',
@@ -200,6 +203,81 @@ describe('LeafSlideNodeSchema', () => {
     for (const s of samples) {
       expect(() => LeafSlideNodeSchema.parse(s)).not.toThrow();
     }
+  });
+
+  it('accepts the v4.12 chart leaf', () => {
+    expect(() =>
+      LeafSlideNodeSchema.parse({
+        type: 'chart',
+        chart_type: 'bar',
+        data: [[1, 2, 3]],
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe('ChartNodeSchema', () => {
+  it('accepts a minimal bar chart', () => {
+    const node = { type: 'chart', chart_type: 'bar', data: [[1, 2, 3]] };
+    expect(ChartNodeSchema.parse(node)).toMatchObject(node);
+  });
+
+  it('accepts every chart_type listed in ChartTypeSchema', () => {
+    const expected = [
+      'bar', 'stacked_bar', 'line', 'area',
+      'scatter', 'pie', 'donut', 'histogram', 'heatmap', 'radar',
+    ] as const;
+    expect([...ChartTypeSchema.options].sort()).toEqual([...expected].sort());
+    for (const chart_type of expected) {
+      expect(() =>
+        ChartNodeSchema.parse({ type: 'chart', chart_type, data: [[1]] }),
+      ).not.toThrow();
+    }
+  });
+
+  it('accepts series_labels, category_labels, axis titles, caption, knobs, value_format', () => {
+    const node = {
+      type: 'chart',
+      chart_type: 'line',
+      data: [[1, 2, 3], [4, 5, 6]],
+      series_labels: ['Revenue', 'Cost'],
+      category_labels: ['Q1', 'Q2', 'Q3'],
+      x_axis_title: 'Quarter',
+      y_axis_title: 'USD',
+      caption: rt('Source: 2026 quarterly report'),
+      show_legend: true,
+      show_grid: false,
+      value_format: 'currency' as const,
+    };
+    expect(ChartNodeSchema.parse(node)).toMatchObject(node);
+  });
+
+  it('rejects an unknown chart_type', () => {
+    expect(() =>
+      ChartNodeSchema.parse({ type: 'chart', chart_type: 'sunburst', data: [[1]] }),
+    ).toThrow();
+  });
+
+  it('rejects empty data array', () => {
+    expect(() =>
+      ChartNodeSchema.parse({ type: 'chart', chart_type: 'bar', data: [] }),
+    ).toThrow();
+  });
+
+  it('rejects unknown fields', () => {
+    expect(() =>
+      ChartNodeSchema.parse({
+        type: 'chart', chart_type: 'bar', data: [[1]], extra: 'nope',
+      }),
+    ).toThrow();
+  });
+
+  it('rejects value_format outside the enum', () => {
+    expect(() =>
+      ChartNodeSchema.parse({
+        type: 'chart', chart_type: 'bar', data: [[1]], value_format: 'kelvin',
+      }),
+    ).toThrow();
   });
 });
 
