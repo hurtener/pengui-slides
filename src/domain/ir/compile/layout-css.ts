@@ -485,6 +485,64 @@ export const NODE_CSS = `
   padding: 0;
   border: 0;
 }
+
+/* v4.14 — slide chrome (deck-level header/footer regions). The chrome
+   row uses CSS Grid with three tracks (1fr auto 1fr) so left/right
+   anchor to the edges and a center slot truly centers regardless of
+   what's in left/right. Empty slot cells still occupy their grid track
+   so layout stays stable across slides with different chrome content.
+
+   The header gets a hairline divider below; the footer gets one above.
+   Both use --color-border so they tone down on dark/low-contrast souls.
+   Padding values use the soul's space scale, not literal px. */
+.pengui-chrome-header,
+.pengui-chrome-footer {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--space-md);
+  width: 100%;
+}
+.pengui-chrome-header {
+  padding-bottom: var(--space-sm);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.pengui-chrome-footer {
+  padding-top: var(--space-sm);
+  border-top: var(--border-width) solid var(--color-border);
+}
+.pengui-chrome-slot {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.pengui-chrome-slot-left   { justify-self: start;  justify-content: flex-start; }
+.pengui-chrome-slot-center { justify-self: center; justify-content: center; }
+.pengui-chrome-slot-right  { justify-self: end;    justify-content: flex-end; }
+.pengui-chrome-logo {
+  display: block;
+  width: auto;
+  /* Prevent the asset's intrinsic ratio from stretching when the slot
+     gets squeezed. The size classes below set a fixed height. */
+  object-fit: contain;
+}
+.pengui-chrome-logo-sm { height: 24px; }
+.pengui-chrome-logo-md { height: 32px; }
+.pengui-chrome-logo-lg { height: 44px; }
+.pengui-chrome-text {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+.pengui-chrome-page-number {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
 `;
 
 /** Slide-mode wrapper CSS: page reset + .slide canvas sized to the
@@ -540,6 +598,32 @@ body {
   min-height: 0;
 }
 .slide > .pengui-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* v4.14: slide chrome alters the .slide flex layout. With chrome,
+   header/main/footer stack naturally — the slide stops centering its
+   direct children (which would push header and footer apart) and the
+   <main class="pengui-chrome-body"> wrapper takes over the centering
+   responsibility for the body content. */
+.slide.pengui-has-chrome {
+  justify-content: stretch;
+  /* Chrome wants its own gap between header/body/footer rather than
+     the wide --space-lg slide gap (which leaves too much air between
+     the header divider and the first body element). */
+  gap: var(--space-md);
+}
+.slide.pengui-has-chrome > .pengui-chrome-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  justify-content: center;
+  min-height: 0;
+}
+.slide.pengui-has-chrome > .pengui-chrome-body > .pengui-two-column,
+.slide.pengui-has-chrome > .pengui-chrome-body > .pengui-grid {
   flex: 1 1 auto;
   min-height: 0;
 }

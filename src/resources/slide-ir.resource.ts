@@ -34,7 +34,7 @@ export function registerSlideIRSchemaResource(server: McpServer): void {
       'validate_slide_ir, and validate_section_ir.',
     getText: () => {
       const payload = {
-        version: '4.13',
+        version: '4.14',
         node_types: SLIDE_NODE_TYPES,
         slide_ir: z.toJSONSchema(SlideIRSchema),
         section_ir: z.toJSONSchema(SectionIRSchema),
@@ -91,6 +91,17 @@ export function registerSlideIRSchemaResource(server: McpServer): void {
             'judiciales de forma "}, {text: "integral", color: "success", bold: true}, {text: "."}]`). ' +
             'Anti-patterns: coloring whole headlines, coloring multiple words with different ' +
             'colors in the same heading, coloring body prose paragraphs.',
+          'Slide chrome (v4.14): persistent header/footer regions configured at the DECK level ' +
+            '(Deck.chrome — set via the chrome editor in the App, or programmatically). Each ' +
+            'region has up to three slots (left / center / right). Slot kinds: `logo` ' +
+            '(asset-backed brand mark, height sm | md | lg), `text` (RichText, rendered in mono ' +
+            'caps), `page_number` (format "1" | "01" | "1/N"). Default cover behavior: chrome is ' +
+            'HIDDEN on the cover slide unless the deck sets `showOnCover: true`. ' +
+            'Per-slide opt-out: SlideIR.chrome_override = "hide" suppresses chrome on a single ' +
+            'slide regardless of deck setting (useful for full-bleed visuals or section dividers). ' +
+            'Authoring guidance: the agent does NOT set chrome on each slide — set it once on ' +
+            'the deck. The agent CAN set `chrome_override: "hide"` on a specific slide when the ' +
+            'deck-level chrome would clash with the content.',
         ],
       };
       return JSON.stringify(payload, null, 2);

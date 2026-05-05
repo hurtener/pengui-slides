@@ -34,6 +34,11 @@ export {
   DividerNodeSchema,
   QuoteNodeSchema,
   TableNodeSchema,
+  ChartNodeSchema,
+  ChartTypeSchema,
+  CardNodeSchema,
+  IconNameSchema,
+  LeafBlockNodeSchema,
   LeafSlideNodeSchema,
   TwoColumnNodeSchema,
   GridNodeSchema,
@@ -56,6 +61,11 @@ export {
   type DividerNode,
   type QuoteNode,
   type TableNode,
+  type ChartNode,
+  type ChartType,
+  type CardNode,
+  type IconName,
+  type LeafBlockNode,
   type LeafSlideNode,
   type TwoColumnNode,
   type GridNode,
@@ -78,6 +88,21 @@ export {
   type SlideIR,
   type SectionIR,
 } from './slide-ir.js';
+
+export {
+  ChromeSlotSchema,
+  ChromeRegionSchema,
+  DeckChromeSchema,
+  ChromeOverrideSchema,
+  ChromeLogoHeightSchema,
+  ChromePageNumberFormatSchema,
+  type ChromeSlot,
+  type ChromeRegion,
+  type DeckChrome,
+  type ChromeOverride,
+  type ChromeLogoHeight,
+  type ChromePageNumberFormat,
+} from './chrome.js';
 
 export {
   compileSlideIRToHtml,

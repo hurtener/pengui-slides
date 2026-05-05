@@ -18,6 +18,7 @@
 
 import * as z from 'zod';
 import { SlideNodeSchema } from './nodes.js';
+import { ChromeOverrideSchema } from './chrome.js';
 
 export const SlideLayoutSchema = z.enum(['default', 'centered', 'split']);
 export type SlideLayout = z.infer<typeof SlideLayoutSchema>;
@@ -35,6 +36,10 @@ export const SlideIRSchema = z
     layout: SlideLayoutSchema.optional(),
     background: BackgroundRoleSchema.optional(),
     body: z.array(SlideNodeSchema),
+    /** v4.14: per-slide chrome decision. `'hide'` suppresses deck chrome
+     *  on this slide (covers, full-bleed sections); omitted/`'inherit'`
+     *  defers to the deck-level setting. */
+    chrome_override: ChromeOverrideSchema.optional(),
   })
   .strict();
 export type SlideIR = z.infer<typeof SlideIRSchema>;

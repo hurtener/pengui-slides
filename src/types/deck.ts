@@ -21,6 +21,7 @@ import type {
 import type { PageChromeDirective } from './page-chrome.js';
 import type { SectionKind, SectionSummary } from './section.js';
 import type { SlideIR } from '../domain/ir/slide-ir.js';
+import type { DeckChrome } from '../domain/ir/chrome.js';
 
 // ── Authoring Model ───────────────────────────────────────────────
 
@@ -126,6 +127,15 @@ export interface Deck {
   authoringModel?: AuthoringModel;
   /** Document-model configuration. Only meaningful when authoringModel = 'document'. */
   documentMeta?: DocumentMeta;
+  /**
+   * v4.14: deck-level slide chrome (header / footer regions that render
+   * persistently across every slide). Only meaningful when
+   * authoringModel = 'slides'. Document-mode decks use the existing
+   * @page-chrome directive for running headers/footers — DeckChrome is
+   * the slide-mode equivalent with structured logo / text / page-number
+   * slots. Per-slide opt-out via SlideIR.chrome_override = 'hide'.
+   */
+  chrome?: DeckChrome;
   createdAt: ISOTimestamp;
   updatedAt: ISOTimestamp;
 }

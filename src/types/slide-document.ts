@@ -192,8 +192,16 @@ export type SlideElement =
  *       and lucide icon glyph. Cached documents at rev 7 don't carry
  *       the new card chrome and would lose accent styling on export
  *       until recompile.
+ *  - 9: v4.14 deck chrome — slide HTML now wraps body with
+ *       `<header class="pengui-chrome-header">` + `<main
+ *       class="pengui-chrome-body">` + `<footer
+ *       class="pengui-chrome-footer">` when the deck carries
+ *       `Deck.chrome` and the slide does not opt out via
+ *       `chrome_override: 'hide'`. Rev-8 cached docs miss the chrome
+ *       shapes; recompile is required so the editable PPTX path
+ *       materialises chrome objects per slide.
  */
-export const CURRENT_COMPILER_REVISION = 8;
+export const CURRENT_COMPILER_REVISION = 9;
 
 export interface SlideDocument {
   version: '1';

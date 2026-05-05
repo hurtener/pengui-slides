@@ -61,9 +61,42 @@ import {
   type IRPath,
 } from '../ir/index.js';
 import { resolveChartRefs } from '../rendering/chart-resolver.js';
-import type { SlideNode } from '../ir/index.js';
+import type { SlideNode, DeckChrome } from '../ir/index.js';
 import { ErrorCode, PenguiError } from '../../types/errors.js';
 import { MetadataEmbedder } from '../metadata/metadata-embedder.js';
+
+/**
+ * v4.14: derive the chrome-related compile args for a slide at a given
+ * position within a deck. Centralises the cover-suppression rule
+ * (showOnCover === false at position 0 → no chrome) so both addSlide
+ * and updateSlide stay in sync.
+ *
+ * Returns an object the caller spreads into compileSlideIRToHtml. When
+ * the deck has no chrome configured, returns the empty subset (the
+ * compiler treats `chrome === undefined` as "no chrome").
+ *
+ * `slidePosition` is the 0-indexed position; the chrome renderer adds 1
+ * for human display.
+ */
+function chromeArgsFor(
+  deck: Pick<Deck, 'chrome'>,
+  slidePosition: number,
+  totalSlideCount: number,
+): {
+  chrome?: DeckChrome;
+  slidePosition?: number;
+  slideCount?: number;
+} {
+  const chrome = deck.chrome;
+  if (!chrome) return {};
+  const isCover = slidePosition === 0;
+  if (isCover && chrome.showOnCover !== true) return {};
+  return {
+    chrome,
+    slidePosition: slidePosition + 1,
+    slideCount: totalSlideCount,
+  };
+}
 
 export class DeckService {
   private readonly deckStore: IDeckStore;
@@ -268,8 +301,14 @@ export class DeckService {
     // v4.5: compile the IR to HTML deterministically. Soul tokens flow
     // in via the compiler emitting var() references; no post-emit
     // substitution required.
+    // v4.14: thread deck.chrome through the compiler. Cover suppression
+    // (showOnCover === false at position 0) is decided by chromeArgsFor.
+    // The post-add slide count for position-N math is `position + 1`
+    // when this slide is being appended; for non-trailing inserts the
+    // existing count grows by 1 too. Either way: deck.slideIds.length + 1.
     const geometry = getFormat(deck.format ?? DEFAULT_FORMAT).geometry;
-    const rawHtml = compileSlideIRToHtml({ ir: input.ir, soul, geometry });
+    const chromeArgs = chromeArgsFor(deck, position, deck.slideIds.length + 1);
+    const rawHtml = compileSlideIRToHtml({ ir: input.ir, soul, geometry, ...chromeArgs });
     // v4.12: swap chart placeholders for real ECharts SVG. No-op when
     // the slide has no chart nodes.
     const compiledHtml = resolveChartRefs(rawHtml, soul.layers);
@@ -403,9 +442,12 @@ export class DeckService {
         throw new SoulNotFoundError(deck.soulId as string);
       }
       const geometry = getFormat(deck.format ?? DEFAULT_FORMAT).geometry;
+      // v4.14: thread chrome through the recompile path too, otherwise
+      // updating a slide's IR would silently strip chrome on next render.
+      const chromeArgs = chromeArgsFor(deck, slide.position, deck.slideIds.length);
       slide.ir = input.ir;
       slide.html = resolveChartRefs(
-        compileSlideIRToHtml({ ir: input.ir, soul, geometry }),
+        compileSlideIRToHtml({ ir: input.ir, soul, geometry, ...chromeArgs }),
         soul.layers,
       );
       slide.metadata.revisionHash = sha256(slide.html);

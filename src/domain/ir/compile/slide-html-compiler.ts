@@ -13,6 +13,14 @@
  * revisionHash) and runs the existing MetadataEmbedder /
  * insertMetaComment pipeline on the compiled output.
  *
+ * v4.14: optional `chrome` arg. When provided AND the slide does not
+ * carry `chrome_override: 'hide'`, the body is wrapped with
+ * `<header class="pengui-chrome-header">` + `<main
+ * class="pengui-chrome-body">` + `<footer class="pengui-chrome-footer">`,
+ * and the slide root gets the `pengui-has-chrome` class so CSS swaps
+ * justification from centered to stretched. `slidePosition` /
+ * `slideCount` feed the page-number slot kind.
+ *
  * Pure / synchronous / deterministic. Asset URIs emit as `asset://UUID`
  * markers and are resolved post-compile by `resolveAssetRefs`.
  */
@@ -20,20 +28,44 @@
 import type { DesignSoul } from '../../../types/design-soul.js';
 import type { FormatGeometry } from '../../../types/format.js';
 import type { SlideIR } from '../slide-ir.js';
+import type { DeckChrome } from '../chrome.js';
 import { renderNodeList } from './node-renderers.js';
+import { renderChromeHeader, renderChromeFooter } from './chrome-renderer.js';
 import { NODE_CSS, buildSlideRootCss } from './layout-css.js';
 
 export interface CompileSlideIRInput {
   ir: SlideIR;
   soul: Pick<DesignSoul, 'cssTokens'>;
   geometry: FormatGeometry;
+  /** v4.14: deck-level chrome to render around the slide body. The
+   *  caller (deck-service) decides whether to pass chrome based on
+   *  showOnCover + slide position; this function trusts the caller's
+   *  decision and only checks SlideIR.chrome_override on top. */
+  chrome?: DeckChrome;
+  /** 1-indexed position for page-number slots. Required if `chrome` has
+   *  a `page_number` slot; ignored otherwise. Defaults to 1. */
+  slidePosition?: number;
+  /** Total slide count for `'1/N'`-style page numbers. Defaults to 1. */
+  slideCount?: number;
 }
 
-export function compileSlideIRToHtml({ ir, soul, geometry }: CompileSlideIRInput): string {
+export function compileSlideIRToHtml({
+  ir,
+  soul,
+  geometry,
+  chrome,
+  slidePosition,
+  slideCount,
+}: CompileSlideIRInput): string {
   const layout = ir.layout ?? 'default';
   const background = ir.background ?? 'canvas';
   const backgroundClass = `pengui-bg-${background.replace(/_/g, '-')}`;
   const layoutClass = `pengui-layout-${layout}`;
+
+  // v4.14 chrome decision: per-slide override beats deck setting.
+  const renderChrome =
+    chrome !== undefined && ir.chrome_override !== 'hide';
+  const chromeClass = renderChrome ? ' pengui-has-chrome' : '';
 
   const css = [soul.cssTokens, buildSlideRootCss(geometry.widthPx, geometry.heightPx, geometry.safeAreaInsetPx), NODE_CSS]
     .map((s) => s.trim())
@@ -42,6 +74,28 @@ export function compileSlideIRToHtml({ ir, soul, geometry }: CompileSlideIRInput
 
   const body = renderNodeList(ir.body);
 
+  // Wrap body in <main class="pengui-chrome-body"> when chrome is
+  // active so the body gets its own flex container that justify-content:
+  // center can target — without this, the slide's own justify-content
+  // pushes header/footer apart from each other and the body floats at
+  // top. The wrapper absorbs the centering responsibility.
+  const wrappedBody = renderChrome
+    ? `<main class="pengui-chrome-body">${body}</main>`
+    : body;
+
+  const headerHtml = renderChrome
+    ? renderChromeHeader(chrome, {
+        slidePosition: slidePosition ?? 1,
+        slideCount: slideCount ?? 1,
+      })
+    : '';
+  const footerHtml = renderChrome
+    ? renderChromeFooter(chrome, {
+        slidePosition: slidePosition ?? 1,
+        slideCount: slideCount ?? 1,
+      })
+    : '';
+
   return [
     '<!DOCTYPE html>',
     '<html>',
@@ -49,8 +103,10 @@ export function compileSlideIRToHtml({ ir, soul, geometry }: CompileSlideIRInput
     `<style>\n${css}\n</style>`,
     '</head>',
     '<body>',
-    `<div class="slide ${backgroundClass} ${layoutClass}">`,
-    body,
+    `<div class="slide ${backgroundClass} ${layoutClass}${chromeClass}">`,
+    headerHtml,
+    wrappedBody,
+    footerHtml,
     '</div>',
     '</body>',
     '</html>',
