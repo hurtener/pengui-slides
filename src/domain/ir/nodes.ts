@@ -16,7 +16,7 @@
  */
 
 import * as z from 'zod';
-import { RichTextSchema } from './rich-text.js';
+import { RichTextSchema, TextColorSchema } from './rich-text.js';
 
 // ── Token reference enums ─────────────────────────────────────────
 //
@@ -195,7 +195,79 @@ export const ChartNodeSchema = z
   .strict();
 export type ChartNode = z.infer<typeof ChartNodeSchema>;
 
+// LeafBlockNode — leaves WITHOUT card. Used as `card.body`'s element type
+// so card cannot nest inside itself (single level of card wrapping). The
+// existing 10-leaf set; expand here when adding new leaves that should be
+// allowed inside cards.
+export const LeafBlockNodeSchema = z.discriminatedUnion('type', [
+  HeroNodeSchema,
+  ProseNodeSchema,
+  ImageNodeSchema,
+  CalloutNodeSchema,
+  HeadingNodeSchema,
+  ListNodeSchema,
+  DividerNodeSchema,
+  QuoteNodeSchema,
+  TableNodeSchema,
+  ChartNodeSchema,
+]);
+export type LeafBlockNode = z.infer<typeof LeafBlockNodeSchema>;
+
+// ── v4.13 card node ──────────────────────────────────────────────
+//
+// Presentational wrapper around a small group of leaves with optional
+// semantic accent (top-border tint + icon color) and a curated lucide
+// icon glyph. Used inside grid cells / two_column children to deliver
+// the "feature card with colored accent" pattern that the design-team
+// reference decks lean on heavily (Galici "Cinco desafíos críticos",
+// "Cuatro módulos", "Acerca de Clear Tech" — all the same primitive).
+//
+// Why a leaf rather than a grid-cell extension: card is reusable
+// anywhere a leaf is allowed (top-level body, two_column children,
+// grid cells), and additive — no breaking change to existing IR.
+
+/** Curated lucide-style icon allowlist. Inline SVGs ship with the
+ *  compiler (`compile/icons.ts`); fonts are not required. Expand on
+ *  demand — keep the set small enough to reason about visually. */
+export const IconNameSchema = z.enum([
+  // status
+  'shield', 'lock', 'check', 'x', 'alert-triangle', 'info-circle',
+  // motion / process
+  'arrow-right', 'refresh', 'rocket', 'zap', 'play', 'workflow',
+  // data / measure
+  'bar-chart', 'trending-up', 'trending-down', 'target', 'gauge',
+  'eye', 'search',
+  // structure
+  'layers', 'grid', 'box', 'puzzle', 'network',
+  // people / business
+  'users', 'user', 'briefcase', 'building',
+  // misc
+  'star', 'heart', 'sparkles', 'lightbulb',
+]);
+export type IconName = z.infer<typeof IconNameSchema>;
+
+export const CardNodeSchema = z
+  .object({
+    type: z.literal('card'),
+    /** Semantic accent — drives the top-border tint and the icon color.
+     *  Reuses the rich-text TextColor enum so the cascade rules match
+     *  what agents already know from inline run colors. */
+    accent: TextColorSchema.optional(),
+    /** Optional icon glyph rendered above the body. From the curated
+     *  lucide allowlist. */
+    icon: IconNameSchema.optional(),
+    /** Small label rendered above the body (Galici cards use these for
+     *  "01 · TRAZABILIDAD" style numbering). Plain RichText so agents
+     *  can color a leading number with the accent if they want to. */
+    eyebrow: RichTextSchema.optional(),
+    /** Inner content — leaves only, no nested cards. */
+    body: z.array(LeafBlockNodeSchema),
+  })
+  .strict();
+export type CardNode = z.infer<typeof CardNodeSchema>;
+
 // Leaf-only union — used inside two_column to prevent recursion.
+// Includes Card (v4.13) so cards can sit inside grid cells / two_column.
 export const LeafSlideNodeSchema = z.discriminatedUnion('type', [
   HeroNodeSchema,
   ProseNodeSchema,
@@ -207,6 +279,7 @@ export const LeafSlideNodeSchema = z.discriminatedUnion('type', [
   QuoteNodeSchema,
   TableNodeSchema,
   ChartNodeSchema,
+  CardNodeSchema,
 ]);
 export type LeafSlideNode = z.infer<typeof LeafSlideNodeSchema>;
 
@@ -324,6 +397,7 @@ export const SlideNodeSchema = z.discriminatedUnion('type', [
   QuoteNodeSchema,
   TableNodeSchema,
   ChartNodeSchema,
+  CardNodeSchema,
   TwoColumnNodeSchema,
   GridNodeSchema,
   TocNodeSchema,
@@ -346,6 +420,7 @@ export const SLIDE_NODE_TYPES = [
   'quote',
   'table',
   'chart',
+  'card',
   'two_column',
   'grid',
   'toc',

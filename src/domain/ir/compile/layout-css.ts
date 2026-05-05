@@ -158,6 +158,67 @@ export const NODE_CSS = `
 .pengui-callout-tip { border-left-color: var(--color-success); }
 .pengui-callout-important { border-left-color: var(--color-error); }
 
+/* v4.13: pengui-card — presentational wrapper around inner leaves with
+   optional accent (top-border tint + icon color). The accent class drives
+   BOTH the border tint AND the icon color via the parent color rule
+   (the icon SVG uses currentColor). Default (no accent class) gets a
+   neutral top-border in --color-border so the card still reads as a
+   card without coloring noise. */
+.pengui-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+  border-top-width: 3px;
+  border-top-color: var(--color-border);
+  border-radius: var(--radius-lg);
+  /* color is the icon tint anchor — accent rules below override per role */
+  color: var(--color-accent-primary);
+}
+.pengui-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 32px;
+  height: 32px;
+  /* SVG inherits via currentColor — see icons.ts */
+}
+.pengui-card-icon > svg {
+  width: 100%;
+  height: 100%;
+}
+.pengui-card-eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+.pengui-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  /* Reset the card's accent color so inner text uses the cascade default,
+     not the accent (which is reserved for the icon + accent flourishes). */
+  color: var(--color-text-default);
+}
+/* Per-accent overrides — each rule sets BOTH the border tint and the
+   icon-anchor color so the card reads as one coherent semantic unit.
+   The class names mirror the TextColor enum (underscore → hyphen). */
+.pengui-card-accent-accent      { border-top-color: var(--color-accent-primary);   color: var(--color-accent-primary); }
+.pengui-card-accent-accent-alt  { border-top-color: var(--color-accent-secondary); color: var(--color-accent-secondary); }
+.pengui-card-accent-accent-warm { border-top-color: var(--color-accent-warm);      color: var(--color-accent-warm); }
+.pengui-card-accent-success     { border-top-color: var(--color-success);          color: var(--color-success); }
+.pengui-card-accent-warning     { border-top-color: var(--color-warning);          color: var(--color-warning); }
+.pengui-card-accent-error       { border-top-color: var(--color-error);            color: var(--color-error); }
+.pengui-card-accent-info        { border-top-color: var(--color-info);             color: var(--color-info); }
+.pengui-card-accent-muted       { border-top-color: var(--color-text-muted);       color: var(--color-text-muted); }
+.pengui-card-accent-inverse     { border-top-color: var(--color-text-inverse);     color: var(--color-text-inverse); }
+
 .pengui-heading {
   margin: 0;
   font-family: var(--font-display);

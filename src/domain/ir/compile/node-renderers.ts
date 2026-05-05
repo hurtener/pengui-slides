@@ -21,12 +21,14 @@
 import type {
   BibliographyNode,
   CalloutNode,
+  CardNode,
   ChartNode,
   DividerNode,
   GridNode,
   HeadingNode,
   HeroNode,
   ImageNode,
+  LeafBlockNode,
   LeafSlideNode,
   ListNode,
   PageBreakNode,
@@ -42,6 +44,7 @@ import type { IRPath } from '../operations/replace-node.js';
 import { irPathToString } from '../path-encoding.js';
 import { ErrorCode, PenguiError } from '../../../types/errors.js';
 import { escapeAttr } from './escape.js';
+import { getIconSvg } from './icons.js';
 import { renderRichText } from './rich-text-renderer.js';
 
 /** Build the `data-ir-path="…"` attribute fragment for a given path. */
@@ -98,6 +101,8 @@ export function renderNode(node: SlideNode, path: IRPath = []): string {
       return renderTable(node, attr);
     case 'chart':
       return renderChart(node, attr);
+    case 'card':
+      return renderCard(node, path, attr);
     case 'two_column':
       return renderTwoColumn(node, path, attr);
     case 'grid':
@@ -295,6 +300,41 @@ function renderChart(node: ChartNode, dataAttr: string): string {
     placeholder +
     captionHtml +
     `</figure>`
+  );
+}
+
+/**
+ * v4.13 — `card` node. Presentational wrapper around inner leaves with
+ * an optional semantic accent (top-border tint) and a curated lucide
+ * icon glyph. Nests one level: `card.body` is `LeafBlockNode[]`, which
+ * excludes nested cards.
+ *
+ * The accent class drives both `border-top-color` (via the
+ * `pengui-card-accent-{role}` rule in layout-css) AND the icon color
+ * (the icon SVG uses `currentColor`, and the same accent rule sets the
+ * card's text color on the icon container). Default (no accent) keeps
+ * a neutral border in the soul's `--color-border`.
+ */
+function renderCard(node: CardNode, path: IRPath, dataAttr: string): string {
+  const accentClass = node.accent
+    ? ` pengui-card-accent-${node.accent.replace(/_/g, '-')}`
+    : '';
+  const iconHtml = node.icon
+    ? `<span class="pengui-card-icon" aria-hidden="true">${getIconSvg(node.icon)}</span>`
+    : '';
+  const eyebrowHtml =
+    node.eyebrow && node.eyebrow.length > 0
+      ? `<p class="pengui-card-eyebrow"${fieldAttr('eyebrow')}>${renderRichText(node.eyebrow)}</p>`
+      : '';
+  const bodyHtml = node.body
+    .map((n: LeafBlockNode, i) => renderNode(n, [...path, 'body', i]))
+    .join('');
+  return (
+    `<article class="pengui-card${accentClass}"${dataAttr}>` +
+    iconHtml +
+    eyebrowHtml +
+    `<div class="pengui-card-body">${bodyHtml}</div>` +
+    `</article>`
   );
 }
 

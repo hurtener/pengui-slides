@@ -187,8 +187,13 @@ export type SlideElement =
  *       compiled at revision 6 contain only the placeholder body — they
  *       must recompile so the editable PPTX path picks up the rendered
  *       chart bytes.
+ *  - 8: v4.13 card node — new `<article class="pengui-card">` element
+ *       wrapping inner leaves with optional accent (top-border tint)
+ *       and lucide icon glyph. Cached documents at rev 7 don't carry
+ *       the new card chrome and would lose accent styling on export
+ *       until recompile.
  */
-export const CURRENT_COMPILER_REVISION = 7;
+export const CURRENT_COMPILER_REVISION = 8;
 
 export interface SlideDocument {
   version: '1';

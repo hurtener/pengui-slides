@@ -27,14 +27,14 @@ export function registerSlideIRSchemaResource(server: McpServer): void {
     mimeType: 'application/json',
     description:
       'JSON Schema for the Slide / Section IR node tree. Lists every node type ' +
-      '(hero, prose, image, callout, heading, list, divider, quote, table, chart, two_column, grid), ' +
+      '(hero, prose, image, callout, heading, list, divider, quote, table, chart, card, two_column, grid), ' +
       'their fields, the rich-text run shape, and the semantic token enums (background ' +
       'roles, color roles). Fetch this once per session and use it to compose `slide_ir` / ' +
       '`section_ir` arguments for add_slide, update_slide, add_section, update_section, ' +
       'validate_slide_ir, and validate_section_ir.',
     getText: () => {
       const payload = {
-        version: '4.12',
+        version: '4.13',
         node_types: SLIDE_NODE_TYPES,
         slide_ir: z.toJSONSchema(SlideIRSchema),
         section_ir: z.toJSONSchema(SectionIRSchema),
@@ -72,6 +72,25 @@ export function registerSlideIRSchemaResource(server: McpServer): void {
             'Native PPTX chart parts are NOT supported in v4.12 — charts export as flattened ' +
             'images in PPTX. Prefer the `compile_chart` tool to assemble chart payloads in one ' +
             'round-trip; agents iterate on chart_type / value_format with preview mode.',
+          'Card nodes (v4.13): presentational wrapper around a small group of leaves. Use INSIDE ' +
+            'grid cells (`grid.cells[i] = [{ type: "card", ... }]`) or two_column children to get ' +
+            'the "feature card with colored top-border + icon" pattern that proposal/pitch decks ' +
+            'rely on (Galici "Cinco desafíos críticos", "Cuatro módulos"). Optional `accent` ' +
+            '(same TextColor enum as inline color: accent | accent_alt | accent_warm | success | ' +
+            'warning | error | info | muted | inverse) drives the top-border tint AND the icon ' +
+            'color in one go. Optional `icon` is one of the curated lucide names (shield, lock, ' +
+            'check, alert-triangle, trending-up, target, eye, layers, rocket, zap, users, …). ' +
+            'Optional `eyebrow` is a small uppercase label rendered above the body (great for ' +
+            '"01 · TRAZABILIDAD" style numbering — color the leading number with the accent). ' +
+            '`body` is leaves only — no nested cards. Pair semantic accents with semantic ' +
+            'meaning: success/check for positive, warning for caution, error for risk, ' +
+            'accent/zap for primary value props, info for context. Don\'t use color for ' +
+            'decoration — every accent should mean something.',
+          'Inline color emphasis (RichText `color` field) — use it sparingly to draw the eye to ' +
+            'ONE keyword per heading (e.g. `[{text: "Una plataforma única para gestionar fondos ' +
+            'judiciales de forma "}, {text: "integral", color: "success", bold: true}, {text: "."}]`). ' +
+            'Anti-patterns: coloring whole headlines, coloring multiple words with different ' +
+            'colors in the same heading, coloring body prose paragraphs.',
         ],
       };
       return JSON.stringify(payload, null, 2);
