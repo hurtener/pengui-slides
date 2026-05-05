@@ -159,11 +159,12 @@ describe('SlideNodeSchema (top-level union)', () => {
     expect(() => SlideNodeSchema.parse({ type: 'metric_grid', items: [] })).toThrow();
   });
 
-  it('SLIDE_NODE_TYPES enumerates the v4.12 catalog (chart added)', () => {
+  it('SLIDE_NODE_TYPES enumerates the v4.13 catalog (card added)', () => {
     expect([...SLIDE_NODE_TYPES].sort()).toEqual(
       [
         'bibliography',
         'callout',
+        'card',
         'chart',
         'divider',
         'grid',

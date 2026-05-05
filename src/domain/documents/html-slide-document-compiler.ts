@@ -1001,28 +1001,65 @@ export class HtmlSlideDocumentCompiler {
             return;
           }
 
+          // v4.14.5: inline <svg> elements (lucide card icons, future
+          // ornaments) — serialize the SVG and emit as a native image with
+          // a data: URI so they survive into the editable PPTX as <p:pic>
+          // shapes. Without this, icons fell into the generic shape /
+          // hasVisualShape branch and produced a floating empty rect, while
+          // the visible icon lived only in the background image.
+          //
+          // Mark every descendant as "handled" (reusing chartHandled)
+          // so the walker doesn't emit one floating shape per inner
+          // <path> / <rect> / <text> on top of the icon image.
+          if (tagName === 'SVG') {
+            for (const desc of Array.from(element.querySelectorAll('*'))) {
+              chartHandled.add(desc);
+            }
+            const svgString = new XMLSerializer().serializeToString(element);
+            // Standard SVG → base64 idiom (handles unicode in attributes
+            // / text). Page context, so btoa exists.
+            const b64 = btoa(unescape(encodeURIComponent(svgString)));
+            const src = `data:image/svg+xml;base64,${b64}`;
+            const base = createBase(element, 'image', computed, rect, index) as Omit<SlideImageElement, 'src' | 'alt'>;
+            elements.push({
+              ...base,
+              kind: 'image',
+              src,
+              // Decorative — icons carry semantic meaning via their
+              // adjacent text (eyebrow / heading), not the SVG itself.
+              alt: '',
+            });
+            return;
+          }
+
           if (tagName === 'IMG') {
             const image = element as HTMLImageElement;
             const base = createBase(element, 'image', computed, rect, index) as Omit<SlideImageElement, 'src' | 'alt'>;
             const src = image.currentSrc || image.src;
+            // v4.14.5: data: URIs are fetchable (the editable-pptx-exporter's
+            // resolveImageData passes them through unchanged). Pre-v4.14.5
+            // they were forced into the background fallback, which is what
+            // made chrome logos disappear from the editable PPTX. Now they
+            // flow through as native <p:pic> shapes.
+            const isFetchable = /^https?:\/\//i.test(src) || /^data:/i.test(src);
             elements.push({
               ...base,
               kind: 'image',
               src,
               alt: image.alt || undefined,
-              ...(!/^https?:\/\//i.test(src)
+              ...(!isFetchable
                 ? {
                     exportDisposition: 'background' as const,
                     fallbackReason: 'non-fetchable-image',
                   }
                 : {}),
             });
-            if (!/^https?:\/\//i.test(src)) {
+            if (!isFetchable) {
               pushIssue({
                 code: 'non-fetchable-image',
                 severity: 'warning',
                 selector,
-                message: 'Images without fetchable HTTP(S) URLs will be flattened into the slide background.',
+                message: 'Images without fetchable HTTP(S) or data: URIs will be flattened into the slide background.',
                 detail: src.slice(0, 128),
               });
             }
@@ -1044,6 +1081,56 @@ export class HtmlSlideDocumentCompiler {
               kind: 'shape',
               shapeType: (toNumber(computed.borderTopLeftRadius) ?? 0) > 0 ? 'roundRectangle' : 'rectangle',
             });
+
+            // v4.14.5: pengui-card accent top-border. The compiler's
+            // generic shape branch records `borderColor` as a single
+            // value (the shorthand collapses to one side), so the v4.13
+            // accent — `border-top: 3px solid var(--color-accent-X)` on
+            // top of a 1px neutral border — gets lost. Detect the card
+            // class explicitly, compare top vs side colors, and emit a
+            // dedicated accent rect on top of the card if they differ.
+            //
+            // The accent rect sits just inside the card's rounded
+            // corners (inset by border-radius) so it doesn't poke past
+            // the rounded outline. Sized to the actual border-top-width
+            // (typically 3px in the v4.13 CSS).
+            if (element.classList?.contains('pengui-card')) {
+              const borderTopColor = computed.borderTopColor;
+              const sideColor = computed.borderLeftColor;
+              const borderTopWidth = toNumber(computed.borderTopWidth) ?? 0;
+              const borderRadius = toNumber(computed.borderTopLeftRadius) ?? 0;
+              const colorsDiffer = Boolean(
+                borderTopColor
+                && borderTopColor !== sideColor
+                && borderTopColor !== 'rgba(0, 0, 0, 0)'
+                && borderTopColor !== 'rgba(0,0,0,0)',
+              );
+              if (colorsDiffer && borderTopWidth >= 2) {
+                const inset = Math.min(borderRadius, rect.width / 4);
+                elements.push({
+                  id: `${base.id}_accent_border`,
+                  kind: 'shape',
+                  x: Math.round((rect.left - rootRect.left + inset) * 1000) / 1000,
+                  y: Math.round((rect.top - rootRect.top) * 1000) / 1000,
+                  width: Math.round((rect.width - 2 * inset) * 1000) / 1000,
+                  height: Math.max(2, borderTopWidth),
+                  rotation: 0,
+                  zIndex: index + 0.5,
+                  opacity: 1,
+                  locked: false,
+                  selector,
+                  domPath: base.domPath,
+                  shapeType: 'rectangle',
+                  style: {
+                    backgroundColor: borderTopColor,
+                    fill: { color: borderTopColor },
+                    borderWidth: 0,
+                    borderColor: undefined,
+                    borderRadius: 0,
+                  },
+                });
+              }
+            }
           }
         });
 

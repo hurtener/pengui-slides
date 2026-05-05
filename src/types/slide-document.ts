@@ -200,8 +200,20 @@ export type SlideElement =
  *       `chrome_override: 'hide'`. Rev-8 cached docs miss the chrome
  *       shapes; recompile is required so the editable PPTX path
  *       materialises chrome objects per slide.
+ *  - 10: v4.14.5 hybrid editable export — three additive changes to
+ *       the editable-export shape inventory:
+ *       (a) data: URI images flow as native `<p:pic>` shapes (chrome
+ *           logos no longer disappear into the background fallback);
+ *       (b) inline `<svg>` elements (lucide card icons) get serialised
+ *           and emitted as native images instead of being lost to the
+ *           generic shape walker;
+ *       (c) `pengui-card` accent top-border emits as an extra native
+ *           rect on top of the card's base shape — preserves the v4.13
+ *           colored top-border that the single-value border heuristic
+ *           used to drop. Rev-9 cached docs miss all three; recompile
+ *           required so editable exports get the new shapes.
  */
-export const CURRENT_COMPILER_REVISION = 9;
+export const CURRENT_COMPILER_REVISION = 10;
 
 export interface SlideDocument {
   version: '1';
