@@ -28,6 +28,7 @@ import { PptxExporter } from '../src/domain/rendering/pptx-exporter.js';
 import { EditablePptxExporter } from '../src/domain/rendering/editable-pptx-exporter.js';
 import { SlideDocumentService } from '../src/domain/documents/slide-document-service.js';
 import { compileSlideIRToHtml } from '../src/domain/ir/index.js';
+import { buildFontFaceCss } from '../src/domain/souls/font-registry.js';
 import { resolveAssetRefs } from '../src/domain/assets/asset-resolver.js';
 import { AssetService } from '../src/domain/assets/asset-service.js';
 import { InMemoryAssetStore } from '../src/storage/memory/asset-store.js';
@@ -213,7 +214,7 @@ async function main(): Promise<void> {
       CHROME.showOnCover === true || !isCover
         ? { chrome: CHROME, slidePosition: idx + 1, slideCount: totalCount }
         : {};
-    const raw = compileSlideIRToHtml({ ir, soul: SOUL, geometry, ...chromeArgs });
+    const raw = compileSlideIRToHtml({ ir, soul: SOUL, geometry, fontFaceCss: buildFontFaceCss(SOUL), ...chromeArgs });
     const html = await resolveAssetRefs(raw, assetService);
     return {
       id: id as SlideId,

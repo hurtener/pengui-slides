@@ -143,13 +143,18 @@ function primaryFamily(stack: string | undefined): string | undefined {
 }
 
 /** Bundled families a soul references via its display / body / mono
- *  tokens. Canonicalised to the BundledFontFace.family form. */
+ *  tokens. Canonicalised to the BundledFontFace.family form. Defensively
+ *  tolerates partial soul stubs (test fixtures, legacy souls) that may
+ *  not carry a typography layer at all — returns an empty set rather
+ *  than crashing. */
 function usedBundledFamilies(layers: Pick<SoulLayers, 'typography'>): Set<string> {
   const used = new Set<string>();
+  const typo = layers?.typography;
+  if (!typo) return used;
   const stacks = [
-    layers.typography.fontDisplay,
-    layers.typography.fontBody,
-    layers.typography.fontMono,
+    typo.fontDisplay,
+    typo.fontBody,
+    typo.fontMono,
   ];
   const bundledByCanon = new Map<string, string>();
   for (const f of BUNDLED_FONTS) {

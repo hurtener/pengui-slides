@@ -345,8 +345,24 @@ export class EditorService {
       if (!got) return null;
       const geometry = getFormat(summary.format ?? DEFAULT_FORMAT).geometry;
       const fontFaceCss = buildFontFaceCss(got.soul);
+      // v4.14: thread deck chrome through the recompile path so opening a
+      // pre-v4.8.5 slide in the App doesn't silently strip its header /
+      // footer / page-number slots. Cover suppression matches the
+      // chromeArgsFor rule used by deck-service: showOnCover === false at
+      // position 0 → no chrome.
+      const isCover = slide.position === 0;
+      const chromeActive =
+        summary.chrome !== undefined &&
+        (!isCover || summary.chrome.showOnCover === true);
+      const chromeArgs = chromeActive
+        ? {
+            chrome: summary.chrome,
+            slidePosition: slide.position + 1,
+            slideCount: summary.slideCount,
+          }
+        : {};
       const compiledHtml = resolveChartRefs(
-        compileSlideIRToHtml({ ir: slide.ir, soul: got.soul, geometry, fontFaceCss }),
+        compileSlideIRToHtml({ ir: slide.ir, soul: got.soul, geometry, fontFaceCss, ...chromeArgs }),
         got.soul.layers,
       );
       const embedded = this.metadataEmbedder.embed(compiledHtml, slide.metadata);

@@ -197,6 +197,11 @@ export interface DeckSummary {
   sections: SectionSummary[];
   sectionCount: number;
   revisionCount: number;
+  /** v4.14: deck-level slide chrome configuration. Mirrored from
+   *  `Deck.chrome` so consumers (editor recompile path, App settings
+   *  panel) don't need to refetch the full Deck. Undefined when the
+   *  deck has no chrome configured. */
+  chrome?: DeckChrome;
   createdAt: ISOTimestamp;
   updatedAt: ISOTimestamp;
 }

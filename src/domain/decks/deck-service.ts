@@ -963,6 +963,7 @@ export class DeckService {
       sectionCount: (deck.sectionIds ?? []).length,
       sections: sectionSummaries,
       revisionCount: revisions.length,
+      ...(deck.chrome ? { chrome: deck.chrome } : {}),
       createdAt: deck.createdAt,
       updatedAt: deck.updatedAt,
     };

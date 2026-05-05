@@ -24,6 +24,7 @@ import { SlideDocumentService } from '../src/domain/documents/slide-document-ser
 import { compileSlideIRToHtml, compileSectionIRToHtml } from '../src/domain/ir/index.js';
 import { resolveChartRefs } from '../src/domain/rendering/chart-resolver.js';
 import { generateTokens } from '../src/domain/souls/token-generator.js';
+import { buildFontFaceCss } from '../src/domain/souls/font-registry.js';
 import { getFormat, DEFAULT_FORMAT } from '../src/domain/formats/format-registry.js';
 import type { SlideIR, SectionIR } from '../src/domain/ir/index.js';
 import type { Slide, Deck, DocumentMeta } from '../src/types/deck.js';
@@ -178,9 +179,11 @@ const TWO_COLUMN_IR: SlideIR = {
 
 // ── Slide builders ────────────────────────────────────────────────
 
+const FONT_FACE_CSS = buildFontFaceCss(SOUL);
+
 function makeSlide(slideIdStr: string, ir: SlideIR, position: number, title: string): Slide {
   const geometry = getFormat(DEFAULT_FORMAT).geometry;
-  const raw = compileSlideIRToHtml({ ir, soul: SOUL, geometry });
+  const raw = compileSlideIRToHtml({ ir, soul: SOUL, geometry, fontFaceCss: FONT_FACE_CSS });
   const html = resolveChartRefs(raw, SOUL.layers);
   return {
     id: slideIdStr as SlideId,

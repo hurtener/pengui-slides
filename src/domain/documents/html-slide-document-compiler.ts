@@ -674,6 +674,11 @@ export class HtmlSlideDocumentCompiler {
           // SVG inside the figure) walks normally and becomes a text
           // shape.
           if (element.classList?.contains('pengui-chart')) {
+            // Mark the chart figure itself as handled — defensive against
+            // future walker re-entries. The current depth-first walk
+            // never re-visits, but explicit marking removes the implicit
+            // ordering dependency.
+            chartHandled.add(element);
             const svgEl = element.querySelector('svg');
             if (svgEl) {
               chartHandled.add(svgEl);

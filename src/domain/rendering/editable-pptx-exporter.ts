@@ -677,6 +677,19 @@ export class EditablePptxExporter {
     const presRelsEntry = zip.file(presRelsPath);
     if (!presRelsEntry) return false;
     const existingRels = await presRelsEntry.async('string');
+
+    // Idempotency guard: if a previous embedFonts run already wrote font
+    // Relationships into this presentation, skip the whole pass. Without
+    // this, calling patchContentTypes twice on the same buffer would
+    // append duplicate <Relationship> entries pointing at the same
+    // ppt/fonts/font<N>.fntdata Targets — PowerPoint flags duplicate rels
+    // as "found a problem with content". The other two patches (Default
+    // extension entry, embeddedFontLst block) already had guards; this
+    // closes the gap.
+    if (/Type="[^"]*\/font"\s+Target="fonts\/font/.test(existingRels)) {
+      return false;
+    }
+
     let nextRid = pickNextRid(existingRels, 1000);
 
     const newRels: string[] = [];
@@ -718,10 +731,13 @@ export class EditablePptxExporter {
     );
     zip.file(presRelsPath, patchedRels);
 
-    // 4. Add <p:embeddedFontLst> to ppt/presentation.xml. PowerPoint requires
-    //    this block to appear AFTER <p:sldSize>/<p:notesSz> and BEFORE
-    //    <p:defaultTextStyle>; safest insertion point is just before the
-    //    closing </p:presentation>. PowerPoint tolerates that ordering.
+    // 4. Add <p:embeddedFontLst> to ppt/presentation.xml. ECMA-376 Part 1
+    //    §13.3.3 requires the block to appear AFTER <p:sldSize>/<p:notesSz>
+    //    and BEFORE <p:defaultTextStyle>. We splice it in immediately
+    //    before <p:defaultTextStyle> when present, falling back to just
+    //    before </p:presentation> when the deck doesn't carry a default
+    //    text style block — covers both pptxgenjs output (always emits
+    //    defaultTextStyle) and any sparser future generator.
     const presPath = 'ppt/presentation.xml';
     const presEntry = zip.file(presPath);
     if (presEntry) {
@@ -761,10 +777,12 @@ export class EditablePptxExporter {
       }
       if (fontEntries.length > 0) {
         const block = `<p:embeddedFontLst>${fontEntries.join('')}</p:embeddedFontLst>`;
-        // Insert immediately before </p:presentation> (idempotent guard:
-        // skip if a block is already present from a prior run).
+        // Idempotent guard: skip if a block is already present from a prior run.
         if (!/<p:embeddedFontLst>/.test(original)) {
-          const patched = original.replace(/<\/p:presentation>\s*$/, `${block}</p:presentation>`);
+          const defaultStyleRe = /<p:defaultTextStyle\b/;
+          const patched = defaultStyleRe.test(original)
+            ? original.replace(defaultStyleRe, `${block}<p:defaultTextStyle`)
+            : original.replace(/<\/p:presentation>\s*$/, `${block}</p:presentation>`);
           zip.file(presPath, patched);
         }
       }

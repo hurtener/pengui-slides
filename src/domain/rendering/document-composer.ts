@@ -60,6 +60,7 @@ import type { Deck, DocumentMeta } from '../../types/deck.js';
 import type { DesignSoul } from '../../types/design-soul.js';
 import type { FormatGeometry } from '../../types/format.js';
 import { NODE_CSS } from '../ir/compile/layout-css.js';
+import { buildFontFaceCss } from '../souls/font-registry.js';
 
 // ── Module-relative template root ────────────────────────────────
 //
@@ -371,6 +372,14 @@ export class DocumentComposer {
     // ── 3. Assemble document frame. ──
 
     const title = escapeHtml(deck.title || 'Document');
+    // v4.15: bundled-font @font-face block. Must come BEFORE any
+    // soulTokens / node CSS that references font-family, so Playwright /
+    // browser sees the data: URI sources before the first usage. Empty
+    // string when the soul references only system fonts.
+    const fontFaceCss = buildFontFaceCss(soul);
+    const fontFaceBlock = fontFaceCss
+      ? `<style id="pengui-font-faces">${fontFaceCss}</style>`
+      : '';
     const soulTokensBlock = this.buildSoulTokensBlock(soul);
     const printBaseBlock = this.buildPrintBaseBlock(geometry, documentMeta);
     const nodeStylesBlock = this.buildNodeStylesBlock();
@@ -384,6 +393,7 @@ export class DocumentComposer {
 <head>
   <meta charset="UTF-8" />
   <title>${title}</title>
+  ${fontFaceBlock}
   ${soulTokensBlock}
   ${printBaseBlock}
   ${nodeStylesBlock}
