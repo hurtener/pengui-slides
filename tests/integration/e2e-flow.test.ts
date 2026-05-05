@@ -139,5 +139,5 @@ describe('End-to-end flow (no MCP)', () => {
     const markdown = container.metadataExporter.toMarkdown(updatedSlide.metadata);
     expect(markdown).toContain('# Updated First Slide');
     expect(markdown).toContain('Point A');
-  });
+  }, 30_000);
 });

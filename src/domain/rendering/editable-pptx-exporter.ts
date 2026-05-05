@@ -9,6 +9,8 @@ import type { ExportPptxOptions, PptxExportResult } from '../../types/export.js'
 import { DEFAULT_PPTX_OPTIONS } from '../../types/export.js';
 import type { SoulService } from '../souls/soul-service.js';
 import { DocumentExportPlanner, type PlannedNativeElement, type PlannedTextElement } from '../export/document-export-planner.js';
+import { resolveFontsForEmbedding, type BundledFontFace, type FontWeight, type FontStyle } from '../souls/font-registry.js';
+import type JSZip from 'jszip';
 import {
   cssColorToHex,
   cssColorToTransparency,
@@ -124,7 +126,7 @@ export class EditablePptxExporter {
     }
 
     const arrayBuffer = await pptx.write({ outputType: 'nodebuffer' }) as Buffer;
-    const data = await this.patchContentTypes(Buffer.from(arrayBuffer));
+    const data = await this.patchContentTypes(Buffer.from(arrayBuffer), soul);
     const filename = this.sanitizeFilename(deckTitle) + '.pptx';
 
     this.logger.info('Editable PPTX export complete', {
@@ -580,10 +582,19 @@ export class EditablePptxExporter {
    *
    * Once upstream ships a fix, these post-process steps can be deleted.
    */
-  private async patchContentTypes(buffer: Buffer): Promise<Buffer> {
+  private async patchContentTypes(buffer: Buffer, soul?: DesignSoul): Promise<Buffer> {
     const { default: JSZip } = await import('jszip');
     const zip = await JSZip.loadAsync(buffer);
     let modified = false;
+
+    // v4.15: embed bundled TTFs for the soul's typography stack BEFORE
+    // [Content_Types] cleanup runs — embedFonts adds new font parts and
+    // their Override entries; the cleanup pass needs to see them as
+    // valid (their PartName must resolve to a real file in the zip).
+    if (soul) {
+      const embedded = await this.embedFonts(zip, soul);
+      if (embedded) modified = true;
+    }
 
     // 1. [Content_Types] — drop Overrides whose PartName isn't in the zip.
     const ctEntry = zip.file('[Content_Types].xml');
@@ -625,7 +636,167 @@ export class EditablePptxExporter {
     const out = await zip.generateAsync({ type: 'nodebuffer' });
     return Buffer.from(out);
   }
+
+  /**
+   * v4.15 — Embed the soul's bundled TTFs into the editable PPTX so
+   * PowerPoint renders native text shapes with the same typography on
+   * any host, not just machines that have Inter / JetBrains Mono
+   * installed locally.
+   *
+   * Per the OOXML spec (ECMA-376 Part 1 §13.3.3), font embedding requires
+   * four pieces:
+   *
+   *   1. Each font file lives under `ppt/fonts/font<N>.fntdata` (the
+   *      `.fntdata` extension is conventional — content is raw TTF bytes).
+   *   2. `[Content_Types].xml` declares the part type via
+   *      `<Default Extension="fntdata" ContentType="application/x-fontdata"/>`.
+   *   3. `ppt/_rels/presentation.xml.rels` adds a Relationship of type
+   *      `…/relationships/font` pointing at each font part.
+   *   4. `ppt/presentation.xml` declares `<p:embeddedFontLst>` mapping
+   *      typeface (display name, e.g. "Inter") to the relationship ids
+   *      for regular / bold / italic / boldItalic. PowerPoint reads this
+   *      list when laying out a slide whose runs reference the typeface.
+   *
+   * Returns true if any font was embedded.
+   */
+  private async embedFonts(
+    zip: JSZip,
+    soul: DesignSoul,
+  ): Promise<boolean> {
+    const faces = resolveFontsForEmbedding(soul);
+    if (faces.length === 0) return false;
+
+    // Group faces by family so each <p:embeddedFont> entry collects its
+    // weight variants under one typeface header.
+    const byFamily = new Map<string, Array<BundledFontFace & { bytes: Buffer; rid: string }>>();
+
+    // 1. Write font binaries + assign new relationship ids. We pick rIds
+    //    starting at 1000 to avoid colliding with the existing pptxgenjs
+    //    relationship namespace (theme1, slideMaster1, etc., typically <100).
+    const presRelsPath = 'ppt/_rels/presentation.xml.rels';
+    const presRelsEntry = zip.file(presRelsPath);
+    if (!presRelsEntry) return false;
+    const existingRels = await presRelsEntry.async('string');
+    let nextRid = pickNextRid(existingRels, 1000);
+
+    const newRels: string[] = [];
+    let fileIndex = 1;
+    for (const face of faces) {
+      const partName = `ppt/fonts/font${fileIndex}.fntdata`;
+      // jszip accepts Buffer for binary files; encoding is preserved.
+      zip.file(partName, face.bytes);
+      const rid = `rId${nextRid++}`;
+      newRels.push(
+        `<Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/font" Target="fonts/font${fileIndex}.fntdata"/>`,
+      );
+      const list = byFamily.get(face.family) ?? [];
+      list.push({ ...face, rid });
+      byFamily.set(face.family, list);
+      fileIndex += 1;
+    }
+
+    // 2. Add the Default extension entry for `fntdata` to [Content_Types].xml
+    //    (idempotent — no-op if already present).
+    const ctPath = '[Content_Types].xml';
+    const ctEntry = zip.file(ctPath);
+    if (ctEntry) {
+      let ct = await ctEntry.async('string');
+      if (!/Extension="fntdata"/.test(ct)) {
+        ct = ct.replace(
+          /<Types\b([^>]*)>/,
+          `<Types$1><Default Extension="fntdata" ContentType="application/x-fontdata"/>`,
+        );
+        zip.file(ctPath, ct);
+      }
+    }
+
+    // 3. Splice the new font Relationships into ppt/_rels/presentation.xml.rels
+    //    (right before the closing </Relationships>).
+    const patchedRels = existingRels.replace(
+      /<\/Relationships>\s*$/,
+      `${newRels.join('')}</Relationships>`,
+    );
+    zip.file(presRelsPath, patchedRels);
+
+    // 4. Add <p:embeddedFontLst> to ppt/presentation.xml. PowerPoint requires
+    //    this block to appear AFTER <p:sldSize>/<p:notesSz> and BEFORE
+    //    <p:defaultTextStyle>; safest insertion point is just before the
+    //    closing </p:presentation>. PowerPoint tolerates that ordering.
+    const presPath = 'ppt/presentation.xml';
+    const presEntry = zip.file(presPath);
+    if (presEntry) {
+      const original = await presEntry.async('string');
+      const fontEntries: string[] = [];
+      for (const [family, variants] of byFamily) {
+        const tag = (
+          weight: FontWeight,
+          style: FontStyle,
+        ): string | null => {
+          const v = variants.find((x) => x.weight === weight && x.style === style);
+          if (!v) return null;
+          if (weight === 700 && style === 'normal') return `<p:bold r:id="${v.rid}"/>`;
+          if (weight === 400 && style === 'italic') return `<p:italic r:id="${v.rid}"/>`;
+          if (weight === 700 && style === 'italic') return `<p:boldItalic r:id="${v.rid}"/>`;
+          // Treat 400 and 500 (and any non-bold non-italic) as the regular slot;
+          // PowerPoint expects exactly one <p:regular> per <p:embeddedFont>.
+          return `<p:regular r:id="${v.rid}"/>`;
+        };
+        const slots: string[] = [];
+        // Only the first non-bold/non-italic variant claims <p:regular>.
+        // For Inter we ship 400 + 500 + 700 — 400 wins regular, 500 is dropped
+        // from the list (PPTX has no 'medium' slot), 700 → bold.
+        const regular = variants.find((v) => v.weight === 400 && v.style === 'normal')
+          ?? variants.find((v) => v.style === 'normal' && v.weight !== 700);
+        if (regular) slots.push(`<p:regular r:id="${regular.rid}"/>`);
+        const bold = tag(700, 'normal');
+        if (bold) slots.push(bold);
+        const italic = tag(400, 'italic');
+        if (italic) slots.push(italic);
+        const boldItalic = tag(700, 'italic');
+        if (boldItalic) slots.push(boldItalic);
+        if (slots.length === 0) continue;
+        fontEntries.push(
+          `<p:embeddedFont><p:font typeface="${escapeXmlAttr(family)}"/>${slots.join('')}</p:embeddedFont>`,
+        );
+      }
+      if (fontEntries.length > 0) {
+        const block = `<p:embeddedFontLst>${fontEntries.join('')}</p:embeddedFontLst>`;
+        // Insert immediately before </p:presentation> (idempotent guard:
+        // skip if a block is already present from a prior run).
+        if (!/<p:embeddedFontLst>/.test(original)) {
+          const patched = original.replace(/<\/p:presentation>\s*$/, `${block}</p:presentation>`);
+          zip.file(presPath, patched);
+        }
+      }
+    }
+
+    return true;
+  }
 }
+
+/** Find the highest rId<N> in an existing .rels XML and return a starting id
+ *  guaranteed not to collide. `floor` lets the caller pin a comfortable lower
+ *  bound when the file has only single-digit ids. */
+function pickNextRid(relsXml: string, floor: number): number {
+  let max = floor - 1;
+  const re = /\bId="rId(\d+)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(relsXml)) !== null) {
+    const n = parseInt(m[1], 10);
+    if (n > max) max = n;
+  }
+  return max + 1;
+}
+
+function escapeXmlAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 
 /**
  * Within each `<a:p>...</a:p>` block, keep only the first `<a:pPr>` (whether

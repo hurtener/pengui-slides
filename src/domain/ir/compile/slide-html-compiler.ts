@@ -47,6 +47,12 @@ export interface CompileSlideIRInput {
   slidePosition?: number;
   /** Total slide count for `'1/N'`-style page numbers. Defaults to 1. */
   slideCount?: number;
+  /** v4.15: pre-built `@font-face` rules (data: URIs) for bundled fonts
+   *  the soul references. Prepended verbatim to the slide stylesheet so
+   *  Playwright renders text with the embedded TTF. Build with
+   *  `buildFontFaceCss(soul)` from `domain/souls`. Empty / undefined →
+   *  no @font-face block (system fonts only). */
+  fontFaceCss?: string;
 }
 
 export function compileSlideIRToHtml({
@@ -56,6 +62,7 @@ export function compileSlideIRToHtml({
   chrome,
   slidePosition,
   slideCount,
+  fontFaceCss,
 }: CompileSlideIRInput): string {
   const layout = ir.layout ?? 'default';
   const background = ir.background ?? 'canvas';
@@ -67,8 +74,13 @@ export function compileSlideIRToHtml({
     chrome !== undefined && ir.chrome_override !== 'hide';
   const chromeClass = renderChrome ? ' pengui-has-chrome' : '';
 
-  const css = [soul.cssTokens, buildSlideRootCss(geometry.widthPx, geometry.heightPx, geometry.safeAreaInsetPx), NODE_CSS]
-    .map((s) => s.trim())
+  const css = [
+    fontFaceCss,
+    soul.cssTokens,
+    buildSlideRootCss(geometry.widthPx, geometry.heightPx, geometry.safeAreaInsetPx),
+    NODE_CSS,
+  ]
+    .map((s) => (s ?? '').trim())
     .filter((s) => s.length > 0)
     .join('\n\n');
 

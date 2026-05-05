@@ -220,8 +220,17 @@ export type SlideElement =
  *       / icons / text on the same slide as a chart now stay native —
  *       parity with the static PPTX is preserved even on chart slides.
  *       Rev-10 cached docs still carry the chart-as-background marker.
+ *  - 12: v4.15 bundled fonts — slide HTML now carries `@font-face` rules
+ *       with `data:font/ttf;base64,…` URIs for any bundled family the
+ *       soul references (Inter, Inter Display, JetBrains Mono). Two
+ *       reasons to bump the revision: (a) the rendered PNG (image
+ *       PPTX path) draws text in the bundled font instead of system
+ *       Helvetica, so cached HTML at rev 11 would re-render with the
+ *       wrong typography; (b) Playwright's text-bbox measurements feed
+ *       the SlideDocument shape inventory, and font-substitution shifts
+ *       those bounds — recompiling re-measures with the bundled font.
  */
-export const CURRENT_COMPILER_REVISION = 11;
+export const CURRENT_COMPILER_REVISION = 12;
 
 export interface SlideDocument {
   version: '1';

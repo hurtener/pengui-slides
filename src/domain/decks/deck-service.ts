@@ -61,6 +61,7 @@ import {
   type IRPath,
 } from '../ir/index.js';
 import { resolveChartRefs } from '../rendering/chart-resolver.js';
+import { buildFontFaceCss } from '../souls/font-registry.js';
 import type { SlideNode, DeckChrome } from '../ir/index.js';
 import { ErrorCode, PenguiError } from '../../types/errors.js';
 import { MetadataEmbedder } from '../metadata/metadata-embedder.js';
@@ -308,7 +309,10 @@ export class DeckService {
     // existing count grows by 1 too. Either way: deck.slideIds.length + 1.
     const geometry = getFormat(deck.format ?? DEFAULT_FORMAT).geometry;
     const chromeArgs = chromeArgsFor(deck, position, deck.slideIds.length + 1);
-    const rawHtml = compileSlideIRToHtml({ ir: input.ir, soul, geometry, ...chromeArgs });
+    // v4.15: inject @font-face data: URIs for bundled fonts the soul
+    // references. Empty string when soul uses only system fonts.
+    const fontFaceCss = buildFontFaceCss(soul);
+    const rawHtml = compileSlideIRToHtml({ ir: input.ir, soul, geometry, fontFaceCss, ...chromeArgs });
     // v4.12: swap chart placeholders for real ECharts SVG. No-op when
     // the slide has no chart nodes.
     const compiledHtml = resolveChartRefs(rawHtml, soul.layers);
@@ -445,9 +449,10 @@ export class DeckService {
       // v4.14: thread chrome through the recompile path too, otherwise
       // updating a slide's IR would silently strip chrome on next render.
       const chromeArgs = chromeArgsFor(deck, slide.position, deck.slideIds.length);
+      const fontFaceCss = buildFontFaceCss(soul);
       slide.ir = input.ir;
       slide.html = resolveChartRefs(
-        compileSlideIRToHtml({ ir: input.ir, soul, geometry, ...chromeArgs }),
+        compileSlideIRToHtml({ ir: input.ir, soul, geometry, fontFaceCss, ...chromeArgs }),
         soul.layers,
       );
       slide.metadata.revisionHash = sha256(slide.html);

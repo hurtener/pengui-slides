@@ -12,3 +12,12 @@ export {
   buildFontTokenLookup,
   canonicalizeFontStack,
 } from './font-token-lookup.js';
+export {
+  BUNDLED_FONTS,
+  buildFontFaceCss,
+  resolveFontsForEmbedding,
+  readBundledFont,
+  type BundledFontFace,
+  type FontWeight,
+  type FontStyle,
+} from './font-registry.js';
