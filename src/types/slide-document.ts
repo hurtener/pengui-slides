@@ -212,8 +212,16 @@ export type SlideElement =
  *           colored top-border that the single-value border heuristic
  *           used to drop. Rev-9 cached docs miss all three; recompile
  *           required so editable exports get the new shapes.
+ *  - 11: v4.14.6 per-element chart hybrid — chart figures stop marking
+ *       themselves exportDisposition:'background' (which used to flip
+ *       the WHOLE slide to hybrid_background mode). Instead, the
+ *       chart's resolved ECharts SVG is extracted and emitted as a
+ *       native image at the SVG's actual bounding rect. Cards / chrome
+ *       / icons / text on the same slide as a chart now stay native —
+ *       parity with the static PPTX is preserved even on chart slides.
+ *       Rev-10 cached docs still carry the chart-as-background marker.
  */
-export const CURRENT_COMPILER_REVISION = 10;
+export const CURRENT_COMPILER_REVISION = 11;
 
 export interface SlideDocument {
   version: '1';

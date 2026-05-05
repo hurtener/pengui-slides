@@ -656,31 +656,82 @@ export class HtmlSlideDocumentCompiler {
             return;
           }
 
-          // v4.12 chart figure — flatten into the slide background. The
-          // existing slide-renderer screenshot path captures the SVG
-          // inline so the chart is visually present in the PPTX export;
-          // emitting per-SVG shapes would litter the slide with floating
-          // text/path shapes on top of the rendered chart.
+          // v4.12 chart figure — pre-v4.14.6 this entire chart was
+          // marked exportDisposition:'background', which made the
+          // editable-export planner flip the WHOLE slide to
+          // hybrid_background mode. That killed parity with the static
+          // PPTX for any chart-bearing slide: cards / chrome / icons
+          // all collapsed into the slide-wide background image and the
+          // user lost the v4.13/v4.14/v4.14.5 native-shape work the
+          // moment they added a chart.
+          //
+          // v4.14.6: extract the chart's resolved ECharts SVG (already
+          // produced by resolveChartRefs upstream) and emit it as a
+          // native image at the SVG's actual bounding rect, exactly
+          // like a v4.14.5 inline icon. Other slide elements stay
+          // native — no whole-slide background fallback. The chart
+          // figure walker emits nothing else; figcaption (sibling of
+          // SVG inside the figure) walks normally and becomes a text
+          // shape.
           if (element.classList?.contains('pengui-chart')) {
-            for (const desc of Array.from(element.querySelectorAll('*'))) {
-              chartHandled.add(desc);
+            const svgEl = element.querySelector('svg');
+            if (svgEl) {
+              chartHandled.add(svgEl);
+              for (const desc of Array.from(svgEl.querySelectorAll('*'))) {
+                chartHandled.add(desc);
+              }
+              const svgRect = svgEl.getBoundingClientRect();
+              const svgString = new XMLSerializer().serializeToString(svgEl);
+              const b64 = btoa(unescape(encodeURIComponent(svgString)));
+              elements.push({
+                id: `el-${index}-chart`,
+                kind: 'image',
+                x: Math.round((svgRect.left - rootRect.left) * 1000) / 1000,
+                y: Math.round((svgRect.top - rootRect.top) * 1000) / 1000,
+                width: Math.round(svgRect.width * 1000) / 1000,
+                height: Math.round(svgRect.height * 1000) / 1000,
+                rotation: 0,
+                zIndex: index,
+                opacity: 1,
+                locked: false,
+                selector,
+                domPath: domPathFor(element),
+                style: {},
+                src: `data:image/svg+xml;base64,${b64}`,
+                alt: 'Chart',
+              });
+              // Do NOT return — let the figcaption (figure's text
+              // sibling, not in chartHandled) walk and emit naturally.
+            } else {
+              // Pre-resolve fallback — if the chart placeholder is
+              // still in place, we have no SVG to extract. Keep the
+              // legacy whole-slide-background behaviour rather than
+              // emit a broken chart slide.
+              for (const desc of Array.from(element.querySelectorAll('*'))) {
+                chartHandled.add(desc);
+              }
+              const base = createBase(element, 'image', computed, rect, index) as Omit<SlideImageElement, 'src' | 'alt'>;
+              elements.push({
+                ...base,
+                kind: 'image',
+                src: 'pengui-chart://background',
+                alt: 'Chart',
+                exportDisposition: 'background' as const,
+                fallbackReason: 'non-fetchable-image',
+              });
+              pushIssue({
+                code: 'non-fetchable-image',
+                severity: 'warning',
+                selector,
+                message:
+                  'Chart placeholder not resolved before editable export — falling back to slide background. Run resolveChartRefs first.',
+              });
             }
-            const base = createBase(element, 'image', computed, rect, index) as Omit<SlideImageElement, 'src' | 'alt'>;
-            elements.push({
-              ...base,
-              kind: 'image',
-              src: 'pengui-chart://background',
-              alt: 'Chart',
-              exportDisposition: 'background' as const,
-              fallbackReason: 'non-fetchable-image',
-            });
-            pushIssue({
-              code: 'non-fetchable-image',
-              severity: 'warning',
-              selector,
-              message:
-                'Chart will be flattened into the slide background. Native PPTX chart parts are not supported in v4.12.',
-            });
+            // Skip the rest of the handler for this iteration — the
+            // figure itself doesn't need a generic shape, and its
+            // children (SVG + descendants) are filtered via
+            // chartHandled. Subsequent iterations of the walker still
+            // emit figcaption naturally.
             return;
           }
 
