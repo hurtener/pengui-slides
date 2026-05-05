@@ -106,21 +106,32 @@ export const NODE_CSS = `
   color: var(--color-text-muted);
 }
 
-/* v4.12: pengui-chart figure wraps the ECharts-rendered SVG. The SVG
-   author at 800×480 with a viewBox; CSS scales it to the container's
-   width and lets the height follow the aspect ratio. */
+/* v4.12: pengui-chart figure wraps the ECharts-rendered SVG, authored
+   at 800x480 with a viewBox. v4.14.6: the figure becomes a flex child
+   that takes available vertical space (handled by .slide rules below);
+   the SVG fills the figure with width:100% + height:100% and lets its
+   own preserveAspectRatio="xMidYMid meet" handle ratio fitting. Without
+   this, the SVG's intrinsic aspect ratio (width:100%, height:auto)
+   pushed the figure past the slide bottom into the chrome footer when
+   the body had any sibling text content. */
 .pengui-chart {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
   margin: 0;
   width: 100%;
+  min-height: 0;
 }
 .pengui-chart-svg,
 .pengui-chart > svg {
   width: 100%;
-  height: auto;
+  height: 100%;
   max-width: 100%;
+  /* Take available space within the chart figure; without flex:1 the
+     SVG sizes to its viewBox intrinsic and the figcaption pushes the
+     SVG past container bounds. */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .pengui-chart-caption {
   margin: 0;
@@ -601,6 +612,14 @@ body {
   flex: 1 1 auto;
   min-height: 0;
 }
+/* v4.14.6: chart figures absorb available vertical space so the SVG
+   height tracks what's left after sibling content (heading, caption,
+   prose). Without this, the chart's natural aspect-ratio height bled
+   past the slide bottom into the chrome footer. */
+.slide > .pengui-chart {
+  flex: 1 1 auto;
+  min-height: 0;
+}
 
 /* v4.14: slide chrome alters the .slide flex layout. With chrome,
    header/main/footer stack naturally — the slide stops centering its
@@ -623,7 +642,8 @@ body {
   min-height: 0;
 }
 .slide.pengui-has-chrome > .pengui-chrome-body > .pengui-two-column,
-.slide.pengui-has-chrome > .pengui-chrome-body > .pengui-grid {
+.slide.pengui-has-chrome > .pengui-chrome-body > .pengui-grid,
+.slide.pengui-has-chrome > .pengui-chrome-body > .pengui-chart {
   flex: 1 1 auto;
   min-height: 0;
 }
