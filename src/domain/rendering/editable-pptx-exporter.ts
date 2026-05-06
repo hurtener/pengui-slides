@@ -623,7 +623,7 @@ export class EditablePptxExporter {
       const entry = zip.file(path);
       if (!entry) continue;
       const original = await entry.async('string');
-      const patched = renumberCNvPrIds(stripLineShapeFill(stripDuplicateParagraphProps(original)));
+      const patched = fixEmptyTblPr(renumberCNvPrIds(stripLineShapeFill(stripDuplicateParagraphProps(original))));
       if (patched !== original) {
         zip.file(path, patched);
         modified = true;
@@ -892,4 +892,28 @@ function stripLineShapeFill(xml: string): string {
       },
     );
   });
+}
+
+/**
+ * v4.18.4 — pptxgenjs 3.12 emits `<a:tblPr/>` (empty self-closing) for
+ * tables when no `tableStyleId` option is set. PowerPoint's strict
+ * validator (Mac PPT recent builds) flags an empty `<a:tblPr/>`
+ * paired with a populated `<a:tblGrid>` + `<a:tr>` as inconsistent,
+ * triggering the "PowerPoint found a problem with content" repair
+ * prompt on file open.
+ *
+ * Inject the default Microsoft "Medium Style 2 - Accent 1" table style
+ * GUID — the canonical PowerPoint default — so the validator sees a
+ * style reference. Per-cell custom styling (fill, color, borders) still
+ * overrides the preset, so visual output is unchanged.
+ *
+ * Both self-closing `<a:tblPr/>` and empty-content `<a:tblPr></a:tblPr>`
+ * forms covered.
+ */
+function fixEmptyTblPr(xml: string): string {
+  const styled =
+    '<a:tblPr><a:tableStyleId>{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}</a:tableStyleId></a:tblPr>';
+  return xml
+    .replace(/<a:tblPr\s*\/>/g, styled)
+    .replace(/<a:tblPr>\s*<\/a:tblPr>/g, styled);
 }
