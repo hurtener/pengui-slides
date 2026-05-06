@@ -623,7 +623,7 @@ export class EditablePptxExporter {
       const entry = zip.file(path);
       if (!entry) continue;
       const original = await entry.async('string');
-      const patched = fixEmptyTblPr(renumberCNvPrIds(stripLineShapeFill(stripDuplicateParagraphProps(original))));
+      const patched = fixZeroWidthCellLines(fixEmptyTblPr(renumberCNvPrIds(stripLineShapeFill(stripDuplicateParagraphProps(original)))));
       if (patched !== original) {
         zip.file(path, patched);
         modified = true;
@@ -902,18 +902,40 @@ function stripLineShapeFill(xml: string): string {
  * triggering the "PowerPoint found a problem with content" repair
  * prompt on file open.
  *
- * Inject the default Microsoft "Medium Style 2 - Accent 1" table style
- * GUID — the canonical PowerPoint default — so the validator sees a
- * style reference. Per-cell custom styling (fill, color, borders) still
- * overrides the preset, so visual output is unchanged.
+ * Inject the canonical Microsoft "No Style, No Grid" table style
+ * GUID — `{5940675A-B579-460E-94D1-54222C63F5DA}` — so the validator
+ * sees a style reference WITHOUT applying any preset row banding /
+ * header chrome on top of our per-cell styling. v4.18.5 fix: the
+ * previous Medium-Style-2 GUID overlaid light banding rows that hid
+ * dark-mode cell fills (Galici slide 12 came out white instead of
+ * dark navy). No-Style-No-Grid is the inert option.
  *
  * Both self-closing `<a:tblPr/>` and empty-content `<a:tblPr></a:tblPr>`
  * forms covered.
  */
 function fixEmptyTblPr(xml: string): string {
   const styled =
-    '<a:tblPr><a:tableStyleId>{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}</a:tableStyleId></a:tblPr>';
+    '<a:tblPr><a:tableStyleId>{5940675A-B579-460E-94D1-54222C63F5DA}</a:tableStyleId></a:tblPr>';
   return xml
     .replace(/<a:tblPr\s*\/>/g, styled)
     .replace(/<a:tblPr>\s*<\/a:tblPr>/g, styled);
+}
+
+/**
+ * v4.18.5 — pptxgenjs rounds table `border.pt` values < 1 down to 0,
+ * emitting `<a:lnL/lnR/lnT/lnB w="0" cap="flat" cmpd="sng" algn="ctr">`
+ * with full populated children (cap, dash, end attributes). PowerPoint
+ * Mac flags the inconsistency (`w="0"` + populated decorators ⇒ "is
+ * this line zero-width or styled?") as a content problem.
+ *
+ * Replace `w="0"` on `<a:lnL/lnR/lnT/lnB>` with `w="6350"` (0.5pt in
+ * EMU) — visible at print fidelity without changing the design intent
+ * (the per-cell `<a:noFill/>` inner element still suppresses the
+ * stroke when the design wants no border).
+ */
+function fixZeroWidthCellLines(xml: string): string {
+  return xml.replace(
+    /(<a:ln[LRTB]\s+)w="0"/g,
+    '$1w="6350"',
+  );
 }

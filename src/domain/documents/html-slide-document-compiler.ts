@@ -137,11 +137,18 @@ export class HtmlSlideDocumentCompiler {
         // top of the snapshot — best of both worlds.
         const snapHandled = new Set<Element>();
         let snapCounter = 0;
+        // v4.18.5 — `pengui-flow-connector` removed from SNAP_CLASSES.
+        // The connector LI has no chrome (no border/background) — it's
+        // just a flex container around an inline SVG arrow glyph. The
+        // existing v4.14.5 inline-SVG-as-image branch already emits
+        // those connectors as native <p:pic> shapes at the SVG's exact
+        // bbox (32×32 within the LI's flex centering). Snapshotting
+        // the LI captures the full row-height bounding box and shifts
+        // the arrow to the visual bottom of the cell — visibly weird.
         const SNAP_CLASSES = [
           'pengui-card',
           'pengui-decoration',
           'pengui-flow-step',
-          'pengui-flow-connector',
           'pengui-frame',
         ];
         function isInlineFormattingTag(tag: string, el: Element): boolean {
