@@ -33,6 +33,7 @@ import { registerRemoveSectionTool } from './decks/remove-section.tool.js';
 import { registerReorderSectionsTool } from './decks/reorder-sections.tool.js';
 import { registerListSectionsTool } from './decks/list-sections.tool.js';
 import { registerUpdateDocumentMetaTool } from './decks/update-document-meta.tool.js';
+import { registerSetDeckChromeTool } from './decks/set-deck-chrome.tool.js';
 import { registerApplySlideNodeEditTool } from './decks/apply-slide-node-edit.tool.js';
 import { registerApplySectionNodeEditTool } from './decks/apply-section-node-edit.tool.js';
 import { registerApplySlideFieldEditTool } from './decks/apply-slide-field-edit.tool.js';
@@ -135,6 +136,7 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerReorderSectionsTool(server, container);
   registerListSectionsTool(server, container);
   registerUpdateDocumentMetaTool(server, container);
+  registerSetDeckChromeTool(server, container);
   registerApplySectionNodeEditTool(server, container);
   registerApplySectionFieldEditTool(server, container);
   registerInsertSectionNodeTool(server, container);

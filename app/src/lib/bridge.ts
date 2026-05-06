@@ -5,7 +5,7 @@ import {
   applyHostFonts,
   applyHostStyleVariables,
 } from '@modelcontextprotocol/ext-apps';
-import type { DeckEditorBridge, ToolCallResult } from './types';
+import type { DeckEditorBridge, DeckChromeConfig, ToolCallResult } from './types';
 
 // ── v4 Wave 2 typed responses ───────────────────────────────────────────────
 
@@ -475,6 +475,20 @@ export class McpDeckEditorBridge implements DeckEditorBridge {
   /** Update deck-level document meta (chrome, TOC, page margins). */
   async updateDocumentMeta(args: { deck_id: string; meta: Record<string, unknown> }): Promise<void> {
     await this.callTool('update_document_meta', args);
+  }
+
+  /** v4.18 — set or clear slide-mode deck chrome (header/footer regions).
+   *  Pass `chrome: null` to clear chrome entirely. */
+  async setDeckChrome(args: {
+    deck_id: string;
+    chrome: DeckChromeConfig | null;
+  }): Promise<{ deck_id: string; chrome: DeckChromeConfig | null }> {
+    const r = await this.callTool<{ deck_id: string; chrome: DeckChromeConfig | null }>(
+      'set_deck_chrome',
+      args,
+    );
+    if (!r.structuredContent) throw new Error('set_deck_chrome returned no content');
+    return r.structuredContent;
   }
 
   /** Get a PNG thumbnail for a deck, slide, or section. */

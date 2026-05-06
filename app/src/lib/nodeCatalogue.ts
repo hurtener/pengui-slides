@@ -24,7 +24,13 @@ export type LeafNodeKind =
   | 'callout'
   | 'image'
   | 'divider'
-  | 'chart';
+  | 'chart'
+  // v4.18: card / flow / decoration leaves are insertable through the
+  // App. Decoration is body-only (top-level); card and flow nest inside
+  // grid cells / two_column children alongside other leaves.
+  | 'card'
+  | 'flow'
+  | 'decoration';
 
 /**
  * v4.11: compound layout presets. Each one maps to a fixed
@@ -59,6 +65,16 @@ export interface NodePayloadOptions {
    *  pastes data). The composer returns null when this is missing
    *  so the caller knows to open the sub-flow. */
   chart_spec?: Record<string, unknown>;
+  /** v4.16 image extension — frame chrome variant. Defaults to 'none'. */
+  imageFrame?: 'none' | 'browser' | 'phone' | 'desktop' | 'laptop';
+  /** v4.18 decoration — preset-name (asset_ref variant uses asset_id). */
+  decorationPreset?: 'glow_ring' | 'radial_glow' | 'grid_dots' | 'corner_bracket' | 'chevron_arrow' | 'noise_overlay';
+  /** v4.18 decoration — anchor + layer. */
+  decorationAnchor?: string;
+  decorationLayer?: 'background' | 'foreground';
+  /** v4.18 flow — direction + connector kind. */
+  flowDirection?: 'horizontal' | 'vertical';
+  flowConnector?: 'arrow' | 'arrow_dashed' | 'cycle' | 'plus';
 }
 /**
  * @deprecated v4.11: kept as an alias for the renamed `NodePayloadOptions`
@@ -98,6 +114,18 @@ export const CATALOGUE: ReadonlyArray<CatalogueEntry> = [
   // TSV data + preview) before insert. No keyboard shortcut — the
   // letter space is crowded and chart inserts are infrequent.
   { kind: 'chart',     group: 'block',  label: 'Chart',     hint: 'Bar, line, pie — soul-themed',       glyph: '▥' },
+  // v4.13/v4.18: card tile inserts a presentational wrapper around a
+  // single placeholder paragraph. Author edits accent / icon / eyebrow
+  // via the BlockActionBar inspector once the card lands.
+  { kind: 'card',      group: 'block',  label: 'Card',      hint: 'Accent border + icon + body',         glyph: '◰' },
+  // v4.17/v4.18: flow tile inserts a 3-step horizontal arrow flow.
+  // Step labels / accents / icons / connector kind editable via the
+  // FlowInspector after insert.
+  { kind: 'flow',      group: 'block',  label: 'Flow',      hint: 'Pipeline of steps with connectors',   glyph: '→' },
+  // v4.16/v4.18: decoration tile inserts a centered glow_ring preset
+  // as background layer. Author swaps preset / anchor / layer / accent
+  // via the DecorationInspector after insert.
+  { kind: 'decoration', group: 'block', label: 'Decoration', hint: 'Glow ring, grid dots, ornaments',     glyph: '✦' },
   // v4.11: compound "layout" tiles. Body-only — never offered inside
   // two_column.{left,right} or grid.cells (leaf-only IR rule).
   { kind: 'two_column_1_1', group: 'layout', label: 'Two columns (1:1)', hint: 'Side-by-side, equal width',   glyph: '⫾'  },
@@ -158,13 +186,57 @@ export function defaultNodePayload(
       return { type: 'divider' };
     case 'image':
       if (!options.asset_id) return null;
-      return { type: 'image', asset_id: options.asset_id };
+      return {
+        type: 'image',
+        asset_id: options.asset_id,
+        ...(options.imageFrame && options.imageFrame !== 'none' ? { frame: options.imageFrame } : {}),
+      };
     case 'chart':
       // Returns null until the ChartSpecPicker sub-flow has produced a
       // full chart payload (chart_type + data). Caller opens the
       // sub-flow on null and re-calls with options.chart_spec attached.
       if (!options.chart_spec) return null;
       return { ...options.chart_spec, type: 'chart' };
+
+    // v4.13 card — single placeholder paragraph; author tunes accent /
+    // icon / eyebrow in the inspector after insert.
+    case 'card':
+      return {
+        type: 'card',
+        body: [{ type: 'prose', body: cloneRichText(PLACEHOLDER_PARAGRAPH) }],
+      };
+
+    // v4.17 flow — 3 step horizontal arrow default. Connector + direction
+    // editable in the FlowInspector.
+    case 'flow':
+      return {
+        type: 'flow',
+        direction: options.flowDirection ?? 'horizontal',
+        connector: options.flowConnector ?? 'arrow',
+        steps: [
+          { label: [{ text: 'Step 1' }] },
+          { label: [{ text: 'Step 2' }] },
+          { label: [{ text: 'Step 3' }] },
+        ],
+      };
+
+    // v4.16 decoration — preset glow_ring, centered, background layer.
+    // Author swaps preset / anchor / layer / accent in DecorationInspector.
+    case 'decoration': {
+      const preset = options.decorationPreset ?? 'glow_ring';
+      const anchor = options.decorationAnchor ?? 'middle_center';
+      const layer = options.decorationLayer ?? 'background';
+      // asset_ref variant when caller passes asset_id, else preset.
+      const source = options.asset_id
+        ? { kind: 'asset_ref', asset_id: options.asset_id }
+        : { kind: 'preset', name: preset };
+      return {
+        type: 'decoration',
+        source,
+        placement: { anchor },
+        layer,
+      };
+    }
 
     // v4.11 compound presets. Each cell is a single placeholder
     // paragraph so the user has something selectable + editable on
@@ -232,6 +304,12 @@ export function kindOfNode(node: Record<string, unknown> | null | undefined): No
       return 'divider';
     case 'chart':
       return 'chart';
+    case 'card':
+      return 'card';
+    case 'flow':
+      return 'flow';
+    case 'decoration':
+      return 'decoration';
     case 'two_column':
       return 'two_column_1_1';
     case 'grid':
@@ -262,6 +340,13 @@ const MORPH_TARGETS: Record<NodeKind, ReadonlyArray<LeafNodeKind>> = {
   // v4.12: charts aren't morphable from text — converting a paragraph
   // into a chart needs a data-shape decision the bridge can't make.
   chart: [],
+  // v4.18: card / flow / decoration — same rationale as compounds.
+  // Card.body and flow.steps[] are RichText collections, not single
+  // text fields, so morphing to/from a leaf would either fabricate or
+  // discard structure. Inspector UI handles per-field edits instead.
+  card: [],
+  flow: [],
+  decoration: [],
   // v4.11: compounds aren't morphable. Replacing a two_column with a
   // leaf would discard every cell's content (irrecoverable from a
   // single-RichText perspective). The user opens Insert ▾ + deletes
@@ -411,9 +496,11 @@ export function availableForParent(
   const container = classifyParent(parentPath);
   if (container === 'unsupported') return [];
   if (container === 'body') return CATALOGUE;
-  // Inner compound container — drop layout presets so the user can't
-  // try to nest a two_column inside another two_column.
-  return CATALOGUE.filter((e) => e.group !== 'layout');
+  // Inner compound container — drop layout presets (no nesting) AND
+  // drop decoration (decoration anchors against the slide root, never
+  // against a grid cell — IR enforces this via the leaf union; mirror
+  // it here so the picker doesn't offer something the schema rejects).
+  return CATALOGUE.filter((e) => e.group !== 'layout' && e.kind !== 'decoration');
 }
 
 // ── helpers ────────────────────────────────────────────────────────
@@ -464,6 +551,11 @@ function primaryRichTextOf(node: Record<string, unknown>, kind: NodeKind): RichT
     // v4.12 chart: morphTargetsFor('chart') === []; falls through to
     // the empty-text default for type-exhaustiveness.
     case 'chart':
+    // v4.18 card / flow / decoration also have morphTargetsFor === [];
+    // defensive default for type-exhaustiveness.
+    case 'card':
+    case 'flow':
+    case 'decoration':
     // v4.11 compounds: morphTargetsFor returns [] so morphTo never
     // reaches here for compound source kinds. Defensive default
     // keeps the exhaustiveness check satisfied.

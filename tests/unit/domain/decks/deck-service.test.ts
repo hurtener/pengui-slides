@@ -328,6 +328,79 @@ describe('DeckService', () => {
     });
   });
 
+  describe('setDeckChrome (v4.18)', () => {
+    it('sets chrome on the deck and recompiles authored slides so chrome HTML appears', async () => {
+      const deck = await deckService.createDeck({ soulId: approvedSoulId });
+      const slide1 = await deckService.addSlide({
+        deckId: deck.id as string,
+        ir: makeSlideIR('cover'),
+        metadata: { title: 'Cover', type: 'content', narrative: '' },
+      });
+      const slide2 = await deckService.addSlide({
+        deckId: deck.id as string,
+        ir: makeSlideIR('body'),
+        metadata: { title: 'Body', type: 'content', narrative: '' },
+      });
+
+      // Sanity: no chrome yet — no <footer> wrapper element.
+      expect(slide2.html.includes('<footer class="pengui-chrome-footer"')).toBe(false);
+
+      const updatedDeck = await deckService.setDeckChrome(deck.id as string, {
+        footer: {
+          right: { kind: 'page_number', format: '1/N' },
+        },
+      });
+
+      expect(updatedDeck.chrome?.footer?.right?.kind).toBe('page_number');
+
+      // Cover (position 0) should NOT pick up chrome by default.
+      const coverAfter = await deckService.getSlide(slide1.id as string);
+      expect(coverAfter.html.includes('<footer class="pengui-chrome-footer"')).toBe(false);
+
+      // Non-cover slide should now contain the chrome footer wrapper.
+      const bodyAfter = await deckService.getSlide(slide2.id as string);
+      expect(bodyAfter.html.includes('<footer class="pengui-chrome-footer"')).toBe(true);
+    });
+
+    it('clears chrome when called with null', async () => {
+      const deck = await deckService.createDeck({ soulId: approvedSoulId });
+      await deckService.addSlide({
+        deckId: deck.id as string,
+        ir: makeSlideIR('s1'),
+        metadata: { title: 'S1', type: 'content', narrative: '' },
+      });
+      const slide = await deckService.addSlide({
+        deckId: deck.id as string,
+        ir: makeSlideIR('s2'),
+        metadata: { title: 'S2', type: 'content', narrative: '' },
+      });
+
+      await deckService.setDeckChrome(deck.id as string, {
+        footer: { right: { kind: 'page_number' } },
+      });
+      const withChrome = await deckService.getSlide(slide.id as string);
+      expect(withChrome.html.includes('<footer class="pengui-chrome-footer"')).toBe(true);
+
+      const cleared = await deckService.setDeckChrome(deck.id as string, null);
+      expect(cleared.chrome).toBeUndefined();
+
+      const after = await deckService.getSlide(slide.id as string);
+      expect(after.html.includes('<footer class="pengui-chrome-footer"')).toBe(false);
+    });
+
+    it('throws WrongAuthoringModelError on document-mode decks', async () => {
+      const docDeck = await deckService.createDeck({
+        soulId: approvedSoulId,
+        format: 'print_a4_portrait',
+      });
+      await expect(
+        deckService.setDeckChrome(docDeck.id as string, {
+          footer: { right: { kind: 'page_number' } },
+        }),
+      ).rejects.toThrow(WrongAuthoringModelError);
+    });
+  });
+
   describe('removeSlide', () => {
     it('removes a slide from a deck', async () => {
       const deck = await deckService.createDeck({ soulId: approvedSoulId });

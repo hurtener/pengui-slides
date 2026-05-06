@@ -152,7 +152,8 @@ export type DeckMutationType =
   | 'section_updated'
   | 'section_removed'
   | 'sections_reordered'
-  | 'document_meta_updated';
+  | 'document_meta_updated'
+  | 'deck_chrome_updated';
 
 export interface DeckRevision {
   id: RevisionId;

@@ -821,6 +821,80 @@ export class DeckService {
     return { recompiledCount, skippedCount, failures };
   }
 
+  // ── Deck Chrome ──────────────────────────────────────────────────
+
+  /**
+   * v4.18 — set or clear deck-level chrome (header/footer regions that
+   * render on every slide). Mutates `deck.chrome`, then recompiles every
+   * slide whose IR is authored so the chrome shows up in cached HTML.
+   * Pass `null` to clear chrome entirely.
+   *
+   * Slides-mode only — document-mode decks use `update_document_meta`
+   * for their `@page-chrome` directive.
+   */
+  async setDeckChrome(
+    deckIdStr: string,
+    chrome: DeckChrome | null,
+  ): Promise<Deck> {
+    const did = await this.resolveRefOrThrow(deckIdStr);
+    const deck = await this.deckStore.get(did);
+    if (!deck) {
+      throw new DeckNotFoundError(deckIdStr);
+    }
+    this.assertSlidesModel(deck, 'set_deck_chrome');
+
+    const now = this.clock.now();
+    if (chrome === null) {
+      delete deck.chrome;
+    } else {
+      deck.chrome = chrome;
+    }
+    deck.updatedAt = now;
+    await this.deckStore.save(deck);
+
+    const slides = await this.slideStore.getByDeck(deck.id);
+    const slideHtmls: string[] = [];
+    let recompiledCount = 0;
+    for (const slide of slides) {
+      if (slide.sourceKind !== 'authored_ir' || !slide.ir) {
+        slideHtmls.push(slide.html);
+        continue;
+      }
+      const soul = await this.soulStore.get(deck.soulId);
+      if (!soul) {
+        throw new SoulNotFoundError(deck.soulId as string);
+      }
+      const geometry = getFormat(deck.format ?? DEFAULT_FORMAT).geometry;
+      const chromeArgs = chromeArgsFor(deck, slide.position, deck.slideIds.length);
+      const fontFaceCss = buildFontFaceCss(soul);
+      slide.html = resolveChartRefs(
+        compileSlideIRToHtml({ ir: slide.ir, soul, geometry, fontFaceCss, ...chromeArgs }),
+        soul.layers,
+      );
+      slide.metadata.revisionHash = sha256(slide.html);
+      slide.updatedAt = now;
+      await this.slideStore.save(slide);
+      slideHtmls.push(slide.html);
+      recompiledCount += 1;
+    }
+
+    const revision = this.revisionTracker.createRevision({
+      deckId: deck.id,
+      type: 'deck_chrome_updated',
+      description: chrome === null ? 'Deck chrome cleared' : 'Deck chrome updated',
+      slideIdsSnapshot: deck.slideIds,
+      slideHtmls,
+    });
+    await this.deckStore.addRevision(revision);
+
+    this.logger.info('Deck chrome updated', {
+      deckId: deck.id,
+      cleared: chrome === null,
+      recompiledCount,
+    });
+    return deck;
+  }
+
   // ── Remove Slide ─────────────────────────────────────────────────
 
   /**

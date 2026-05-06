@@ -107,6 +107,26 @@ export interface DeckSummary {
   updatedAt: string;
   /** Format of the deck — added in Wave 2 (SPEC §3.3). Absent on legacy decks → treated as slides_16_9. */
   format?: FormatKind;
+  /** v4.18 — slide-mode deck chrome (header/footer regions). Absent when the deck has no chrome configured. */
+  chrome?: DeckChromeConfig;
+}
+
+// ── v4.18 deck-chrome shape (mirrors src/domain/ir/chrome.ts) ───
+export type DeckChromeLogoHeight = 'sm' | 'md' | 'lg';
+export type DeckChromePageNumberFormat = '1' | '1/N' | '01';
+export type DeckChromeSlot =
+  | { kind: 'logo'; asset_id: string; height?: DeckChromeLogoHeight }
+  | { kind: 'text'; content: unknown }
+  | { kind: 'page_number'; format?: DeckChromePageNumberFormat };
+export interface DeckChromeRegion {
+  left?: DeckChromeSlot;
+  center?: DeckChromeSlot;
+  right?: DeckChromeSlot;
+}
+export interface DeckChromeConfig {
+  header?: DeckChromeRegion;
+  footer?: DeckChromeRegion;
+  showOnCover?: boolean;
 }
 
 /** Export result from export_pdf / export_pptx / export_html. */

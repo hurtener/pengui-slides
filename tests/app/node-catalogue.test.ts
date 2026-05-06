@@ -16,7 +16,7 @@ import {
 // Catalogue + default payloads ─────────────────────────────────────
 
 describe('CATALOGUE', () => {
-  it('lists every supported leaf and compound kind exactly once', () => {
+  it('lists every supported leaf and compound kind exactly once (v4.18)', () => {
     const kinds = CATALOGUE.map((entry) => entry.kind);
     expect(new Set(kinds).size).toBe(kinds.length);
     expect(kinds).toEqual([
@@ -28,6 +28,9 @@ describe('CATALOGUE', () => {
       'image',
       'divider',
       'chart',
+      'card',
+      'flow',
+      'decoration',
       'two_column_1_1',
       'two_column_1_2',
       'two_column_2_1',
@@ -37,10 +40,13 @@ describe('CATALOGUE', () => {
     ]);
   });
 
-  it('groups leaves as block and compounds as layout', () => {
+  it('groups leaves as block and compounds as layout (v4.18 adds card/flow/decoration to block)', () => {
     const blocks = CATALOGUE.filter((e) => e.group === 'block').map((e) => e.kind);
     const layouts = CATALOGUE.filter((e) => e.group === 'layout').map((e) => e.kind);
-    expect(blocks).toEqual(['paragraph', 'heading', 'list', 'quote', 'callout', 'image', 'divider', 'chart']);
+    expect(blocks).toEqual([
+      'paragraph', 'heading', 'list', 'quote', 'callout', 'image', 'divider', 'chart',
+      'card', 'flow', 'decoration',
+    ]);
     expect(layouts).toEqual([
       'two_column_1_1',
       'two_column_1_2',
@@ -119,6 +125,55 @@ describe('defaultNodePayload', () => {
     expect(payload).toMatchObject({ type: 'callout', kind: 'warning' });
   });
 
+  // v4.18 — new leaf-like kinds.
+  it('card default validates as a leaf with one prose body item', () => {
+    const payload = defaultNodePayload('card');
+    expect(payload).toMatchObject({ type: 'card' });
+    expect(LeafSlideNodeSchema.safeParse(payload).success).toBe(true);
+  });
+
+  it('flow default validates as a leaf with 3 horizontal arrow steps', () => {
+    const payload = defaultNodePayload('flow');
+    expect(payload).toMatchObject({ type: 'flow', direction: 'horizontal', connector: 'arrow' });
+    expect((payload as { steps: unknown[] }).steps).toHaveLength(3);
+    expect(LeafSlideNodeSchema.safeParse(payload).success).toBe(true);
+  });
+
+  it('flow respects custom direction + connector', () => {
+    const payload = defaultNodePayload('flow', { flowDirection: 'vertical', flowConnector: 'cycle' });
+    expect(payload).toMatchObject({ type: 'flow', direction: 'vertical', connector: 'cycle' });
+  });
+
+  it('decoration default validates against SlideNodeSchema (top-level only)', () => {
+    const payload = defaultNodePayload('decoration');
+    expect(payload).toMatchObject({
+      type: 'decoration',
+      source: { kind: 'preset', name: 'glow_ring' },
+      placement: { anchor: 'middle_center' },
+      layer: 'background',
+    });
+    expect(SlideNodeSchema.safeParse(payload).success).toBe(true);
+  });
+
+  it('decoration with asset_id produces an asset_ref source', () => {
+    const payload = defaultNodePayload('decoration', { asset_id: 'abc' });
+    expect(payload).toMatchObject({
+      source: { kind: 'asset_ref', asset_id: 'abc' },
+    });
+  });
+
+  it('image with frame option emits the frame field', () => {
+    const payload = defaultNodePayload('image', { asset_id: 'abc', imageFrame: 'browser' });
+    expect(payload).toMatchObject({ type: 'image', asset_id: 'abc', frame: 'browser' });
+    expect(LeafSlideNodeSchema.safeParse(payload).success).toBe(true);
+  });
+
+  it('image with imageFrame "none" omits the frame field (defaults at the IR level)', () => {
+    const payload = defaultNodePayload('image', { asset_id: 'abc', imageFrame: 'none' });
+    expect(payload).toMatchObject({ type: 'image', asset_id: 'abc' });
+    expect(payload).not.toHaveProperty('frame');
+  });
+
   // v4.11 compound presets — each must validate against the full
   // SlideNodeSchema (compounds aren't leaves), and inner cells must
   // hold leaf-only payloads so the IR's no-nesting rule holds.
@@ -187,6 +242,10 @@ describe('kindOfNode', () => {
     ['callout', 'callout'],
     ['image', 'image'],
     ['divider', 'divider'],
+    // v4.18 — new leaf-like / top-level kinds.
+    ['card', 'card'],
+    ['flow', 'flow'],
+    ['decoration', 'decoration'],
   ])('%s → %s', (type, kind) => {
     expect(kindOfNode({ type })).toBe(kind);
   });
@@ -224,6 +283,12 @@ describe('morphTargetsFor', () => {
       const expected = textKinds.filter((t) => t !== k);
       expect([...targets].sort()).toEqual([...expected].sort());
     }
+  });
+
+  it('v4.18 leaves card / flow / decoration expose no morph targets', () => {
+    expect(morphTargetsFor('card')).toEqual([]);
+    expect(morphTargetsFor('flow')).toEqual([]);
+    expect(morphTargetsFor('decoration')).toEqual([]);
   });
 
   it('compound presets expose no morph targets', () => {
@@ -405,7 +470,7 @@ describe('availableForParent', () => {
   it('two_column.left filters out compound layouts (no nesting)', () => {
     const kinds = availableForParent(['body', 2, 'left']).map((e) => e.kind);
     expect(kinds).toEqual(
-      CATALOGUE.filter((e) => e.group !== 'layout').map((e) => e.kind),
+      CATALOGUE.filter((e) => e.group !== 'layout' && e.kind !== 'decoration').map((e) => e.kind),
     );
     expect(kinds).not.toContain('two_column_1_1');
     expect(kinds).not.toContain('grid_2x1');
@@ -414,14 +479,14 @@ describe('availableForParent', () => {
   it('two_column.right filters out compound layouts (no nesting)', () => {
     const kinds = availableForParent(['body', 2, 'right']).map((e) => e.kind);
     expect(kinds).toEqual(
-      CATALOGUE.filter((e) => e.group !== 'layout').map((e) => e.kind),
+      CATALOGUE.filter((e) => e.group !== 'layout' && e.kind !== 'decoration').map((e) => e.kind),
     );
   });
 
   it('grid row (cells, R) filters out compound layouts (no nesting)', () => {
     const kinds = availableForParent(['body', 4, 'cells', 0]).map((e) => e.kind);
     expect(kinds).toEqual(
-      CATALOGUE.filter((e) => e.group !== 'layout').map((e) => e.kind),
+      CATALOGUE.filter((e) => e.group !== 'layout' && e.kind !== 'decoration').map((e) => e.kind),
     );
     expect(kinds).not.toContain('two_column_1_1');
     expect(kinds).not.toContain('grid_2x2');

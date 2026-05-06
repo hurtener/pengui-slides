@@ -13,6 +13,7 @@
   import ChartSpecPicker from '../lib/ChartSpecPicker.svelte';
   import BlockActionBar from '../lib/BlockActionBar.svelte';
   import NodeTypePicker from '../lib/NodeTypePicker.svelte';
+  import DeckChromeEditor from '../lib/DeckChromeEditor.svelte';
   import {
     CATALOGUE,
     availableForParent,
@@ -26,7 +27,7 @@
   import { Button, Card, Pill, Tabs, Textarea } from '../lib/primitives/index';
   import { decodeIrPath, isPathInside } from '../lib/irPath';
   import type { DeckStore } from '../stores/deck.svelte';
-  import type { ValidationPresentation, ValidationIssue, ValidationIssueSummary, SlideHealth, FormatKind } from '../lib/types';
+  import type { ValidationPresentation, ValidationIssue, ValidationIssueSummary, SlideHealth, FormatKind, DeckChromeConfig } from '../lib/types';
   import type { McpDeckEditorBridge, CommentTarget } from '../lib/bridge';
 
   interface Props {
@@ -125,17 +126,30 @@
   }
 
   async function handleAssetPick(a: PickerAsset): Promise<void> {
+    await insertImageAt(a, 'none');
+  }
+
+  async function handleAssetPickWithFrame(pick: { asset: PickerAsset; frame: 'none' | 'browser' | 'phone' | 'desktop' | 'laptop' }): Promise<void> {
+    await insertImageAt(pick.asset, pick.frame);
+  }
+
+  async function insertImageAt(
+    a: PickerAsset,
+    frame: 'none' | 'browser' | 'phone' | 'desktop' | 'laptop',
+  ): Promise<void> {
     const path = assetPickerTargetPath;
     const pos = assetPickerTargetIndex;
     assetPickerOpen = false;
     assetPickerTargetPath = null;
     if (!path) return;
     try {
-      await deck.insertSlideNode(path, pos, {
+      const payload: Record<string, unknown> = {
         type: 'image',
         asset_id: a.asset_id,
         ...(a.label ? { alt: a.label } : {}),
-      });
+      };
+      if (frame !== 'none') payload.frame = frame;
+      await deck.insertSlideNode(path, pos, payload);
       setStructureStatus('Image added.');
       // Parity with non-image inserts: select the new block so the
       // user can immediately move / delete / change it. The bridge
@@ -182,6 +196,29 @@
     chartPickerOpen = false;
     chartPickerTargetPath = null;
   }
+
+  // ── Deck chrome editor (v4.18) ──────────────────────────────────
+  let chromeEditorOpen = $state(false);
+  function openChromeEditor(): void {
+    if (!bridge) {
+      setStructureStatus('Deck chrome editor is only available inside the MCP App.');
+      return;
+    }
+    chromeEditorOpen = true;
+  }
+  async function handleChromeSaved(_chrome: DeckChromeConfig | null): Promise<void> {
+    chromeEditorOpen = false;
+    // Recompiled HTML lives in the slide store; refreshing the editor
+    // state reloads the selected slide's HTML so the canvas reflects
+    // the new chrome.
+    try {
+      await deck.refresh();
+      setStructureStatus('Chrome updated.');
+    } catch (err) {
+      setStructureStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   // Stringified IR paths of elements that already have (unresolved)
   // comments — drives the dashed mint outline decoration on the canvas.
   let commentedIrPaths = $state<string[]>([]);
@@ -852,6 +889,14 @@
               {detailsOpen ? 'Hide details' : 'Slide details'}
             </Button>
             {#if bridge}
+              <Button
+                variant="ghost"
+                size="sm"
+                onclick={openChromeEditor}
+                title="Edit deck chrome (header / footer that render on every slide)."
+              >
+                Chrome
+              </Button>
               <Button variant="ghost" size="sm" onclick={toggleCommentDrawer}>
                 Comments
               </Button>
@@ -1137,9 +1182,23 @@
       <AssetPicker
         bridge={bridge}
         open={assetPickerOpen}
+        withFramePicker={true}
         onPick={handleAssetPick}
+        onPickWithFrame={(p) => void handleAssetPickWithFrame(p)}
         onClose={closeAssetPicker}
       />
+
+      <!-- v4.18 deck chrome editor (slide-mode) -->
+      {#if deck.editorState}
+        <DeckChromeEditor
+          bridge={bridge}
+          deckId={deck.editorState.deck.id}
+          open={chromeEditorOpen}
+          initial={deck.editorState.deck.chrome ?? null}
+          onSaved={(c) => void handleChromeSaved(c)}
+          onClose={() => { chromeEditorOpen = false; }}
+        />
+      {/if}
     {/if}
 
     <!-- v4.12 chart sub-flow (opened from + Block ▾ → Chart) -->

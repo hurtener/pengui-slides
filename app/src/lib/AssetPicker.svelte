@@ -25,14 +25,75 @@
     data_base64?: string;
   }
 
+  // v4.18 — image.frame chrome variant. Caller may opt in to the
+  // 2-stage picker by setting `withFramePicker: true`; the user picks
+  // asset, then picks one of 5 frame variants. When `withFramePicker`
+  // is false (default), behaviour matches the pre-v4.18 single-stage
+  // picker (asset → onPick immediately).
+  type ImageFrame = 'none' | 'browser' | 'phone' | 'desktop' | 'laptop';
+
+  interface FramedPick {
+    asset: PickerAsset;
+    frame: ImageFrame;
+  }
+
   interface Props {
     bridge: McpDeckEditorBridge;
     open: boolean;
+    /** v4.18: when true, surface a frame picker after the user selects
+     *  an asset, then resolve onPick with { asset, frame }. Default
+     *  false so existing call sites keep their single-stage UX. */
+    withFramePicker?: boolean;
     onPick: (asset: PickerAsset) => void;
+    /** v4.18: alternate callback fired only when withFramePicker is true.
+     *  Caller composes the IR image node with both fields. */
+    onPickWithFrame?: (pick: FramedPick) => void;
     onClose: () => void;
   }
 
-  let { bridge, open, onPick, onClose }: Props = $props();
+  let {
+    bridge, open, withFramePicker = false,
+    onPick, onPickWithFrame, onClose,
+  }: Props = $props();
+
+  // v4.18 — 2-stage state. `pendingAsset` holds the chosen asset while
+  // the frame picker is open. Reset on close + on stage rewind.
+  let pendingAsset = $state<PickerAsset | null>(null);
+
+  const FRAME_OPTIONS: ReadonlyArray<{ value: ImageFrame; label: string; hint: string }> = [
+    { value: 'none',    label: 'No frame',  hint: 'Bare image, no chrome' },
+    { value: 'browser', label: 'Browser',   hint: 'Title bar + URL pill — for UI screenshots' },
+    { value: 'phone',   label: 'Phone',     hint: 'Device bezel + status bar' },
+    { value: 'desktop', label: 'Desktop',   hint: 'Monitor + stand' },
+    { value: 'laptop',  label: 'Laptop',    hint: 'Lid + keyboard tray' },
+  ];
+
+  function handleAssetClick(a: PickerAsset): void {
+    if (withFramePicker) {
+      pendingAsset = a;
+    } else {
+      onPick(a);
+    }
+  }
+
+  function handleFramePick(frame: ImageFrame): void {
+    if (!pendingAsset) return;
+    if (onPickWithFrame) {
+      onPickWithFrame({ asset: pendingAsset, frame });
+    } else {
+      onPick(pendingAsset);
+    }
+    pendingAsset = null;
+  }
+
+  function rewindToAssetGrid(): void {
+    pendingAsset = null;
+  }
+
+  // Reset the frame stage when the picker closes externally.
+  $effect(() => {
+    if (!open) pendingAsset = null;
+  });
 
   let loading = $state(false);
   let error = $state('');
@@ -92,11 +153,33 @@
   <button type="button" class="picker-scrim" aria-label="Close" onclick={onClose}></button>
   <div class="picker" role="dialog" aria-label="Choose an image">
     <div class="picker-head">
-      <p class="eyebrow">Choose an image</p>
+      {#if pendingAsset}
+        <Button variant="ghost" size="sm" onclick={rewindToAssetGrid}>← Back</Button>
+        <p class="eyebrow">Pick a frame</p>
+      {:else}
+        <p class="eyebrow">Choose an image</p>
+      {/if}
       <Button variant="ghost" size="sm" onclick={onClose}>Close</Button>
     </div>
     <div class="picker-body">
-      {#if loading}
+      {#if pendingAsset}
+        <!-- Stage 2 — frame picker. v4.18 image.frame extension. -->
+        <div class="frame-grid">
+          {#each FRAME_OPTIONS as opt (opt.value)}
+            <button
+              type="button"
+              class="frame-tile"
+              onclick={() => handleFramePick(opt.value)}
+              aria-label={opt.label}
+              title={opt.hint}
+            >
+              <span class={`frame-thumb frame-thumb-${opt.value}`}></span>
+              <span class="frame-label">{opt.label}</span>
+              <span class="frame-hint">{opt.hint}</span>
+            </button>
+          {/each}
+        </div>
+      {:else if loading}
         <p class="muted">Loading images…</p>
       {:else if error}
         <p class="error">Couldn't load images: {error}</p>
@@ -111,7 +194,7 @@
             <button
               type="button"
               class="picker-tile"
-              onclick={() => onPick(a)}
+              onclick={() => handleAssetClick(a)}
               aria-label={displayLabel(a)}
             >
               {#if a.data_base64 && a.mime_type.startsWith('image/')}
@@ -244,5 +327,84 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .frame-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--s-3);
+  }
+
+  .frame-tile {
+    all: unset;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-1);
+    padding: var(--s-3);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-md);
+    background: var(--surface-1);
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .frame-tile:hover,
+  .frame-tile:focus-visible {
+    border-color: var(--mint);
+    box-shadow: 0 0 0 3px var(--mint-tint);
+  }
+
+  .frame-thumb {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: var(--surface-2);
+    border-radius: var(--r-sm);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .frame-thumb-none {
+    background: var(--surface-2);
+  }
+
+  .frame-thumb-browser {
+    background:
+      linear-gradient(var(--surface-3) 14%, var(--surface-2) 14%);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .frame-thumb-phone {
+    background: var(--surface-3);
+    border-radius: var(--r-md);
+    border: 2px solid var(--ink-2);
+    margin: 0 auto;
+    width: 50%;
+  }
+
+  .frame-thumb-desktop {
+    background: var(--surface-3);
+    border: 2px solid var(--ink-2);
+    border-bottom-width: 6px;
+    border-radius: var(--r-sm);
+  }
+
+  .frame-thumb-laptop {
+    background: var(--surface-3);
+    border: 1px solid var(--ink-2);
+    border-radius: var(--r-sm) var(--r-sm) 0 0;
+    border-bottom: 6px solid var(--ink-2);
+  }
+
+  .frame-label {
+    font-size: 13px;
+    color: var(--ink-1);
+    font-weight: 500;
+  }
+
+  .frame-hint {
+    font-size: 11px;
+    color: var(--ink-3);
+    line-height: 1.3;
   }
 </style>

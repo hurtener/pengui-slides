@@ -6,7 +6,7 @@
  */
 export const BUILD_INFO = {
   server_version: "0.1.0",
-  build_sha: "cf341e2",
-  build_time: "2026-05-04T14:20:22.070Z",
+  build_sha: "b8f1ba3",
+  build_time: "2026-05-06T05:06:31.703Z",
   git_dirty: true,
 } as const;

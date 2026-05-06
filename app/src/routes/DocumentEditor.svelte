@@ -198,22 +198,35 @@
     }
   }
   async function handleAssetPick(a: PickerAsset): Promise<void> {
+    await insertImageAt(a, 'none');
+  }
+
+  async function handleAssetPickWithFrame(pick: { asset: PickerAsset; frame: 'none' | 'browser' | 'phone' | 'desktop' | 'laptop' }): Promise<void> {
+    await insertImageAt(pick.asset, pick.frame);
+  }
+
+  async function insertImageAt(
+    a: PickerAsset,
+    frame: 'none' | 'browser' | 'phone' | 'desktop' | 'laptop',
+  ): Promise<void> {
     const path = assetPickerTargetPath;
     const pos = assetPickerTargetIndex;
     assetPickerOpen = false;
     assetPickerTargetPath = null;
     if (!path || !selectedId) return;
     try {
+      const newNode: Record<string, unknown> = {
+        type: 'image',
+        asset_id: a.asset_id,
+        ...(a.label ? { alt: a.label } : {}),
+      };
+      if (frame !== 'none') newNode.frame = frame;
       await bridge.insertSectionNode({
         deck_id: deckRef,
         section_id: selectedId,
         parent_path: path,
         position: pos,
-        new_node: {
-          type: 'image',
-          asset_id: a.asset_id,
-          ...(a.label ? { alt: a.label } : {}),
-        },
+        new_node: newNode,
       });
       setStructureStatus('Image added.');
       // Parity with non-image inserts: select the new block so the
@@ -1392,7 +1405,9 @@
   <AssetPicker
     {bridge}
     open={assetPickerOpen}
+    withFramePicker={true}
     onPick={handleAssetPick}
+    onPickWithFrame={(p) => void handleAssetPickWithFrame(p)}
     onClose={closeAssetPicker}
   />
 
