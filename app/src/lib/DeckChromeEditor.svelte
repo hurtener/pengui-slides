@@ -197,7 +197,9 @@
     };
     const header = buildRegion('header');
     const footer = buildRegion('footer');
-    if (!header && !footer && !showOnCover) return null;
+    // showOnCover alone with no regions is a no-op chrome — clear instead
+    // of persisting an empty wrapper.
+    if (!header && !footer) return null;
     const out: DeckChromeConfig = {};
     if (header) out.header = header;
     if (footer) out.footer = footer;

@@ -888,7 +888,7 @@
             <Button variant="ghost" size="sm" onclick={() => detailsOpen = !detailsOpen}>
               {detailsOpen ? 'Hide details' : 'Slide details'}
             </Button>
-            {#if bridge}
+            {#if bridge && deck.editorState}
               <Button
                 variant="ghost"
                 size="sm"
