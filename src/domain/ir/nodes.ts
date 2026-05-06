@@ -487,6 +487,64 @@ export const DecorationNodeSchema = z
   .strict();
 export type DecorationNode = z.infer<typeof DecorationNodeSchema>;
 
+// ── v4.17 flow node ──────────────────────────────────────────────
+//
+// Sequential pipeline / process visualization (Galici slide 11
+// "Backlog Grooming → Sprint Planning → Development → Demo + retro").
+// Steps are arranged horizontally or vertically with a connector glyph
+// between them. Bimodal — works in slide AND document modes.
+//
+// Schema is a thin wrapper over `FlowStep[]`: each step carries a
+// label (RichText), optional accent token, optional curated icon,
+// optional short badge ("01", "Q1", "Done"). The connector is a single
+// kind that applies between every adjacent pair of steps; mixing
+// connectors mid-flow is intentionally not supported (would obscure the
+// visual rhythm that makes flows readable).
+//
+// `cycle` connector: emits a closing return-arrow after the last step
+// to communicate "this loops back to the start" without drawing a
+// physical curved wrap (deferred to v4.18+).
+
+export const FlowConnectorSchema = z.enum([
+  'arrow',          // solid arrow (→) — sequential default
+  'arrow_dashed',   // dashed arrow — soft / proposed step
+  'cycle',          // return arrow — recurring / iterative process
+  'plus',           // plus glyph — additive composition
+]);
+export type FlowConnector = z.infer<typeof FlowConnectorSchema>;
+
+export const FlowStepSchema = z
+  .object({
+    /** Primary step label. RichText so authors can color/bold individual
+     *  words via the existing TextRun color enum. */
+    label: RichTextSchema,
+    /** Soul accent — drives the step pill's top-border tint and the
+     *  icon color. Mirrors the v4.13 card pattern. */
+    accent: TextColorSchema.optional(),
+    /** Curated lucide icon glyph rendered above the label. Same
+     *  allowlist as CardNode.icon. */
+    icon: IconNameSchema.optional(),
+    /** Short corner badge — "01", "Done", "Q1". Plain string; no
+     *  rich-text formatting. Capped at 16 chars to keep the badge
+     *  visually compact. */
+    badge: z.string().max(16).optional(),
+  })
+  .strict();
+export type FlowStep = z.infer<typeof FlowStepSchema>;
+
+export const FlowNodeSchema = z
+  .object({
+    type: z.literal('flow'),
+    direction: z.enum(['horizontal', 'vertical']),
+    connector: FlowConnectorSchema,
+    /** Hard minimum 2 (a single step isn't a flow, it's just a card).
+     *  Soft maximum 7 enforced by the density warning lint — agents
+     *  can ship more, but the lint surfaces the visual-density risk. */
+    steps: z.array(FlowStepSchema).min(2),
+  })
+  .strict();
+export type FlowNode = z.infer<typeof FlowNodeSchema>;
+
 // ── Top-level union ──────────────────────────────────────────────
 
 export const SlideNodeSchema = z.discriminatedUnion('type', [
@@ -508,6 +566,7 @@ export const SlideNodeSchema = z.discriminatedUnion('type', [
   BibliographyNodeSchema,
   PageBreakNodeSchema,
   DecorationNodeSchema,
+  FlowNodeSchema,
 ]);
 export type SlideNode = z.infer<typeof SlideNodeSchema>;
 
@@ -532,6 +591,7 @@ export const SLIDE_NODE_TYPES = [
   'bibliography',
   'page_break',
   'decoration',
+  'flow',
 ] as const;
 export type SlideNodeType = (typeof SLIDE_NODE_TYPES)[number];
 

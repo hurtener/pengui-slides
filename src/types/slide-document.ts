@@ -251,8 +251,19 @@ export type SlideElement =
  *           `overflow: visible` via `:has(.pengui-decoration-bleed)`
  *           so the rasterised PNG (image PPTX) doesn't clip the bleed
  *           shape either.
+ *  - 14: v4.17 flow & connectors — new top-level `flow` IR node that
+ *       emits an `<ol class="pengui-flow">` of step pills + connector
+ *       glyphs. Step pills mirror the v4.13 card pattern (1px border +
+ *       3px accent top-border) and ship as native `<p:sp>` rectangles
+ *       via the generic shape walker. Connector glyphs are inline
+ *       lucide-style SVGs (arrow / arrow_dashed / cycle / plus) that
+ *       flow through the v4.14.5 inline-SVG-as-image branch and ship
+ *       as native `<p:pic>` shapes. Step icons use the same v4.13 path.
+ *       Cached docs at rev 13 were compiled before the flow node
+ *       existed; recompile materialises every step pill + icon +
+ *       badge + connector glyph.
  */
-export const CURRENT_COMPILER_REVISION = 13;
+export const CURRENT_COMPILER_REVISION = 14;
 
 export interface SlideDocument {
   version: '1';

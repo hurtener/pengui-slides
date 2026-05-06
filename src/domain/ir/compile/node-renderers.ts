@@ -25,6 +25,8 @@ import type {
   ChartNode,
   DecorationNode,
   DividerNode,
+  FlowNode,
+  FlowStep,
   GridNode,
   HeadingNode,
   HeroNode,
@@ -47,6 +49,7 @@ import { ErrorCode, PenguiError } from '../../../types/errors.js';
 import { escapeAttr } from './escape.js';
 import { getIconSvg } from './icons.js';
 import { getOrnamentDef } from './ornaments.js';
+import { getConnectorSvg } from './connectors.js';
 import { renderRichText } from './rich-text-renderer.js';
 
 /** Build the `data-ir-path="…"` attribute fragment for a given path. */
@@ -119,6 +122,8 @@ export function renderNode(node: SlideNode, path: IRPath = []): string {
       return renderPageBreak(node, attr);
     case 'decoration':
       return renderDecoration(node, attr);
+    case 'flow':
+      return renderFlow(node, path, attr);
   }
 }
 
@@ -586,6 +591,66 @@ function renderDecoration(node: DecorationNode, dataAttr: string): string {
     ` aria-hidden="true"${dataAttr}>` +
     innerHtml +
     `</aside>`
+  );
+}
+
+/** v4.17 — render a flow node. Emits an `<ol>` of step pills with
+ *  connector `<li>`s interleaved between them. Cycle connector adds a
+ *  closing return-arrow after the last step (the visual "loops back"
+ *  cue without literally drawing a curved wrap). */
+function renderFlow(node: FlowNode, path: IRPath, dataAttr: string): string {
+  const direction = node.direction;
+  const connector = node.connector;
+  const stepCount = node.steps.length;
+  const isCycle = connector === 'cycle';
+
+  const stepHtmls: string[] = [];
+  for (let i = 0; i < stepCount; i++) {
+    stepHtmls.push(
+      renderFlowStep(node.steps[i], i, [...path, 'steps', i]),
+    );
+    // Connector between steps
+    if (i < stepCount - 1) {
+      stepHtmls.push(renderFlowConnector(connector, false));
+    }
+  }
+  // Cycle: add a closing return arrow after the last step.
+  if (isCycle) {
+    stepHtmls.push(renderFlowConnector(connector, true));
+  }
+
+  return (
+    `<ol class="pengui-flow pengui-flow-${direction} pengui-flow-connector-${connector}"${dataAttr}>` +
+    stepHtmls.join('') +
+    `</ol>`
+  );
+}
+
+function renderFlowStep(step: FlowStep, index: number, path: IRPath): string {
+  const accent = step.accent ?? 'muted';
+  const accentClass = ` pengui-flow-step-accent-${accent}`;
+  const pathStr = pathAttr(path);
+  const iconHtml = step.icon
+    ? `<span class="pengui-flow-step-icon" aria-hidden="true">${getIconSvg(step.icon)}</span>`
+    : '';
+  const badgeHtml = step.badge
+    ? `<span class="pengui-flow-step-badge">${escapeAttr(step.badge)}</span>`
+    : '';
+  return (
+    `<li class="pengui-flow-step${accentClass}"${pathStr} data-ir-flow-step="${index}">` +
+    badgeHtml +
+    iconHtml +
+    `<p class="pengui-flow-step-label"${fieldAttr('label')}>${renderRichText(step.label)}</p>` +
+    `</li>`
+  );
+}
+
+function renderFlowConnector(connector: FlowNode['connector'], isReturn: boolean): string {
+  const returnClass = isReturn ? ' pengui-flow-connector-return' : '';
+  return (
+    `<li class="pengui-flow-connector pengui-flow-connector-glyph-${connector}${returnClass}" aria-hidden="true">` +
+    getConnectorSvg(connector) +
+    `</li>`
   );
 }
 

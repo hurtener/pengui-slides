@@ -133,3 +133,9 @@ export {
   type AuthoringMode,
   type ModeIssue,
 } from './mode-check.js';
+
+export {
+  lintFlowDensity,
+  MAX_RECOMMENDED_FLOW_STEPS,
+  type FlowDensityWarning,
+} from './flow-density.js';

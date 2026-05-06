@@ -748,6 +748,123 @@ export const NODE_CSS = `
   border-bottom-right-radius: 6px;
   margin-left: -5%;
 }
+
+/* ── v4.17 flow node ────────────────────────────────────────────
+ *
+ * Sequential pipeline visualization. The renderer emits an <ol> with
+ * step pills + connector glyphs interleaved. Horizontal flows lay out
+ * row-wise with inline connectors; vertical flows stack column-wise
+ * with rotated connectors.
+ *
+ * Step pills mirror the v4.13 card pattern: 1px neutral border + 3px
+ * soul-token top-border tint. No box-shadow per the v4.16 frame
+ * learnings (planner flips shadowed elements to slide background).
+ *
+ * Connector glyphs ship from compile/connectors.ts as 24×24 inline
+ * SVGs. The .pengui-flow-vertical row rotates the arrow / arrow_dashed
+ * glyphs 90 degrees to point down — cycle and plus are
+ * orientation-agnostic, no rotation applied.
+ */
+.pengui-flow {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-md);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.pengui-flow-horizontal { flex-direction: row; }
+.pengui-flow-vertical   { flex-direction: column; }
+
+.pengui-flow-step {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--color-text-muted);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  flex: 1 1 0;
+  position: relative;
+  min-width: 0;
+}
+
+.pengui-flow-step-icon { color: inherit; }
+.pengui-flow-step-icon > svg {
+  width: 24px;
+  height: 24px;
+}
+
+.pengui-flow-step-badge {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.pengui-flow-step-label {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  line-height: 1.25;
+  color: var(--color-text-default);
+}
+
+/* Step accent — top-border tint + icon color, mirroring the v4.13
+ * card accent pattern. */
+.pengui-flow-step-accent-accent      { border-top-color: var(--color-accent-primary);   color: var(--color-accent-primary); }
+.pengui-flow-step-accent-accent-alt  { border-top-color: var(--color-accent-secondary); color: var(--color-accent-secondary); }
+.pengui-flow-step-accent-accent-warm { border-top-color: var(--color-accent-warm);      color: var(--color-accent-warm); }
+.pengui-flow-step-accent-success     { border-top-color: var(--color-success);          color: var(--color-success); }
+.pengui-flow-step-accent-warning     { border-top-color: var(--color-warning);          color: var(--color-warning); }
+.pengui-flow-step-accent-error       { border-top-color: var(--color-error);            color: var(--color-error); }
+.pengui-flow-step-accent-info        { border-top-color: var(--color-info);             color: var(--color-info); }
+.pengui-flow-step-accent-muted       { border-top-color: var(--color-text-muted);       color: var(--color-text-muted); }
+.pengui-flow-step-accent-inverse     { border-top-color: var(--color-text-inverse);     color: var(--color-text-inverse); }
+
+/* Connector slot — fixed-size box that hosts the inline glyph. The
+ * accent color uses --color-text-muted by default so the connector
+ * reads as neutral; flows whose direction needs more emphasis can be
+ * upgraded to use accent later via per-flow accent (deferred to v4.18+). */
+.pengui-flow-connector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 48px;
+  color: var(--color-text-muted);
+}
+.pengui-flow-connector > svg {
+  width: 100%;
+  height: 100%;
+  max-width: 32px;
+  max-height: 32px;
+}
+
+/* Vertical flows: connector takes column width; rotate arrow glyphs
+ * 90° so they point down. Cycle / plus glyphs stay un-rotated. */
+.pengui-flow-vertical > .pengui-flow-connector {
+  width: auto;
+  height: 32px;
+}
+.pengui-flow-vertical > .pengui-flow-connector-glyph-arrow > svg,
+.pengui-flow-vertical > .pengui-flow-connector-glyph-arrow_dashed > svg {
+  transform: rotate(90deg);
+}
+
+/* Cycle's closing return-arrow rotates 180° to visually point back
+ * toward the start — communicates the loop without literally drawing
+ * the curved wrap (deferred to v4.18+). */
+.pengui-flow-connector-return > svg {
+  transform: rotate(180deg);
+}
 `;
 
 /** Slide-mode wrapper CSS: page reset + .slide canvas sized to the

@@ -159,7 +159,7 @@ describe('SlideNodeSchema (top-level union)', () => {
     expect(() => SlideNodeSchema.parse({ type: 'metric_grid', items: [] })).toThrow();
   });
 
-  it('SLIDE_NODE_TYPES enumerates the v4.16 catalog (decoration added)', () => {
+  it('SLIDE_NODE_TYPES enumerates the v4.17 catalog (flow added)', () => {
     expect([...SLIDE_NODE_TYPES].sort()).toEqual(
       [
         'bibliography',
@@ -168,6 +168,7 @@ describe('SlideNodeSchema (top-level union)', () => {
         'chart',
         'decoration',
         'divider',
+        'flow',
         'grid',
         'heading',
         'hero',
