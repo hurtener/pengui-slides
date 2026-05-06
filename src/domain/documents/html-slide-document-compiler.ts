@@ -1077,8 +1077,19 @@ export class HtmlSlideDocumentCompiler {
             const b64 = btoa(unescape(encodeURIComponent(svgString)));
             const src = `data:image/svg+xml;base64,${b64}`;
             const base = createBase(element, 'image', computed, rect, index) as Omit<SlideImageElement, 'src' | 'alt'>;
+            // v4.16: SVG inside a decoration node — override zIndex so
+            // background-layer decorations render behind body, foreground
+            // above, regardless of IR ordering. Walk-order zIndex is the
+            // wrong default for explicitly-layered decorations.
+            const decoAncestor = element.closest('.pengui-decoration');
+            const decoZ = decoAncestor?.classList.contains('pengui-decoration-background')
+              ? -50
+              : decoAncestor?.classList.contains('pengui-decoration-foreground')
+                ? 10000
+                : undefined;
             elements.push({
               ...base,
+              ...(decoZ !== undefined ? { zIndex: decoZ } : {}),
               kind: 'image',
               src,
               // Decorative — icons carry semantic meaning via their
@@ -1098,8 +1109,17 @@ export class HtmlSlideDocumentCompiler {
             // made chrome logos disappear from the editable PPTX. Now they
             // flow through as native <p:pic> shapes.
             const isFetchable = /^https?:\/\//i.test(src) || /^data:/i.test(src);
+            // v4.16: <img> inside a decoration node — same zIndex override
+            // pattern as the inline-SVG branch above.
+            const decoAncestor = element.closest('.pengui-decoration');
+            const decoZ = decoAncestor?.classList.contains('pengui-decoration-background')
+              ? -50
+              : decoAncestor?.classList.contains('pengui-decoration-foreground')
+                ? 10000
+                : undefined;
             elements.push({
               ...base,
+              ...(decoZ !== undefined ? { zIndex: decoZ } : {}),
               kind: 'image',
               src,
               alt: image.alt || undefined,

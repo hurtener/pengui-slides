@@ -17,7 +17,7 @@ import type {
 import type { DesignSoul, LayoutRecipe, SoulStatus } from '../types/design-soul.js';
 import type { Deck, DeckRevision, Slide } from '../types/deck.js';
 import type { Section } from '../types/section.js';
-import type { Asset, AssetScope } from '../types/asset.js';
+import type { Asset, AssetRole, AssetScope } from '../types/asset.js';
 import type { Comment, ListCommentsFilter } from '../types/comment.js';
 
 // ── Soul Store ───────────────────────────────────────────────────
@@ -69,7 +69,7 @@ export interface AssetListFilter {
   scope?: AssetScope['type'];
   soulId?: SoulId;
   deckId?: DeckId;
-  role?: 'logo' | 'content';
+  role?: AssetRole;
 }
 
 export interface IAssetStore {

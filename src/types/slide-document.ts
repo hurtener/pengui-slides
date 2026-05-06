@@ -229,8 +229,30 @@ export type SlideElement =
  *       wrong typography; (b) Playwright's text-bbox measurements feed
  *       the SlideDocument shape inventory, and font-substitution shifts
  *       those bounds — recompiling re-measures with the bundled font.
+ *  - 13: v4.16 decoration & assets — three additive changes to the
+ *       SlideDocument inventory:
+ *       (a) New top-level `decoration` IR node — emits an absolutely-
+ *           positioned `<aside class="pengui-decoration">` wrapping
+ *           either an `<img>` (asset_ref) or inline `<svg>` (preset
+ *           ornament). The walker's existing IMG/SVG branches pick
+ *           these up natively; v4.16 adds a zIndex override based on
+ *           layer (background → -50, foreground → 10000) so explicit
+ *           layering survives the editable PPTX shape ordering.
+ *       (b) `image.frame: 'browser'|'phone'|'desktop'|'laptop'` — frame
+ *           chrome wraps the asset in an HTML shell whose titlebar,
+ *           traffic-light dots, bezel, etc. emit as native shapes via
+ *           the generic background/border walker. Rev-12 cached docs
+ *           don't carry frame chrome shapes; recompile materialises
+ *           them.
+ *       (c) Bleed support — decorations with `placement.anchor:
+ *           'bleed_*'` produce shape rects with negative `x`/`y`
+ *           coordinates (PowerPoint accepts negative `<a:off>` for
+ *           partial-shape placement). The slide root opts into
+ *           `overflow: visible` via `:has(.pengui-decoration-bleed)`
+ *           so the rasterised PNG (image PPTX) doesn't clip the bleed
+ *           shape either.
  */
-export const CURRENT_COMPILER_REVISION = 12;
+export const CURRENT_COMPILER_REVISION = 13;
 
 export interface SlideDocument {
   version: '1';

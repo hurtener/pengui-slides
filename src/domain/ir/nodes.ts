@@ -69,6 +69,20 @@ export const ProseNodeSchema = z
   .strict();
 export type ProseNode = z.infer<typeof ProseNodeSchema>;
 
+/** v4.16 — frame chrome variants for the image node. Each frame wraps
+ *  the asset image in device chrome so screenshots feel "in context"
+ *  (Galici slides 5 / 8 / 9 use these for UI prototype shots). The
+ *  chrome itself is generated declaratively (CSS + minimal inline SVG
+ *  for device shapes); no extra raster assets needed. */
+export const ImageFrameSchema = z.enum([
+  'none',     // bare image, no chrome (default behaviour)
+  'browser',  // title bar + URL bar + traffic-light dots
+  'phone',    // rounded-corner device frame + status bar + home indicator
+  'desktop',  // monitor with stand
+  'laptop',   // laptop bezel
+]);
+export type ImageFrame = z.infer<typeof ImageFrameSchema>;
+
 export const ImageNodeSchema = z
   .object({
     type: z.literal('image'),
@@ -78,6 +92,8 @@ export const ImageNodeSchema = z
      *  Falls back to caption text when omitted. */
     alt: z.string().optional(),
     fit: z.enum(['contain', 'cover']).optional(),
+    /** v4.16 device frame around the image. Defaults to 'none'. */
+    frame: ImageFrameSchema.optional(),
   })
   .strict();
 export type ImageNode = z.infer<typeof ImageNodeSchema>;
@@ -384,6 +400,93 @@ export const PageBreakNodeSchema = z
   .strict();
 export type PageBreakNode = z.infer<typeof PageBreakNodeSchema>;
 
+// ── v4.16 decoration node ────────────────────────────────────────
+//
+// Purely visual element — has no data content, no text, no semantic
+// role. Drives the "ornament" / "bleed mark" / "glow ring" affordances
+// the design-team reference decks rely on heavily. Two source kinds:
+//
+//   - `asset_ref`: resolves to an uploaded image/SVG. Asset library
+//     categorises decorations as `illustration` per v4.16's role enum
+//     widening, but the IR doesn't care about the role tag.
+//
+//   - `preset`: bundled inline SVG primitive (glow_ring, radial_glow,
+//     grid_dots, corner_bracket, chevron_arrow, noise_overlay). Uses
+//     `currentColor` so the resolved `accent` token cascades through
+//     soul changes for free.
+//
+// Placement uses anchor + offset semantics rather than absolute x/y:
+// keeps the IR portable across formats (16:9 vs A4 vs square) and
+// preserves the IR-first contract (no per-pixel positioning).
+//
+// `bleed_*` anchors push the decoration past the slide canvas edge —
+// the slide root gets `overflow: visible` so the partial shape isn't
+// clipped, and the editable PPTX exporter writes negative `<a:off>`
+// coords (PowerPoint accepts these for partial shape placement).
+
+export const PresetOrnamentNameSchema = z.enum([
+  'glow_ring',       // halo around a focal point
+  'radial_glow',     // soft gradient backdrop
+  'grid_dots',       // dotted texture
+  'corner_bracket',  // L-shaped bracket frame
+  'chevron_arrow',   // directional accent
+  'noise_overlay',   // subtle grain overlay
+]);
+export type PresetOrnamentName = z.infer<typeof PresetOrnamentNameSchema>;
+
+const DecorationSourceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('asset_ref'), asset_id: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal('preset'), name: PresetOrnamentNameSchema }).strict(),
+]);
+export type DecorationSource = z.infer<typeof DecorationSourceSchema>;
+
+export const DecorationAnchorSchema = z.enum([
+  // in-canvas anchors (decoration sits inside the safe area)
+  'top_left', 'top_center', 'top_right',
+  'middle_left', 'middle_center', 'middle_right',
+  'bottom_left', 'bottom_center', 'bottom_right',
+  // bleed anchors (decoration extends past the canvas edge)
+  'bleed_left', 'bleed_right', 'bleed_top', 'bleed_bottom',
+  'bleed_top_left', 'bleed_top_right',
+  'bleed_bottom_left', 'bleed_bottom_right',
+]);
+export type DecorationAnchor = z.infer<typeof DecorationAnchorSchema>;
+
+const DecorationPlacementSchema = z
+  .object({
+    anchor: DecorationAnchorSchema,
+    /** Pixel offset from the anchor. Positive values move toward the
+     *  slide centre. Defaults to {x:0, y:0}. */
+    offset: z.object({ x: z.number(), y: z.number() }).optional(),
+    /** Override decoration size. Defaults to natural size for assets,
+     *  preset-defined size for ornaments (e.g. glow_ring → 480×480). */
+    size: z
+      .object({
+        width: z.number().positive(),
+        height: z.number().positive(),
+      })
+      .optional(),
+    rotation: z.number().min(-360).max(360).optional(),
+    opacity: z.number().min(0).max(1).optional(),
+  })
+  .strict();
+export type DecorationPlacement = z.infer<typeof DecorationPlacementSchema>;
+
+export const DecorationNodeSchema = z
+  .object({
+    type: z.literal('decoration'),
+    source: DecorationSourceSchema,
+    placement: DecorationPlacementSchema,
+    /** background = renders behind body content (full-bleed marks);
+     *  foreground = renders on top of body (glow rings around focal). */
+    layer: z.enum(['background', 'foreground']),
+    /** Soul accent token for tinted preset ornaments. Ignored for
+     *  asset_ref. Defaults to `accent` (primary). */
+    accent: TextColorSchema.optional(),
+  })
+  .strict();
+export type DecorationNode = z.infer<typeof DecorationNodeSchema>;
+
 // ── Top-level union ──────────────────────────────────────────────
 
 export const SlideNodeSchema = z.discriminatedUnion('type', [
@@ -404,6 +507,7 @@ export const SlideNodeSchema = z.discriminatedUnion('type', [
   SectionDividerNodeSchema,
   BibliographyNodeSchema,
   PageBreakNodeSchema,
+  DecorationNodeSchema,
 ]);
 export type SlideNode = z.infer<typeof SlideNodeSchema>;
 
@@ -427,6 +531,7 @@ export const SLIDE_NODE_TYPES = [
   'section_divider',
   'bibliography',
   'page_break',
+  'decoration',
 ] as const;
 export type SlideNodeType = (typeof SLIDE_NODE_TYPES)[number];
 

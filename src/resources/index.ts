@@ -718,7 +718,7 @@ Step 1 — Upload the image
   Input: name, filename, mime_type,
          scope_type: "deck" | "soul" | "global",
          soul_id or deck_id (per scope),
-         role: "logo" | "content",
+         role: "logo" | "illustration" | "screenshot" | "photo" | "icon",
          data_base64
   Result: ref = "asset://UUID"
 

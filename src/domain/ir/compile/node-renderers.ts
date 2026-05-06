@@ -23,6 +23,7 @@ import type {
   CalloutNode,
   CardNode,
   ChartNode,
+  DecorationNode,
   DividerNode,
   GridNode,
   HeadingNode,
@@ -45,6 +46,7 @@ import { irPathToString } from '../path-encoding.js';
 import { ErrorCode, PenguiError } from '../../../types/errors.js';
 import { escapeAttr } from './escape.js';
 import { getIconSvg } from './icons.js';
+import { getOrnamentDef } from './ornaments.js';
 import { renderRichText } from './rich-text-renderer.js';
 
 /** Build the `data-ir-path="…"` attribute fragment for a given path. */
@@ -115,6 +117,8 @@ export function renderNode(node: SlideNode, path: IRPath = []): string {
       return renderBibliography(node, attr);
     case 'page_break':
       return renderPageBreak(node, attr);
+    case 'decoration':
+      return renderDecoration(node, attr);
   }
 }
 
@@ -156,6 +160,7 @@ function renderProse(node: ProseNode, dataAttr: string): string {
 
 function renderImage(node: ImageNode, dataAttr: string): string {
   const fit = node.fit ?? 'contain';
+  const frame = node.frame ?? 'none';
   // Author-supplied alt wins; caption is the fallback. Empty string is a
   // valid intentional value (decorative image — screen readers skip it).
   const altText =
@@ -168,12 +173,75 @@ function renderImage(node: ImageNode, dataAttr: string): string {
     node.caption && node.caption.length > 0
       ? `<figcaption class="pengui-image-caption"${fieldAttr('caption')}>${renderRichText(node.caption)}</figcaption>`
       : '';
+  const imgHtml = `<img src="asset://${escapeAttr(node.asset_id)}" alt="${escapeAttr(altText)}" />`;
+  // v4.16: frame chrome wraps the image in a device-styled shell. The
+  // chrome itself is CSS-driven (titlebar bar, traffic-light dots, phone
+  // bezel, etc. — see `.pengui-frame-*` rules in layout-css.ts). The
+  // SlideDocument compiler also reads the `pengui-frame-*` class to
+  // emit the chrome as native PPTX shapes for editable parity.
+  const framedImg =
+    frame === 'none'
+      ? imgHtml
+      : renderFramedImage(frame, imgHtml);
+  const frameClass = frame === 'none' ? '' : ` pengui-image-framed pengui-image-frame-${frame}`;
   return (
-    `<figure class="pengui-image pengui-image-${fit}"${dataAttr}>` +
-    `<img src="asset://${escapeAttr(node.asset_id)}" alt="${escapeAttr(altText)}" />` +
+    `<figure class="pengui-image pengui-image-${fit}${frameClass}"${dataAttr}>` +
+    framedImg +
     captionHtml +
     `</figure>`
   );
+}
+
+/** v4.16 — wrap an `<img>` in device-frame chrome. The chrome consists
+ *  of a frame container + per-frame chrome elements (titlebar, traffic
+ *  lights, status bar, etc.) that CSS positions absolutely around the
+ *  image. The image itself sits in `.pengui-frame-content`. */
+function renderFramedImage(frame: ImageNode['frame'], imgHtml: string): string {
+  const frameKind = frame ?? 'none';
+  if (frameKind === 'browser') {
+    return (
+      `<div class="pengui-frame pengui-frame-browser" aria-hidden="true">` +
+      `<div class="pengui-frame-titlebar">` +
+      `<span class="pengui-frame-dot pengui-frame-dot-close"></span>` +
+      `<span class="pengui-frame-dot pengui-frame-dot-min"></span>` +
+      `<span class="pengui-frame-dot pengui-frame-dot-max"></span>` +
+      `<div class="pengui-frame-urlbar"></div>` +
+      `</div>` +
+      `<div class="pengui-frame-content">${imgHtml}</div>` +
+      `</div>`
+    );
+  }
+  if (frameKind === 'phone') {
+    return (
+      `<div class="pengui-frame pengui-frame-phone" aria-hidden="true">` +
+      `<div class="pengui-frame-statusbar"></div>` +
+      `<div class="pengui-frame-content">${imgHtml}</div>` +
+      `<div class="pengui-frame-home-indicator"></div>` +
+      `</div>`
+    );
+  }
+  if (frameKind === 'desktop') {
+    return (
+      `<div class="pengui-frame pengui-frame-desktop" aria-hidden="true">` +
+      `<div class="pengui-frame-bezel">` +
+      `<div class="pengui-frame-content">${imgHtml}</div>` +
+      `</div>` +
+      `<div class="pengui-frame-stand"></div>` +
+      `<div class="pengui-frame-base"></div>` +
+      `</div>`
+    );
+  }
+  if (frameKind === 'laptop') {
+    return (
+      `<div class="pengui-frame pengui-frame-laptop" aria-hidden="true">` +
+      `<div class="pengui-frame-bezel">` +
+      `<div class="pengui-frame-content">${imgHtml}</div>` +
+      `</div>` +
+      `<div class="pengui-frame-keyboard"></div>` +
+      `</div>`
+    );
+  }
+  return imgHtml;
 }
 
 function renderCallout(node: CalloutNode, dataAttr: string): string {
@@ -458,6 +526,67 @@ function renderBibliography(node: BibliographyNode, dataAttr: string): string {
 
 function renderPageBreak(_node: PageBreakNode, dataAttr: string): string {
   return `<div class="pengui-page-break" aria-hidden="true"${dataAttr}></div>`;
+}
+
+/** v4.16 — render a decoration node (asset_ref or preset). Decoration
+ *  is purely visual: emits an `<aside>` taken out of the body's flex
+ *  flow via absolute positioning. Anchor + offset + size compose into
+ *  inline `style` because they are geometry, not theme — every other
+ *  styling concern goes through soul tokens. */
+function renderDecoration(node: DecorationNode, dataAttr: string): string {
+  const layer = node.layer;
+  const anchor = node.placement.anchor;
+  const isBleed = anchor.startsWith('bleed_');
+  const accent = node.accent ?? 'accent';
+
+  const offsetX = node.placement.offset?.x ?? 0;
+  const offsetY = node.placement.offset?.y ?? 0;
+
+  // Default size: asset uses natural dims (let CSS size:auto pick),
+  // preset uses its registered default. Authors can override either.
+  let widthPx: number | undefined = node.placement.size?.width;
+  let heightPx: number | undefined = node.placement.size?.height;
+  let innerHtml: string;
+  if (node.source.kind === 'preset') {
+    const def = getOrnamentDef(node.source.name);
+    if (widthPx === undefined) widthPx = def.defaultWidth;
+    if (heightPx === undefined) heightPx = def.defaultHeight;
+    innerHtml = def.svg;
+  } else {
+    innerHtml = `<img src="asset://${escapeAttr(node.source.asset_id)}" alt="" />`;
+  }
+
+  // Anchor-driven positioning. The slide-root CSS is `position: relative`
+  // (already true for the slide frame), so absolute children resolve
+  // against the canvas. Bleed anchors use negative inset values via the
+  // `pengui-decoration-bleed` modifier in CSS — the inline style only
+  // carries the offset numbers; the anchor class picks the inset side(s).
+  const styleParts: string[] = [];
+  if (widthPx !== undefined) styleParts.push(`width:${widthPx}px`);
+  if (heightPx !== undefined) styleParts.push(`height:${heightPx}px`);
+  if (offsetX !== 0) styleParts.push(`--pengui-deco-dx:${offsetX}px`);
+  if (offsetY !== 0) styleParts.push(`--pengui-deco-dy:${offsetY}px`);
+  if (node.placement.rotation !== undefined) {
+    styleParts.push(`transform:rotate(${node.placement.rotation}deg)`);
+  }
+  if (node.placement.opacity !== undefined) {
+    styleParts.push(`opacity:${node.placement.opacity}`);
+  }
+  const styleAttr = styleParts.length > 0 ? ` style="${styleParts.join(';')}"` : '';
+
+  const sourceClass = `pengui-decoration-source-${node.source.kind === 'preset' ? 'preset' : 'asset'}`;
+  const bleedClass = isBleed ? ' pengui-decoration-bleed' : '';
+  const accentClass = node.source.kind === 'preset' ? ` pengui-text-${accent}` : '';
+
+  return (
+    `<aside class="pengui-decoration pengui-decoration-${layer}` +
+    ` pengui-decoration-anchor-${anchor.replace(/_/g, '-')}` +
+    `${bleedClass} ${sourceClass}${accentClass}"` +
+    `${styleAttr}` +
+    ` aria-hidden="true"${dataAttr}>` +
+    innerHtml +
+    `</aside>`
+  );
 }
 
 /**

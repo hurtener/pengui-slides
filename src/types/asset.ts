@@ -16,13 +16,32 @@ export type AssetScope =
   | { type: 'deck'; deckId: DeckId }
   | { type: 'global' };
 
+/**
+ * Asset categorisation. v4.16 widened from `'logo' | 'content'` to add
+ * the design-team-quality categories the App-side asset picker uses to
+ * filter binders. Backwards compatibility: legacy `'content'` values are
+ * read as-is and surfaced under the `'photo'` filter in the App.
+ *
+ * Roles are an organisational tag — the renderer / compiler don't read
+ * them. The decoration node accepts any asset by `asset_id`; uploading
+ * something tagged `'photo'` instead of `'illustration'` doesn't change
+ * how it renders.
+ */
+export type AssetRole =
+  | 'logo'           // brand mark / corporate identity
+  | 'illustration'   // hand-drawn / vector / decorative imagery
+  | 'screenshot'     // app UI capture, often paired with image.frame
+  | 'photo'          // photographic content (people, places, products)
+  | 'icon'           // small inline mark (NOT the lucide curated set)
+  | 'content';       // legacy v4.15-and-earlier — surfaces as 'photo' in the App
+
 export interface Asset {
   id: AssetId;
   name: string;
   filename: string;
   mimeType: AssetMimeType;
   scope: AssetScope;
-  role: 'logo' | 'content';
+  role: AssetRole;
   sizeBytes: number;
   width?: number;
   height?: number;

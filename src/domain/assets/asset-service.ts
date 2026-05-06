@@ -10,7 +10,7 @@ import type { Logger } from '../../infrastructure/logger.js';
 import type { Clock } from '../../infrastructure/clock.js';
 import { generateAssetId } from '../../infrastructure/id-generator.js';
 import type { AssetId } from '../../types/common.js';
-import type { Asset, AssetMimeType, AssetScope } from '../../types/asset.js';
+import type { Asset, AssetMimeType, AssetRole, AssetScope } from '../../types/asset.js';
 import { ASSET_PROTOCOL } from '../../types/asset.js';
 import type { IAssetStore, AssetListFilter } from '../../storage/interfaces.js';
 import { ErrorCode, PenguiError } from '../../types/errors.js';
@@ -26,7 +26,7 @@ export interface UploadAssetInput {
   filename: string;
   mimeType: AssetMimeType;
   scope: AssetScope;
-  role: 'logo' | 'content';
+  role: AssetRole;
   dataBase64: string;
 }
 

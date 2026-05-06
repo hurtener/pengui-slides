@@ -59,7 +59,7 @@ export function registerUploadAssetFromAppTool(server: McpServer, container: Ser
         scope: scopeSchema.describe(
           'Scoping: { type: "soul", soul_ref } | { type: "deck", deck_ref } | { type: "global" }',
         ),
-        role: z.enum(['logo', 'content']).describe('"logo" for branding marks, "content" for imagery.'),
+        role: z.enum(['logo', 'illustration', 'screenshot', 'photo', 'icon', 'content']).describe('"logo" branding · "illustration" hand-drawn/vector · "screenshot" UI captures (pair with image.frame) · "photo" photographic · "icon" inline mark. "content" is the v4.15 alias, surfaces as "photo".'),
         label: z.string().optional().describe('Human-readable label; defaults to the mime type.'),
       }),
       _meta: {

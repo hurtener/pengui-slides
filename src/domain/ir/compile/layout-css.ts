@@ -554,6 +554,200 @@ export const NODE_CSS = `
   color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* ── v4.16 decoration node ──────────────────────────────────────
+ *
+ * Decorations sit absolutely-positioned inside the slide frame. The
+ * anchor class picks which inset side(s) the offset CSS variables
+ * (--pengui-deco-dx / --pengui-deco-dy) push from. Bleed anchors flip
+ * those insets to negative so the shape extends past the slide edge —
+ * the slide root opts into overflow:visible only when at least one
+ * bleed decoration is present (handled at the .slide level via the
+ * pengui-has-bleed class added by the CSS itself: any
+ * .pengui-decoration-bleed descendant flips overflow on the parent).
+ * For broad browser/Playwright support we use the :has() selector
+ * (Chromium 105+, our Playwright version is way newer).
+ *
+ * Layer ordering:
+ *   slide background        z-index 0  (the .slide background-color)
+ *   decoration-background   z-index 1
+ *   slide body content      z-index 10 (default — children of .slide)
+ *   decoration-foreground   z-index 100
+ *
+ * The default offset CSS vars resolve to 0 so the SCSS-style
+ * fallback works when the renderer omits them.
+ */
+.slide:has(.pengui-decoration-bleed) {
+  overflow: visible;
+}
+.pengui-decoration {
+  position: absolute;
+  --pengui-deco-dx: 0px;
+  --pengui-deco-dy: 0px;
+  pointer-events: none;
+  display: block;
+}
+.pengui-decoration > svg,
+.pengui-decoration > img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.pengui-decoration-background { z-index: 1; }
+.pengui-decoration-foreground { z-index: 100; }
+
+/* Body content carries z-index 10 to keep decoration layers stable
+ * regardless of source order. Children of .slide that aren't
+ * decorations get this implicitly via direct-child selector. */
+.slide > :not(.pengui-decoration):not(.pengui-chrome-header):not(.pengui-chrome-footer) {
+  position: relative;
+  z-index: 10;
+}
+
+/* ── decoration anchors ─────────────────────────────────────────
+ *
+ * Anchor names map to an inset corner. The dx/dy offset variables
+ * push the decoration toward the slide centre. Bleed anchors invert
+ * those offsets to push past the slide edge (handled by the
+ * pengui-decoration-bleed modifier below).
+ */
+.pengui-decoration-anchor-top-left      { top: var(--pengui-deco-dy); left: var(--pengui-deco-dx); }
+.pengui-decoration-anchor-top-center    { top: var(--pengui-deco-dy); left: 50%; transform: translateX(-50%); }
+.pengui-decoration-anchor-top-right     { top: var(--pengui-deco-dy); right: var(--pengui-deco-dx); }
+.pengui-decoration-anchor-middle-left   { top: 50%; left: var(--pengui-deco-dx); transform: translateY(-50%); }
+.pengui-decoration-anchor-middle-center { top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.pengui-decoration-anchor-middle-right  { top: 50%; right: var(--pengui-deco-dx); transform: translateY(-50%); }
+.pengui-decoration-anchor-bottom-left   { bottom: var(--pengui-deco-dy); left: var(--pengui-deco-dx); }
+.pengui-decoration-anchor-bottom-center { bottom: var(--pengui-deco-dy); left: 50%; transform: translateX(-50%); }
+.pengui-decoration-anchor-bottom-right  { bottom: var(--pengui-deco-dy); right: var(--pengui-deco-dx); }
+
+/* Bleed anchors push the decoration past the slide edge. The CSS uses
+ * negative insets so half/most of the decoration sits outside the
+ * canvas (Galici slide 3 glow rings, PM Top Concerns "C" mark). The
+ * dx/dy offsets ADD to the bleed: a positive dx pulls the decoration
+ * back toward the slide centre. */
+.pengui-decoration-anchor-bleed-left         { top: 50%; left: 0; transform: translate(calc(-50% + var(--pengui-deco-dx)), -50%); }
+.pengui-decoration-anchor-bleed-right        { top: 50%; right: 0; transform: translate(calc(50% - var(--pengui-deco-dx)), -50%); }
+.pengui-decoration-anchor-bleed-top          { top: 0; left: 50%; transform: translate(-50%, calc(-50% + var(--pengui-deco-dy))); }
+.pengui-decoration-anchor-bleed-bottom       { bottom: 0; left: 50%; transform: translate(-50%, calc(50% - var(--pengui-deco-dy))); }
+.pengui-decoration-anchor-bleed-top-left     { top: 0; left: 0; transform: translate(calc(-50% + var(--pengui-deco-dx)), calc(-50% + var(--pengui-deco-dy))); }
+.pengui-decoration-anchor-bleed-top-right    { top: 0; right: 0; transform: translate(calc(50% - var(--pengui-deco-dx)), calc(-50% + var(--pengui-deco-dy))); }
+.pengui-decoration-anchor-bleed-bottom-left  { bottom: 0; left: 0; transform: translate(calc(-50% + var(--pengui-deco-dx)), calc(50% - var(--pengui-deco-dy))); }
+.pengui-decoration-anchor-bleed-bottom-right { bottom: 0; right: 0; transform: translate(calc(50% - var(--pengui-deco-dx)), calc(50% - var(--pengui-deco-dy))); }
+
+/* ── v4.16 image frame chrome ───────────────────────────────────
+ *
+ * Frames wrap the <img> in device chrome. The chrome elements (titlebar,
+ * traffic lights, status bar, etc.) are styled via CSS — no extra raster
+ * assets. The image sits in .pengui-frame-content with object-fit
+ * cover so the frame interior fills cleanly.
+ *
+ * Each frame variant declares its own padding + bezel + decorations
+ * via its scoped class. The figure itself stays in the body flow; only
+ * the inner chrome is positioned. */
+.pengui-image-framed { background: transparent; padding: 0; }
+.pengui-image-framed > .pengui-frame { width: 100%; height: 100%; display: block; position: relative; }
+.pengui-frame-content { width: 100%; height: 100%; overflow: hidden; }
+.pengui-frame-content > img { width: 100%; height: 100%; display: block; object-fit: cover; }
+
+/* Browser frame: titlebar with traffic-light dots + URL bar pill. */
+.pengui-frame-browser {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-surface);
+  /* No box-shadow: the html→SlideDocument compiler flips any element with
+   * a shadow to the slide-background fallback (it can't reproduce CSS
+   * box-shadow as a native PPTX shape). The 1px border + neutral surface
+   * fill carries enough definition without a shadow. */
+}
+.pengui-frame-browser > .pengui-frame-titlebar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  background: var(--color-surface-alt);
+  border-bottom: 1px solid var(--color-border);
+}
+.pengui-frame-browser .pengui-frame-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  display: inline-block;
+}
+.pengui-frame-browser .pengui-frame-dot-close { background: var(--color-error); }
+.pengui-frame-browser .pengui-frame-dot-min   { background: var(--color-warning); }
+.pengui-frame-browser .pengui-frame-dot-max   { background: var(--color-success); }
+.pengui-frame-browser .pengui-frame-urlbar {
+  flex: 1 1 auto;
+  height: 18px;
+  background: var(--color-canvas);
+  border-radius: 9999px;
+  margin-left: var(--space-md);
+  border: 1px solid var(--color-border);
+}
+
+/* Phone frame: rounded device bezel + status bar + home indicator. */
+.pengui-frame-phone {
+  border: 8px solid var(--color-text-primary);
+  border-radius: 32px;
+  overflow: hidden;
+  background: var(--color-text-primary);
+  padding: 0;
+  /* No box-shadow per editable-PPTX shadow constraint. */
+}
+.pengui-frame-phone > .pengui-frame-statusbar {
+  height: 18px;
+  background: var(--color-text-primary);
+}
+.pengui-frame-phone > .pengui-frame-content { background: var(--color-canvas); }
+.pengui-frame-phone > .pengui-frame-home-indicator {
+  height: 4px;
+  width: 32%;
+  background: var(--color-canvas);
+  border-radius: 9999px;
+  margin: var(--space-sm) auto;
+  opacity: 0.85;
+}
+
+/* Desktop frame: monitor bezel + stand. */
+.pengui-frame-desktop > .pengui-frame-bezel {
+  border: 6px solid var(--color-text-primary);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-text-primary);
+}
+.pengui-frame-desktop > .pengui-frame-stand {
+  width: 24%;
+  height: 14px;
+  background: var(--color-text-secondary);
+  margin: 0 auto;
+}
+.pengui-frame-desktop > .pengui-frame-base {
+  width: 40%;
+  height: 4px;
+  background: var(--color-text-primary);
+  border-radius: 9999px;
+  margin: 0 auto;
+}
+
+/* Laptop frame: lid + thin bottom keyboard tray. */
+.pengui-frame-laptop > .pengui-frame-bezel {
+  border: 6px solid var(--color-text-primary);
+  border-top-left-radius: var(--radius-md);
+  border-top-right-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-text-primary);
+}
+.pengui-frame-laptop > .pengui-frame-keyboard {
+  height: 6px;
+  background: var(--color-text-secondary);
+  margin: 0 auto;
+  width: 110%;
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+  margin-left: -5%;
+}
 `;
 
 /** Slide-mode wrapper CSS: page reset + .slide canvas sized to the

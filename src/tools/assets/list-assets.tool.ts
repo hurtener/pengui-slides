@@ -25,7 +25,7 @@ export function registerListAssetsTool(server: McpServer, container: ServiceCont
         scope_type: z.enum(['soul', 'deck', 'global']).nullish().describe('Filter by scope type. When set, only assets of this scope are returned.'),
         soul_id: z.string().nullish().describe('Filter soul-scoped assets by this soul ID. Only relevant when scope_type is "soul" or omitted.'),
         deck_id: z.string().nullish().describe('Filter deck-scoped assets by this deck ID. Only relevant when scope_type is "deck" or omitted.'),
-        role: z.enum(['logo', 'content']).nullish().describe('Filter by role.'),
+        role: z.enum(['logo', 'illustration', 'screenshot', 'photo', 'icon', 'content']).nullish().describe('Filter by role.'),
       }),
     },
     async ({ scope_type, soul_id, deck_id, role }) => {

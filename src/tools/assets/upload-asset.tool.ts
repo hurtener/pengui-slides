@@ -30,7 +30,7 @@ export function registerUploadAssetTool(server: McpServer, container: ServiceCon
         ),
         soul_id: z.string().nullish().describe('Required when scope_type is "soul".'),
         deck_id: z.string().nullish().describe('Required when scope_type is "deck".'),
-        role: z.enum(['logo', 'content']).describe('"logo" for branding marks, "content" for slide imagery.'),
+        role: z.enum(['logo', 'illustration', 'screenshot', 'photo', 'icon', 'content']).describe('"logo" branding · "illustration" hand-drawn/vector · "screenshot" UI captures · "photo" photographic · "icon" inline. "content" is the v4.15 alias.'),
         data_base64: z.string().min(1).describe('Base64-encoded image data.'),
       }),
     },
