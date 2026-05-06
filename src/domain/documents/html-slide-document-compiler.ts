@@ -1378,15 +1378,21 @@ export class HtmlSlideDocumentCompiler {
         // visually overlapping) a snap candidate would be baked into the
         // PNG. To make snapshots strictly the chrome / visual layer with
         // text supplied separately by native overlays, hide ALL text on
-        // the page for the duration of the snapshot pass. Backgrounds /
-        // borders / accent strips / SVG decorations remain visible.
-        // `color: transparent` preserves layout dimensions exactly so
-        // chrome geometry stays unchanged.
+        // the page for the duration of the snapshot pass.
+        //
+        // Critical: use `-webkit-text-fill-color: transparent` (NOT
+        // `color: transparent`) so SVG `currentColor` references stay
+        // intact. Lucide card icons + decoration ornaments (glow_ring,
+        // corner_bracket, etc.) all paint with stroke="currentColor",
+        // and `color: transparent` cascades to those — turning every
+        // icon and decoration ring invisible in the snapshot.
+        // `-webkit-text-fill-color` only affects text glyph rendering;
+        // SVG fill/stroke use the `fill`/`stroke` properties and aren't
+        // touched. `text-shadow: none` suppresses glow effects on text.
         await page.addStyleTag({
           content:
-            '* { color: transparent !important; '
+            '* { -webkit-text-fill-color: transparent !important; '
             + 'text-shadow: none !important; '
-            + '-webkit-text-fill-color: transparent !important; '
             + 'caret-color: transparent !important; }',
         });
       }
