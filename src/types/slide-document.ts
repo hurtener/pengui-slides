@@ -262,8 +262,24 @@ export type SlideElement =
  *       Cached docs at rev 13 were compiled before the flow node
  *       existed; recompile materialises every step pill + icon +
  *       badge + connector glyph.
+ *  - 15: v4.18.1 per-node visual snapshots — composite-visual nodes
+ *       (.pengui-card, .pengui-decoration, .pengui-flow-step,
+ *       .pengui-flow-connector, .pengui-frame) now emit a single
+ *       PNG screenshot of their rendered bbox PLUS native text shapes
+ *       for any text-leaf descendants positioned on top. Replaces the
+ *       v4.13–v4.17 approach of trying to reproduce every sub-shape
+ *       (border-radius, accent stripe, icon, gradient, connector
+ *       glyph) natively, which was losing fidelity on radial
+ *       gradients, glow effects, lucide icon details, and connector
+ *       arrows. Layering: snapshot at the candidate's walk-order
+ *       zIndex (decoration overrides to -50 / 10000 by layer); text
+ *       leaves walk normally and emit at higher zIndex via DOM order,
+ *       so heading/body/eyebrow paint above the snapshot. Result: each
+ *       card / decoration / flow step is one repositionable image with
+ *       editable text overlays — best of both worlds. Rev-14 docs are
+ *       missing the snapshots.
  */
-export const CURRENT_COMPILER_REVISION = 14;
+export const CURRENT_COMPILER_REVISION = 15;
 
 export interface SlideDocument {
   version: '1';

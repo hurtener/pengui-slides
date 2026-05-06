@@ -287,14 +287,18 @@ async function main(): Promise<void> {
   if (!bgDeco) throw new Error('glow slide: no background decoration with zIndex <= -50');
   console.log(`[ok] glow slide: bg zIndex=${bgDeco.zIndex}, fg zIndex=${fgDeco.zIndex}`);
 
-  // Frame slide: must have at least 4 native shape elements in the frame
-  // chrome region (titlebar, 3 traffic-light dots, urlbar — many shapes)
+  // v4.18.1 — frame chrome now ships as a single PNG snapshot per
+  // pengui-frame container (titlebar + traffic-light dots + urlbar all
+  // baked into one image), not as 4+ individual native shapes. Verify
+  // there's at least one snapshot image element instead.
   const frameDoc = editableSlides[2].document!;
-  const frameShapes = frameDoc.elements.filter((el) => el.kind === 'shape' && (el.exportDisposition ?? 'native') === 'native');
-  if (frameShapes.length < 4) {
-    throw new Error(`frame slide: expected ≥4 native chrome shapes, got ${frameShapes.length}`);
+  const frameImages = frameDoc.elements.filter((el) =>
+    el.kind === 'image' && el.src.startsWith('data:image/png'),
+  );
+  if (frameImages.length < 1) {
+    throw new Error(`frame slide: expected ≥1 PNG snapshot for frame chrome, got ${frameImages.length}`);
   }
-  console.log(`[ok] frame slide: ${frameShapes.length} native chrome shapes`);
+  console.log(`[ok] frame slide: ${frameImages.length} PNG snapshot(s) (frame chrome composited per-node)`);
 
   // ── C. Export all three formats ──────────────────────────────
   console.log('\n[step] export PDF + image PPTX + editable PPTX');
@@ -355,8 +359,10 @@ async function main(): Promise<void> {
   if (frameXmlPics < 1) {
     throw new Error(`frame slide expected ≥1 <p:pic> (the screenshot), got ${frameXmlPics}`);
   }
-  if (frameXmlShapes < 4) {
-    throw new Error(`frame slide expected ≥4 <p:sp> chrome shapes, got ${frameXmlShapes}`);
+  // v4.18.1 — frame chrome is now baked into the snapshot picture, so
+  // we only require the picture itself, not 4 chrome shapes. Loosen.
+  if (frameXmlShapes < 0) {
+    throw new Error(`frame slide expected ≥0 <p:sp>, got ${frameXmlShapes}`);
   }
   console.log(`[ok] frame slide: ${frameXmlPics} <p:pic> + ${frameXmlShapes} <p:sp> (screenshot + browser chrome native)`);
 

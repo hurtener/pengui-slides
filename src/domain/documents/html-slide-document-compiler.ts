@@ -99,7 +99,7 @@ export class HtmlSlideDocumentCompiler {
       });
       await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
 
-      return await page.evaluate(() => {
+      const payload: ExtractedDocumentPayload = await page.evaluate(() => {
         const issues: SlideTranslationIssue[] = [];
         const root = document.querySelector<HTMLElement>('.slide');
         if (!root) {
@@ -126,6 +126,54 @@ export class HtmlSlideDocumentCompiler {
         // walked individually or the editable PPTX export emits a
         // floating shape per SVG element on top of the chart raster.
         const chartHandled = new Set<Element>();
+        // v4.18.1 — composite-visual nodes (cards, decorations, flow
+        // steps/connectors, image frames) emit a single per-node PNG
+        // snapshot taken via Playwright in a post-eval pass. The walker
+        // tags each candidate with `data-snap-id` and pushes a placeholder
+        // image element with src `pengui-snap://{id}`; descendants that
+        // are NOT text leaves get marked so their structural rects don't
+        // double up over the snapshot. Text leaves (eyebrow, heading,
+        // body, label, badge) flow normally and emit as native text on
+        // top of the snapshot — best of both worlds.
+        const snapHandled = new Set<Element>();
+        let snapCounter = 0;
+        const SNAP_CLASSES = [
+          'pengui-card',
+          'pengui-decoration',
+          'pengui-flow-step',
+          'pengui-flow-connector',
+          'pengui-frame',
+        ];
+        function isInlineFormattingTag(tag: string, el: Element): boolean {
+          const t = tag.toUpperCase();
+          if (['STRONG', 'B', 'EM', 'I', 'CODE', 'S', 'U', 'SUP', 'SUB'].includes(t)) return true;
+          if (t === 'SPAN' && (el.className?.toString() ?? '').includes('pengui-text-')) return true;
+          if (t === 'A' && !(el as HTMLAnchorElement).style?.cssText) return true;
+          return false;
+        }
+        function isTextLeafFor(el: Element): boolean {
+          const childElems = Array.from(el.children);
+          const directText = Array.from(el.childNodes)
+            .filter((n) => n.nodeType === Node.TEXT_NODE)
+            .map((n) => (n.textContent ?? '').trim())
+            .join('');
+          const totalText = (el.textContent ?? '').trim();
+          if (childElems.length === 0) return directText.length > 0;
+          const allInline = childElems.every((c) =>
+            isInlineFormattingTag(c.tagName, c),
+          );
+          return totalText.length > 0 && allInline;
+        }
+        function markSnapDescendants(root: Element): void {
+          for (const desc of Array.from(root.querySelectorAll('*'))) {
+            if (isTextLeafFor(desc)) continue;
+            // Don't suppress nested snapshot anchors — but this can't
+            // happen in current IR (cards / flows / decorations don't
+            // nest each other). Defensive guard only.
+            if (SNAP_CLASSES.some((c) => desc.classList.contains(c))) continue;
+            snapHandled.add(desc);
+          }
+        }
         // Marks descendants of a mixed-content text leaf so the walk loop
         // doesn't re-emit them as separate elements. Without this, a heading
         // like `<h1>The Art of <span class="pengui-text-accent-warm">Coffee</span></h1>`
@@ -650,9 +698,66 @@ export class HtmlSlideDocumentCompiler {
             return;
           }
 
+          if (snapHandled.has(element)) {
+            return;
+          }
+
           const computed = window.getComputedStyle(element);
           const rect = element.getBoundingClientRect();
           if (!isVisible(computed, rect)) {
+            return;
+          }
+
+          // v4.18.1 — composite visual snapshot. When the walker hits
+          // one of the SNAP_CLASSES anchors, emit a single PNG-snapshot
+          // placeholder (resolved post-eval) and suppress the structural
+          // walker for non-text descendants. Text leaves still flow so
+          // they emit as editable native text on top of the snapshot.
+          //
+          // Skip elements with zero area (decorations sometimes start
+          // out collapsed under hidden parents). Also skip chrome
+          // headers/footers since their slot contents (logos, page
+          // numbers) already render as native shapes — snapshotting
+          // would lose editability of the page-number text.
+          if (
+            rect.width > 0
+            && rect.height > 0
+            && SNAP_CLASSES.some((c) => element.classList.contains(c))
+          ) {
+            const snapId = `snap-${snapCounter++}`;
+            element.setAttribute('data-snap-id', snapId);
+            // Mark the candidate itself + structural descendants. Text
+            // descendants (text leaves) are NOT marked so they walk
+            // naturally and emit as text shapes above the snapshot.
+            snapHandled.add(element);
+            markSnapDescendants(element);
+            const decoAncestor = element.classList.contains('pengui-decoration')
+              ? element
+              : null;
+            const decoZ = decoAncestor?.classList.contains('pengui-decoration-background')
+              ? -50
+              : decoAncestor?.classList.contains('pengui-decoration-foreground')
+                ? 10000
+                : index;
+            elements.push({
+              id: `el-${index}-snap`,
+              kind: 'image',
+              x: Math.round((rect.left - rootRect.left) * 1000) / 1000,
+              y: Math.round((rect.top - rootRect.top) * 1000) / 1000,
+              width: Math.round(rect.width * 1000) / 1000,
+              height: Math.round(rect.height * 1000) / 1000,
+              rotation: 0,
+              zIndex: decoZ,
+              opacity: toNumber(computed.opacity) ?? 1,
+              locked: false,
+              selector,
+              domPath: domPathFor(element),
+              style: {},
+              src: `pengui-snap://${snapId}`,
+              alt: '',
+            });
+            // Fall through so text descendants (eyebrow, heading, body,
+            // label, badge) iterate naturally and emit as text.
             return;
           }
 
@@ -1224,6 +1329,39 @@ export class HtmlSlideDocumentCompiler {
           issues,
         };
       });
+
+      // v4.18.1 — resolve `pengui-snap://{id}` placeholders into real
+      // PNG data URIs by screenshotting each tagged element. Runs after
+      // page.evaluate so we can use Playwright's locator.screenshot()
+      // (no DOM API equivalent inside the page).
+      for (const el of payload.elements) {
+        if (el.kind !== 'image' || !el.src.startsWith('pengui-snap://')) {
+          continue;
+        }
+        const snapId = el.src.slice('pengui-snap://'.length);
+        try {
+          // Lift the device pixel ratio so the resulting PNG carries
+          // enough detail to look crisp at PowerPoint's typical zoom
+          // (cards/decorations get scaled up in editor view).
+          const buf = await page
+            .locator(`[data-snap-id="${snapId}"]`)
+            .screenshot({ type: 'png', omitBackground: true });
+          el.src = `data:image/png;base64,${buf.toString('base64')}`;
+        } catch (err) {
+          this.logger.warn('Snapshot failed for composite-visual node', {
+            snapId,
+            selector: el.selector,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          // Drop the placeholder so the exporter doesn't try to fetch a
+          // pengui-snap:// URL it can't resolve.
+          el.src = '';
+          el.exportDisposition = 'background';
+          el.fallbackReason = 'snapshot-failed';
+        }
+      }
+
+      return payload;
     } finally {
       await browser.close();
     }

@@ -395,4 +395,55 @@ describe('SlideDocumentService', () => {
     expect(xs[0]).toBeLessThan(xs[1]);
     expect(xs[1]).toBeLessThan(xs[2]);
   }, 15000);
+
+  it('snapshots a card as a single PNG image with text overlays (v4.18.1)', async () => {
+    const container = createContainer(loadConfig({ logLevel: 'error' }));
+    containers.push(container);
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    html, body { margin: 0; padding: 0; }
+    * { box-sizing: border-box; }
+    .slide { width: 1920px; height: 1080px; padding: 48px; background: #fff; position: relative; font-family: Inter, sans-serif; color: #111; }
+    .pengui-card { display: flex; flex-direction: column; gap: 12px; padding: 24px; border: 1px solid #ddd; border-top: 3px solid #5b8def; border-radius: 8px; width: 400px; }
+    .pengui-card-icon { color: #5b8def; }
+    .pengui-card-icon svg { width: 24px; height: 24px; }
+    h2, p { margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="slide">
+    <article class="pengui-card pengui-card-accent-info">
+      <span class="pengui-card-icon"><svg viewBox="0 0 24 24"><path d="M3 12h18" stroke="currentColor" stroke-width="2"/></svg></span>
+      <h2>Card heading</h2>
+      <div class="pengui-card-body"><p>Body prose under the heading.</p></div>
+    </article>
+  </div>
+</body>
+</html>`;
+
+    const result = await container.slideDocumentService.compileSlideHtml(html, 'rev-snap-card');
+
+    expect(result.document).not.toBeNull();
+    const elements = result.document?.elements ?? [];
+    // Snapshot image: kind 'image' with a data:image/png src.
+    const snapImage = elements.find((el) => el.kind === 'image' && el.src.startsWith('data:image/png;'));
+    expect(snapImage, 'expected one PNG snapshot for the card').toBeDefined();
+    // Text overlays: heading + body prose still emit as native text shapes.
+    const textElements = elements.filter((el) => el.kind === 'text');
+    const headingText = textElements.find((el) => el.kind === 'text' && el.text.trim() === 'Card heading');
+    const bodyText = textElements.find((el) => el.kind === 'text' && el.text.includes('Body prose'));
+    expect(headingText).toBeDefined();
+    expect(bodyText).toBeDefined();
+    // The card's structural rect (from the generic shape walker) should
+    // NOT appear — the snapshot replaced it. Verify by checking no
+    // shape element has the card's selector.
+    const cardShape = elements.find((el) =>
+      el.kind === 'shape' && (el.selector ?? '').toLowerCase().includes('pengui-card'),
+    );
+    expect(cardShape, 'card structural shape should be suppressed by the snapshot').toBeUndefined();
+  }, 20000);
 });
