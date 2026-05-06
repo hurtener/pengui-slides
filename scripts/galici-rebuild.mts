@@ -71,8 +71,12 @@ const LAYERS: SoulLayers = {
     fontDisplay: "'Inter', sans-serif",
     fontBody: "'Inter', sans-serif",
     fontMono: "'JetBrains Mono', monospace",
-    sizeHero: 80, sizeH1: 52, sizeH2: 36, sizeH3: 22,
-    sizeBody: 16, sizeLabel: 13, sizeCaption: 12,
+    // Reference deck measurements: hero 64px, H1 44px, H2 40px (the
+    // big slide titles), H3 24px (card titles), body 18px. The deck
+    // is on a 1920×1080 canvas; previous values were calibrated for
+    // a smaller render and felt cramped.
+    sizeHero: 64, sizeH1: 44, sizeH2: 40, sizeH3: 24,
+    sizeBody: 18, sizeLabel: 13, sizeCaption: 12,
     weightNormal: 400, weightMedium: 500, weightBold: 700,
     lineHeightHeading: 1.15, lineHeightBody: 1.55,
     letterSpacingHeading: '-0.02em', letterSpacingBody: '0em',
@@ -122,35 +126,25 @@ const GALICIA_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1
 
 // ── Section chip helper ────────────────────────────────────────
 //
-// Every Galici body slide opens with a horizontal chip "NN · SECTION
-// NAME" in mono caps. Modeled as a single-paragraph centered prose
-// node — the inline-color emphasis handles the muted dot separator.
-// CSS handles the rounded background via a soul-themed border + radius
-// pattern (we use a card with no body for the chip shape).
+// Every Galici body slide opens with a full-width pill chip "NN ·
+// SECTION NAME" in mono caps with a thin blue outline. We model it as
+// a card with `accent: info` — the v4.13 card chrome already gives us
+// the rounded border + accent stripe; the centered mono-caps prose
+// inside completes the look. Rendering at H6 level keeps the chip
+// tight (no oversized padding).
 
-function sectionChip(text: string): SlideIR['body'][number] {
+function sectionLabel(text: string): SlideIR['body'][number] {
   return {
     type: 'card',
     accent: 'info',
     body: [
       {
-        type: 'prose',
+        type: 'heading',
+        level: 6,
         align: 'center',
-        body: [{ text, color: 'info' }],
+        text: [{ text, color: 'info' }],
       },
     ],
-  };
-}
-
-// Section chip rendered as a thin h6 (mono caps) — used when a card
-// chip would over-emphasize the chrome. Matches the pengui-text-info
-// styling of the reference's chip outline.
-function sectionLabel(text: string): SlideIR['body'][number] {
-  return {
-    type: 'heading',
-    level: 6,
-    align: 'center',
-    text: [{ text, color: 'info' }],
   };
 }
 
@@ -176,11 +170,12 @@ function slideCover(): SlideIR {
   return {
     layout: 'centered',
     body: [
-      // Subtle radial glow background for atmosphere.
+      // Subtle radial glow centered behind the hero — the reference
+      // deck's atmosphere is restrained, not full-canvas.
       {
         type: 'decoration',
         source: { kind: 'preset', name: 'radial_glow' },
-        placement: { anchor: 'middle_center', size: { width: 1400, height: 1400 } },
+        placement: { anchor: 'middle_center', size: { width: 1100, height: 1100 }, opacity: 0.6 },
         layer: 'background',
         accent: 'accent',
       },
@@ -274,16 +269,34 @@ function slideResumen(): SlideIR {
           },
         ],
         right: [
-          // Glow ring + shield card composition.
+          // Centered shield card with eyebrow underneath — the ring
+          // glow comes from the slide-level decoration below so it
+          // wraps both the card and any breathing room.
           {
             type: 'card',
             accent: 'success',
             icon: 'shield',
             body: [
-              { type: 'prose', align: 'center', body: [{ text: 'Control · Trazabilidad · Seguridad', color: 'success' }] },
+              {
+                type: 'heading', level: 4, align: 'center',
+                text: [{ text: 'Control · Trazabilidad · Seguridad', color: 'success' }],
+              },
             ],
           },
         ],
+      },
+      // Glow ring decoration anchored to the right side as a foreground
+      // halo around the shield card.
+      {
+        type: 'decoration',
+        source: { kind: 'preset', name: 'glow_ring' },
+        placement: {
+          anchor: 'middle_right',
+          size: { width: 460, height: 460 },
+          offset: { x: -280, y: 0 },
+        },
+        layer: 'foreground',
+        accent: 'success',
       },
     ],
   };
@@ -392,10 +405,20 @@ function slideSituacion2(): SlideIR {
             ],
           }],
           [{
+            // The standout 200K highlight cell — bigger number,
+            // orange-warm-tinted card, no eyebrow. The accent stripe
+            // gets re-emphasized via the warm color and the heading
+            // dominates the space.
             type: 'card', accent: 'accent_warm',
             body: [
-              { type: 'heading', level: 1, text: [{ text: '200K', color: 'accent_warm', bold: true }] },
-              { type: 'prose', body: [{ text: 'cuentas activas operadas hoy\nsin sistema centralizado', color: 'accent_warm' }] },
+              {
+                type: 'heading', level: 1,
+                text: [{ text: '200K', color: 'accent_warm', bold: true }],
+              },
+              {
+                type: 'prose',
+                body: [{ text: 'cuentas activas operadas hoy sin sistema centralizado', color: 'accent_warm' }],
+              },
             ],
           }],
         ],
@@ -456,6 +479,32 @@ function slideSistema(): SlideIR {
 
 // 7. Módulos y alcance — 4 module cards + warm callout.
 function slideModulos(): SlideIR {
+  // Each module card uses an oversized number heading (level 1) +
+  // small heading for the title + bullet list. The reference deck
+  // alternates accent colours per module: 01 info, 02 info, 03
+  // success, 04 info — emphasizing the auth-flow module visually.
+  const moduleCard = (
+    num: string,
+    accent: 'accent' | 'success' | 'warning',
+    title: string,
+    items: string[],
+  ): SlideIR['body'][number] => ({
+    type: 'card',
+    accent,
+    body: [
+      {
+        type: 'heading',
+        level: 1,
+        text: [{ text: num, color: accent, bold: true }],
+      },
+      { type: 'heading', level: 5, text: [{ text: title }] },
+      {
+        type: 'list',
+        style: 'bullet',
+        items: items.map((item) => [{ text: item }]),
+      },
+    ],
+  });
   return {
     body: [
       sectionLabel('04 · MÓDULOS Y ALCANCE'),
@@ -467,56 +516,33 @@ function slideModulos(): SlideIR {
       {
         type: 'grid', columns: 4, gap: 'md',
         cells: [
-          [{
-            type: 'card', accent: 'accent',
-            body: [
-              { type: 'heading', level: 1, text: [{ text: '01', color: 'accent', bold: true }] },
-              { type: 'heading', level: 5, text: [{ text: 'Gestión de expedientes y cuentas' }] },
-              { type: 'list', style: 'bullet', items: [
-                [{ text: 'Alta y administración con vinculación a cuenta bancaria' }],
-                [{ text: 'Saldos y movimientos en tiempo real vía integración Galicia' }],
-                [{ text: 'Búsqueda por expediente, juzgado, CBU, estado y fecha' }],
-              ] },
-            ],
-          }],
-          [{
-            type: 'card', accent: 'accent',
-            body: [
-              { type: 'heading', level: 1, text: [{ text: '02', color: 'accent', bold: true }] },
-              { type: 'heading', level: 5, text: [{ text: 'Administración de fondos e inversiones' }] },
-              { type: 'list', style: 'bullet', items: [
-                [{ text: 'Registro y seguimiento de plazos fijos sobre cuentas' }],
-                [{ text: 'Alertas de vencimiento clasificadas por estado' }],
-                [{ text: 'Rentabilidad por expediente y consolidada por juzgado' }],
-              ] },
-            ],
-          }],
-          [{
-            type: 'card', accent: 'success',
-            body: [
-              { type: 'heading', level: 1, text: [{ text: '03', color: 'success', bold: true }] },
-              { type: 'heading', level: 5, text: [{ text: 'Flujos de autorización y firmas' }] },
-              { type: 'list', style: 'bullet', items: [
-                [{ text: 'Workflow de aprobaciones de movimientos y transferencias' }],
-                [{ text: 'Roles: operador, autorizante, administrador del Poder Judicial' }],
-                [{ text: 'Log de auditoría inmutable: acción, usuario, timestamp, estado' }],
-              ] },
-            ],
-          }],
-          [{
-            type: 'card', accent: 'accent',
-            body: [
-              { type: 'heading', level: 1, text: [{ text: '04', color: 'accent', bold: true }] },
-              { type: 'heading', level: 5, text: [{ text: 'Panel de control y reporting' }] },
-              { type: 'list', style: 'bullet', items: [
-                [{ text: 'Vista por juzgado y consolidada para Poder Judicial central' }],
-                [{ text: 'KPIs: fondos bajo gestión, rentabilidad, vencimientos, alertas' }],
-                [{ text: 'Exportación de reportes por juzgado y período' }],
-              ] },
-            ],
-          }],
+          [moduleCard('01', 'accent', 'Gestión de expedientes y cuentas', [
+            'Alta y administración con vinculación a cuenta bancaria',
+            'Saldos y movimientos en tiempo real vía integración Galicia',
+            'Búsqueda por expediente, juzgado, CBU, estado y fecha',
+          ])],
+          [moduleCard('02', 'accent', 'Administración de fondos e inversiones', [
+            'Registro y seguimiento de plazos fijos sobre cuentas',
+            'Alertas de vencimiento clasificadas por estado',
+            'Rentabilidad por expediente y consolidada por juzgado',
+          ])],
+          [moduleCard('03', 'success', 'Flujos de autorización y firmas', [
+            'Workflow de aprobaciones de movimientos y transferencias',
+            'Roles: operador, autorizante, administrador del Poder Judicial',
+            'Log de auditoría inmutable: acción, usuario, timestamp, estado',
+          ])],
+          [moduleCard('04', 'accent', 'Panel de control y reporting', [
+            'Vista por juzgado y consolidada para Poder Judicial central',
+            'KPIs: fondos bajo gestión, rentabilidad, vencimientos, alertas',
+            'Exportación de reportes por juzgado y período',
+          ])],
         ],
       },
+      // Out-of-scope band — reference deck renders this as a wide dark
+      // strip with orange "FUERA DEL ALCANCE" eyebrow to its left and
+      // the bulleted exclusions inline. Warning callout maps to the
+      // orange-edged surface; mono-cap title + comma-joined body
+      // approximates the strip layout.
       {
         type: 'callout', kind: 'warning',
         title: [{ text: 'FUERA DEL ALCANCE', color: 'accent_warm' }],
@@ -870,29 +896,35 @@ function slideAcerca(): SlideIR {
         type: 'grid', columns: 3, gap: 'md',
         cells: [
           [{
-            type: 'card', accent: 'accent',
-            eyebrow: [{ text: 'PARTNERS TECNOLÓGICOS', color: 'accent' }],
+            type: 'card', accent: 'muted',
+            eyebrow: [{ text: 'PARTNERS TECNOLÓGICOS', color: 'muted' }],
             body: [
-              { type: 'prose', align: 'center', body: [{ text: 'Microsoft Partner · AWS · Google Cloud · Databricks', color: 'muted' }] },
+              { type: 'heading', level: 5, align: 'center', text: [{ text: 'Microsoft Partner' }] },
+              { type: 'heading', level: 5, align: 'center', text: [{ text: 'AWS' }] },
+              { type: 'heading', level: 5, align: 'center', text: [{ text: 'Google Cloud' }] },
+              { type: 'heading', level: 5, align: 'center', text: [{ text: 'Databricks' }] },
             ],
           }],
           [{
             type: 'card', accent: 'success', icon: 'shield',
             eyebrow: [{ text: 'CERTIFICACIONES DE SEGURIDAD', color: 'success' }],
             body: [
-              { type: 'heading', level: 4, text: [{ text: 'SOC 2 TYPE 2', color: 'success' }] },
-              { type: 'prose', body: [{ text: 'Auditoría de seguridad, disponibilidad y confidencialidad.' }] },
+              { type: 'heading', level: 3, align: 'center', text: [{ text: 'SOC 2 TYPE 2', color: 'success' }] },
+              { type: 'prose', align: 'center', body: [{ text: 'Auditoría de seguridad, disponibilidad y confidencialidad.', color: 'muted' }] },
             ],
           }],
           [{
             type: 'card', accent: 'accent_warm',
             eyebrow: [{ text: 'ACERCA DE NOSOTROS', color: 'accent_warm' }],
             body: [
-              { type: 'heading', level: 1, text: [
-                { text: '+130 ', color: 'success', bold: true },
-                { text: '+8', color: 'accent_warm', bold: true },
-              ] },
-              { type: 'prose', body: [{ text: 'Expertos · Países' }] },
+              {
+                type: 'heading', level: 1, align: 'center', text: [
+                  { text: '+130 ', color: 'success', bold: true },
+                  { text: '+8', color: 'accent_warm', bold: true },
+                ],
+              },
+              { type: 'prose', align: 'center', body: [{ text: 'Expertos · Países', color: 'muted' }] },
+              { type: 'prose', align: 'center', body: [{ text: 'Presencia en' }] },
               { type: 'prose', align: 'center', body: [{ text: 'Argentina · USA · México · Uruguay', color: 'success' }] },
             ],
           }],
@@ -961,6 +993,15 @@ function slideResultados(): SlideIR {
 
 // 17. Confían en nosotros — closing slide with logo grid (placeholders).
 function slideConfianza(): SlideIR {
+  // Logo placeholder — bold heading + thin separator line above. Each
+  // sits in a top-level grid cell so they form a 4×3 wall like the
+  // reference deck's logo wall (LinkedIn, LG Ad Solutions, …).
+  const logoCell = (name: string): SlideIR['body'][number] => ({
+    type: 'heading',
+    level: 4,
+    align: 'center',
+    text: [{ text: name, bold: true }],
+  });
   return {
     layout: 'centered',
     body: [
@@ -974,25 +1015,20 @@ function slideConfianza(): SlideIR {
         body: [{ text: 'Algunos de los líderes que eligen Clear Tech para construir su capa de datos.', color: 'muted' }],
       },
       {
-        type: 'card', accent: 'muted',
-        body: [
-          {
-            type: 'grid', columns: 4, gap: 'lg',
-            cells: [
-              [{ type: 'prose', align: 'center', body: [{ text: 'LinkedIn' }] }],
-              [{ type: 'prose', align: 'center', body: [{ text: 'LG Ad Solutions' }] }],
-              [{ type: 'prose', align: 'center', body: [{ text: 'Changent' }] }],
-              [{ type: 'prose', align: 'center', body: [{ text: 'Boats Group' }] }],
-              [{ type: 'prose', align: 'center', body: [{ text: 'Grupo Bimbo' }] }],
-              [{ type: 'prose', align: 'center', body: [{ text: 'Pluspetrol' }] }],
-              [{ type: 'prose', align: 'center', body: [{ text: 'Telus International' }] }],
-              [{ type: 'prose', align: 'center', body: [{ text: 'Ferring Pharmaceuticals' }] }],
-              [{ type: 'prose', align: 'center', body: [{ text: 'Century 21' }] }],
-              [{ type: 'prose', align: 'center', body: [{ text: 'Cammesa' }] }],
-              [{ type: 'prose', align: 'center', body: [{ text: 'TTEC' }] }],
-              [{ type: 'prose', align: 'center', body: [{ text: 'Nucleoeléctrica Argentina' }] }],
-            ],
-          },
+        type: 'grid', columns: 4, gap: 'lg', align_items: 'center',
+        cells: [
+          [logoCell('LinkedIn')],
+          [logoCell('LG Ad Solutions')],
+          [logoCell('Changent')],
+          [logoCell('Boats Group')],
+          [logoCell('Grupo Bimbo')],
+          [logoCell('Pluspetrol')],
+          [logoCell('Telus International')],
+          [logoCell('Ferring')],
+          [logoCell('Century 21')],
+          [logoCell('Cammesa')],
+          [logoCell('TTEC')],
+          [logoCell('Nucleoeléctrica')],
         ],
       },
     ],
