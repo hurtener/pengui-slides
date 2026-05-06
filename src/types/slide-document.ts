@@ -278,8 +278,25 @@ export type SlideElement =
  *       card / decoration / flow step is one repositionable image with
  *       editable text overlays — best of both worlds. Rev-14 docs are
  *       missing the snapshots.
+ *  - 16: v4.18.2 — two correctness fixes on the snapshot pass:
+ *       (a) Text in PNG snapshots is now hidden globally during the
+ *           snapshot pass (`* { color: transparent }`) so painted text
+ *           NEVER lands inside the picture. Pre-rev-16 the snapshot
+ *           was a full-page-cropped screenshot, so text painted on top
+ *           of (or inside) a snap candidate ended up in the PNG AND
+ *           also as the editable overlay → unreadable double-rendered
+ *           text. Cover decoration snapshots dropped 543KB → 9KB once
+ *           the embedded text was removed; total deck PNG payload
+ *           halved. (b) Multi-run color formatting now survives
+ *           newline boundaries inside a heading's text — pre-rev-16
+ *           the splitter degraded to one paragraph per line carrying
+ *           ONLY the base format, dropping accent colors on any
+ *           heading authored as `'Title,\nthat ', { text: 'wraps',
+ *           color: 'accent' }, '.'`. The new splitter walks runs and
+ *           groups them by paragraph, preserving per-run color/bold/
+ *           italic within each line.
  */
-export const CURRENT_COMPILER_REVISION = 15;
+export const CURRENT_COMPILER_REVISION = 16;
 
 export interface SlideDocument {
   version: '1';

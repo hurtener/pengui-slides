@@ -166,6 +166,11 @@ export class HtmlSlideDocumentCompiler {
         }
         function markSnapDescendants(root: Element): void {
           for (const desc of Array.from(root.querySelectorAll('*'))) {
+            // Text leaves walk normally and emit as native text shapes
+            // ABOVE the snapshot. The post-eval snapshot pass injects a
+            // global `* { color: transparent }` rule before screenshotting
+            // so painted text never lands inside the PNG (text is always
+            // supplied by the editable overlay, never duplicated).
             if (isTextLeafFor(desc)) continue;
             // Don't suppress nested snapshot anchors — but this can't
             // happen in current IR (cards / flows / decorations don't
@@ -1111,33 +1116,58 @@ export class HtmlSlideDocumentCompiler {
               allowTextualPseudo: true,
             }) as Omit<SlideTextElement, 'text' | 'paragraphs' | 'editId'>;
 
-            // Newlines are uncommon in IR-rendered inline content (no <br>),
-            // but keep the legacy line-split fallback for safety. When the
-            // text spans multiple lines, we degrade to one paragraph per
-            // line carrying the merged base run — multi-run formatting only
-            // survives within a single line.
+            // v4.18.2 — properly split runs across newline boundaries so
+            // multi-run formatting (color, bold, italic) survives within
+            // each paragraph. Pre-v4.18.2 the splitter degraded to one
+            // paragraph per line carrying ONLY the base format, which
+            // dropped accent colors on any heading authored as
+            // `'Title,\nthat ', { text: 'wraps', color: 'accent' }, '.'`.
+            const splitRunsByNewline = (runs: SlideTextRun[]): SlideTextRun[][] => {
+              const lines: SlideTextRun[][] = [[]];
+              for (const r of runs) {
+                if (!r.text.includes('\n')) {
+                  lines[lines.length - 1].push(r);
+                  continue;
+                }
+                const parts = r.text.split('\n');
+                parts.forEach((part, i) => {
+                  if (part.length > 0) {
+                    lines[lines.length - 1].push({ ...r, text: part });
+                  }
+                  if (i < parts.length - 1) {
+                    lines.push([]);
+                  }
+                });
+              }
+              return lines;
+            };
             const hasNewlines = combinedText.includes('\n');
             const paragraphs = hasNewlines
-              ? combinedText.split('\n').map((line) => ({
-                  text: line,
-                  runs: [{
-                    text: line,
-                    color: baseFmt.color,
-                    fontFamily: baseFmt.fontFamily,
-                    fontSize: baseFmt.fontSize,
-                    ...(baseFmt.bold ? { bold: true } : {}),
-                    ...(baseFmt.italic ? { italic: true } : {}),
-                  }],
-                  ...(isListItem
-                    ? {
-                        bullet: {
-                          type: listKind,
-                          ...(bulletText ? { characterCode: bulletText.codePointAt(0)?.toString(16).toUpperCase() } : {}),
-                          level: 0,
-                        },
-                      }
-                    : {}),
-                }))
+              ? splitRunsByNewline(allRuns).map((lineRuns) => {
+                  const lineText = lineRuns.map((r) => r.text).join('');
+                  return {
+                    text: lineText,
+                    runs: lineRuns.length > 0
+                      ? lineRuns
+                      : [{
+                          text: '',
+                          color: baseFmt.color,
+                          fontFamily: baseFmt.fontFamily,
+                          fontSize: baseFmt.fontSize,
+                          ...(baseFmt.bold ? { bold: true } : {}),
+                          ...(baseFmt.italic ? { italic: true } : {}),
+                        }],
+                    ...(isListItem
+                      ? {
+                          bullet: {
+                            type: listKind,
+                            ...(bulletText ? { characterCode: bulletText.codePointAt(0)?.toString(16).toUpperCase() } : {}),
+                            level: 0,
+                          },
+                        }
+                      : {}),
+                  };
+                })
               : [{
                   text: combinedText,
                   runs: allRuns,
@@ -1333,16 +1363,36 @@ export class HtmlSlideDocumentCompiler {
       // v4.18.1 — resolve `pengui-snap://{id}` placeholders into real
       // PNG data URIs by screenshotting each tagged element. Runs after
       // page.evaluate so we can use Playwright's locator.screenshot()
-      // (no DOM API equivalent inside the page).
-      for (const el of payload.elements) {
-        if (el.kind !== 'image' || !el.src.startsWith('pengui-snap://')) {
-          continue;
-        }
+      // (no DOM API equivalent inside the page). Before snapshotting,
+      // inject CSS that hides text inside snap candidates — those text
+      // leaves emit as editable native text overlays, so painting them
+      // INTO the snapshot too would double-render the words slightly
+      // off-center (unreadable mess).
+      const snapElements = payload.elements.filter(
+        (el): el is Extract<typeof el, { kind: 'image' }> =>
+          el.kind === 'image' && el.src.startsWith('pengui-snap://'),
+      );
+      if (snapElements.length > 0) {
+        // Playwright's locator.screenshot() takes a full-page screenshot
+        // and crops to the bbox — so any text PAINTED on top of (or
+        // visually overlapping) a snap candidate would be baked into the
+        // PNG. To make snapshots strictly the chrome / visual layer with
+        // text supplied separately by native overlays, hide ALL text on
+        // the page for the duration of the snapshot pass. Backgrounds /
+        // borders / accent strips / SVG decorations remain visible.
+        // `color: transparent` preserves layout dimensions exactly so
+        // chrome geometry stays unchanged.
+        await page.addStyleTag({
+          content:
+            '* { color: transparent !important; '
+            + 'text-shadow: none !important; '
+            + '-webkit-text-fill-color: transparent !important; '
+            + 'caret-color: transparent !important; }',
+        });
+      }
+      for (const el of snapElements) {
         const snapId = el.src.slice('pengui-snap://'.length);
         try {
-          // Lift the device pixel ratio so the resulting PNG carries
-          // enough detail to look crisp at PowerPoint's typical zoom
-          // (cards/decorations get scaled up in editor view).
           const buf = await page
             .locator(`[data-snap-id="${snapId}"]`)
             .screenshot({ type: 'png', omitBackground: true });
