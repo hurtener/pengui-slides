@@ -37,6 +37,7 @@ import {
   compileSectionIRToHtml,
   duplicateNodeAtPath,
   insertNodeAtPath,
+  lintFlowDensity,
   lintNodesForMode,
   moveNodeAtPath,
   removeNodeAtPath,
@@ -130,6 +131,12 @@ export class DocumentService {
           .map((m) => `${m.path} (${m.nodeType})`)
           .join(', ')}. ${modeIssues[0].message}`,
       );
+    }
+    // v4.17 — non-blocking flow density warnings (>7 steps).
+    for (const w of lintFlowDensity(input.ir.body)) {
+      this.logger.warn('Flow density warning', {
+        deckId: deck.id, code: w.code, path: w.path, stepCount: w.stepCount,
+      });
     }
 
     const now = this.clock.now();
@@ -276,6 +283,11 @@ export class DocumentService {
             .map((m) => `${m.path} (${m.nodeType})`)
             .join(', ')}. ${modeIssues[0].message}`,
         );
+      }
+      for (const w of lintFlowDensity(input.ir.body)) {
+        this.logger.warn('Flow density warning', {
+          deckId: deck.id, sectionId: section.id, code: w.code, path: w.path, stepCount: w.stepCount,
+        });
       }
       section.ir = input.ir;
       section.html = compileSectionIRToHtml({ ir: input.ir, kind: effectiveKind });

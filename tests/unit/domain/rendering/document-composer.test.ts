@@ -666,4 +666,114 @@ describe('DocumentComposer', () => {
     expect(blockCss).toContain('.pengui-prose');
     expect(blockCss).toContain('.pengui-figure');
   });
+
+  // ── v4.18 parity: bimodal node CSS reaches document mode ─────────
+  //
+  // The slides/sections audit caught that pengui-bg-* / pengui-layout-*
+  // selectors only targeted .slide; .pengui-section carried the same
+  // classes but had no matching CSS. v4.18 added .pengui-section
+  // selectors into NODE_CSS. These tests verify the CSS is present in
+  // the composer's node-styles block so cards / flows / decorations /
+  // framed images render with the same affordances in A4 PDF as they do
+  // on a slide canvas.
+
+  it('node-styles block carries .pengui-section parity selectors (v4.18 fix)', async () => {
+    const sections = [makeSection('prose', wrapMeta('prose', '<p>x</p>'))];
+    const result = await composer.compose({
+      sections, deck: makeDeck(), soul: makeSoul(),
+      geometry: geometryFor(), documentMeta: {},
+    });
+    const nodeMatch = result.html.match(
+      /<style id="pengui-node-styles">([\s\S]*?)<\/style>/,
+    );
+    expect(nodeMatch).not.toBeNull();
+    const nodeCss = nodeMatch![1];
+    // .pengui-section root rules
+    expect(nodeCss).toContain('.pengui-section {');
+    expect(nodeCss).toContain('.pengui-section.pengui-bg-canvas');
+    expect(nodeCss).toContain('.pengui-section.pengui-bg-accent');
+    expect(nodeCss).toContain('.pengui-section.pengui-section-centered');
+    expect(nodeCss).toContain('.pengui-section:has(.pengui-decoration-bleed)');
+    // Bimodal node classes from v4.13–v4.17 all live in NODE_CSS so
+    // the composer picks them up automatically.
+    expect(nodeCss).toContain('.pengui-card');
+    expect(nodeCss).toContain('.pengui-flow');
+    expect(nodeCss).toContain('.pengui-decoration');
+    expect(nodeCss).toContain('.pengui-frame-browser');
+  });
+
+  it('composer renders a card-bearing section without losing the pengui-card class', async () => {
+    const cardHtml =
+      '<article class="pengui-card pengui-card-accent-info" data-ir-path="body,0">' +
+      '<p class="pengui-card-eyebrow">EYEBROW</p>' +
+      '<h4 class="pengui-heading pengui-heading-4">Title</h4>' +
+      '</article>';
+    const sections = [makeSection('prose', wrapMeta('prose', cardHtml))];
+    const result = await composer.compose({
+      sections, deck: makeDeck(), soul: makeSoul(),
+      geometry: geometryFor(), documentMeta: {},
+    });
+    expect(result.html).toContain('class="pengui-card pengui-card-accent-info"');
+    expect(result.html).toContain('class="pengui-card-eyebrow"');
+  });
+
+  it('composer renders a flow-bearing section with step pills and connectors', async () => {
+    const flowHtml =
+      '<ol class="pengui-flow pengui-flow-horizontal pengui-flow-connector-arrow" data-ir-path="body,0">' +
+      '<li class="pengui-flow-step pengui-flow-step-accent-info" data-ir-flow-step="0">' +
+      '<p class="pengui-flow-step-label">Plan</p></li>' +
+      '<li class="pengui-flow-connector pengui-flow-connector-glyph-arrow" aria-hidden="true">' +
+      '<svg viewBox="0 0 24 24"></svg></li>' +
+      '<li class="pengui-flow-step pengui-flow-step-accent-success" data-ir-flow-step="1">' +
+      '<p class="pengui-flow-step-label">Build</p></li>' +
+      '</ol>';
+    const sections = [makeSection('prose', wrapMeta('prose', flowHtml))];
+    const result = await composer.compose({
+      sections, deck: makeDeck(), soul: makeSoul(),
+      geometry: geometryFor(), documentMeta: {},
+    });
+    expect(result.html).toContain('pengui-flow-horizontal');
+    expect(result.html).toContain('pengui-flow-step-accent-info');
+    expect(result.html).toContain('pengui-flow-connector-glyph-arrow');
+  });
+
+  it('composer renders a decoration in a section (bleed anchor + foreground layer)', async () => {
+    const decorationHtml =
+      '<aside class="pengui-decoration pengui-decoration-foreground ' +
+      'pengui-decoration-anchor-bleed-top-right pengui-decoration-bleed ' +
+      'pengui-decoration-source-preset pengui-text-accent" ' +
+      'style="width:480px;height:480px" aria-hidden="true">' +
+      '<svg viewBox="0 0 480 480"></svg></aside>';
+    const sections = [makeSection('prose', wrapMeta('prose', decorationHtml + '<p>body</p>'))];
+    const result = await composer.compose({
+      sections, deck: makeDeck(), soul: makeSoul(),
+      geometry: geometryFor(), documentMeta: {},
+    });
+    expect(result.html).toContain('pengui-decoration-foreground');
+    expect(result.html).toContain('pengui-decoration-bleed');
+    expect(result.html).toContain('pengui-decoration-anchor-bleed-top-right');
+  });
+
+  it('composer renders a framed-browser image with all chrome parts present', async () => {
+    const framedHtml =
+      '<figure class="pengui-image pengui-image-contain pengui-image-framed pengui-image-frame-browser">' +
+      '<div class="pengui-frame pengui-frame-browser" aria-hidden="true">' +
+      '<div class="pengui-frame-titlebar">' +
+      '<span class="pengui-frame-dot pengui-frame-dot-close"></span>' +
+      '<span class="pengui-frame-dot pengui-frame-dot-min"></span>' +
+      '<span class="pengui-frame-dot pengui-frame-dot-max"></span>' +
+      '<div class="pengui-frame-urlbar"></div>' +
+      '</div>' +
+      '<div class="pengui-frame-content"><img src="data:image/png;base64,iVBORw0KGgo=" alt="" /></div>' +
+      '</div></figure>';
+    const sections = [makeSection('figure', wrapMeta('figure', framedHtml))];
+    const result = await composer.compose({
+      sections, deck: makeDeck(), soul: makeSoul(),
+      geometry: geometryFor(), documentMeta: {},
+    });
+    expect(result.html).toContain('pengui-frame pengui-frame-browser');
+    expect(result.html).toContain('pengui-frame-titlebar');
+    expect(result.html).toContain('pengui-frame-urlbar');
+    expect(result.html).toContain('pengui-frame-dot-close');
+  });
 });

@@ -1,7 +1,10 @@
 <!--
   AssetPicker — modal grid for choosing an image to insert.
 
-  Loads the deck's content assets via `bridge.listAssets({ role: 'content' })`
+  Loads the deck's image assets via `bridge.listAssets()` and filters
+  out logos (which belong in the chrome editor, not the inline picker).
+  Surfaces every v4.16 role bucket — illustration, screenshot, photo,
+  icon, and the legacy 'content' alias — under one picker.
   and filters to image MIME types. Used by both the slide editor and the
   document editor when the user clicks "Add image" in edit-layout mode.
 -->
@@ -40,10 +43,17 @@
     loading = true;
     error = '';
     try {
-      const list = await bridge.listAssets({ role: 'content' });
+      // v4.16 — list ALL non-logo image assets so the picker exposes
+      // illustrations / screenshots / photos / icons / legacy 'content'
+      // uploads, not just the legacy 'content' bucket. Logos are still
+      // filtered out — they belong in the chrome editor, not the inline
+      // image picker.
+      const list = await bridge.listAssets();
       const all = list.assets ?? [];
       items = all.filter((a: PickerAsset) =>
-        typeof a.mime_type === 'string' && a.mime_type.startsWith('image/'),
+        typeof a.mime_type === 'string' &&
+        a.mime_type.startsWith('image/') &&
+        a.role !== 'logo',
       );
       loaded = true;
     } catch (err) {

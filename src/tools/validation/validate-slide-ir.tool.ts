@@ -17,12 +17,19 @@ import {
   SlideIRSchema,
   SectionIRSchema,
   lintNodesForMode,
+  lintFlowDensity,
 } from '../../domain/ir/index.js';
 
 interface IssueOut {
   path: string;
   message: string;
   code?: string;
+}
+
+interface WarningOut {
+  path: string;
+  message: string;
+  code: string;
 }
 
 function flattenZodIssues(issues: z.core.$ZodIssue[]): IssueOut[] {
@@ -72,7 +79,13 @@ export function registerValidateSlideIRTool(server: McpServer): void {
             })),
           });
         }
-        return structuredResponse({ ok: true, issues: [] });
+        // v4.17 — non-blocking flow density warnings (>7 steps).
+        const flowWarnings: WarningOut[] = lintFlowDensity(result.data.body).map((w) => ({
+          path: w.path,
+          message: w.message,
+          code: w.code,
+        }));
+        return structuredResponse({ ok: true, issues: [], warnings: flowWarnings });
       } catch (error) {
         return handleToolError(error);
       }
@@ -118,7 +131,13 @@ export function registerValidateSectionIRTool(server: McpServer): void {
             })),
           });
         }
-        return structuredResponse({ ok: true, issues: [] });
+        // v4.17 — non-blocking flow density warnings (>7 steps).
+        const flowWarnings: WarningOut[] = lintFlowDensity(result.data.body).map((w) => ({
+          path: w.path,
+          message: w.message,
+          code: w.code,
+        }));
+        return structuredResponse({ ok: true, issues: [], warnings: flowWarnings });
       } catch (error) {
         return handleToolError(error);
       }

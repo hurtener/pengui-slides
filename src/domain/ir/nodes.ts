@@ -211,40 +211,19 @@ export const ChartNodeSchema = z
   .strict();
 export type ChartNode = z.infer<typeof ChartNodeSchema>;
 
-// LeafBlockNode — leaves WITHOUT card. Used as `card.body`'s element type
-// so card cannot nest inside itself (single level of card wrapping). The
-// existing 10-leaf set; expand here when adding new leaves that should be
-// allowed inside cards.
-export const LeafBlockNodeSchema = z.discriminatedUnion('type', [
-  HeroNodeSchema,
-  ProseNodeSchema,
-  ImageNodeSchema,
-  CalloutNodeSchema,
-  HeadingNodeSchema,
-  ListNodeSchema,
-  DividerNodeSchema,
-  QuoteNodeSchema,
-  TableNodeSchema,
-  ChartNodeSchema,
-]);
-export type LeafBlockNode = z.infer<typeof LeafBlockNodeSchema>;
-
-// ── v4.13 card node ──────────────────────────────────────────────
+// ── Curated icon + flow declarations ─────────────────────────────
 //
-// Presentational wrapper around a small group of leaves with optional
-// semantic accent (top-border tint + icon color) and a curated lucide
-// icon glyph. Used inside grid cells / two_column children to deliver
-// the "feature card with colored accent" pattern that the design-team
-// reference decks lean on heavily (Galici "Cinco desafíos críticos",
-// "Cuatro módulos", "Acerca de Clear Tech" — all the same primitive).
-//
-// Why a leaf rather than a grid-cell extension: card is reusable
-// anywhere a leaf is allowed (top-level body, two_column children,
-// grid cells), and additive — no breaking change to existing IR.
+// IconNameSchema and the v4.17 flow declarations live here (before
+// LeafBlockNodeSchema) so both can be referenced by the leaf unions
+// without forward-reference gymnastics. Flow nests inside cards / grid
+// cells / two_column children — agents commonly compose a "feature
+// pipeline" by putting a flow inside a content area, so it has to be
+// allowed in both leaf unions.
 
 /** Curated lucide-style icon allowlist. Inline SVGs ship with the
- *  compiler (`compile/icons.ts`); fonts are not required. Expand on
- *  demand — keep the set small enough to reason about visually. */
+ *  compiler (`compile/icons.ts`); fonts are not required. Used by
+ *  CardNode.icon and FlowStep.icon. Expand on demand — keep the set
+ *  small enough to reason about visually. */
 export const IconNameSchema = z.enum([
   // status
   'shield', 'lock', 'check', 'x', 'alert-triangle', 'info-circle',
@@ -261,6 +240,96 @@ export const IconNameSchema = z.enum([
   'star', 'heart', 'sparkles', 'lightbulb',
 ]);
 export type IconName = z.infer<typeof IconNameSchema>;
+
+// ── v4.17 flow node ──────────────────────────────────────────────
+//
+// Sequential pipeline / process visualization (Galici slide 11
+// "Backlog Grooming → Sprint Planning → Development → Demo + retro").
+// Steps are arranged horizontally or vertically with a connector glyph
+// between them. Bimodal — works in slide AND document modes.
+//
+// Schema is a thin wrapper over `FlowStep[]`: each step carries a
+// label (RichText), optional accent token, optional curated icon,
+// optional short badge ("01", "Q1", "Done"). The connector is a single
+// kind that applies between every adjacent pair of steps; mixing
+// connectors mid-flow is intentionally not supported (would obscure the
+// visual rhythm that makes flows readable).
+//
+// `cycle` connector: emits a closing return-arrow after the last step
+// to communicate "this loops back to the start" without drawing a
+// physical curved wrap (deferred to v4.18+).
+
+export const FlowConnectorSchema = z.enum([
+  'arrow',          // solid arrow (→) — sequential default
+  'arrow_dashed',   // dashed arrow — soft / proposed step
+  'cycle',          // return arrow — recurring / iterative process
+  'plus',           // plus glyph — additive composition
+]);
+export type FlowConnector = z.infer<typeof FlowConnectorSchema>;
+
+export const FlowStepSchema = z
+  .object({
+    /** Primary step label. RichText so authors can color/bold individual
+     *  words via the existing TextRun color enum. */
+    label: RichTextSchema,
+    /** Soul accent — drives the step pill's top-border tint and the
+     *  icon color. Mirrors the v4.13 card pattern. */
+    accent: TextColorSchema.optional(),
+    /** Curated lucide icon glyph rendered above the label. Same
+     *  allowlist as CardNode.icon. */
+    icon: IconNameSchema.optional(),
+    /** Short corner badge — "01", "Done", "Q1". Plain string; no
+     *  rich-text formatting. Capped at 16 chars to keep the badge
+     *  visually compact. */
+    badge: z.string().max(16).optional(),
+  })
+  .strict();
+export type FlowStep = z.infer<typeof FlowStepSchema>;
+
+export const FlowNodeSchema = z
+  .object({
+    type: z.literal('flow'),
+    direction: z.enum(['horizontal', 'vertical']),
+    connector: FlowConnectorSchema,
+    /** Hard minimum 2 (a single step isn't a flow, it's just a card).
+     *  Soft maximum 7 enforced by the density warning lint — agents
+     *  can ship more, but the lint surfaces the visual-density risk. */
+    steps: z.array(FlowStepSchema).min(2),
+  })
+  .strict();
+export type FlowNode = z.infer<typeof FlowNodeSchema>;
+
+// LeafBlockNode — leaves usable inside `card.body`. `card` itself is
+// excluded so cards can't nest inside cards (single level of wrapping).
+// Flow is included so a card can host a step pipeline (Galici "process
+// in a card" pattern).
+export const LeafBlockNodeSchema = z.discriminatedUnion('type', [
+  HeroNodeSchema,
+  ProseNodeSchema,
+  ImageNodeSchema,
+  CalloutNodeSchema,
+  HeadingNodeSchema,
+  ListNodeSchema,
+  DividerNodeSchema,
+  QuoteNodeSchema,
+  TableNodeSchema,
+  ChartNodeSchema,
+  FlowNodeSchema,
+]);
+export type LeafBlockNode = z.infer<typeof LeafBlockNodeSchema>;
+
+// ── v4.13 card node ──────────────────────────────────────────────
+//
+// Presentational wrapper around a small group of leaves with optional
+// semantic accent (top-border tint + icon color) and a curated lucide
+// icon glyph. Used inside grid cells / two_column children to deliver
+// the "feature card with colored accent" pattern that the design-team
+// reference decks lean on heavily (Galici "Cinco desafíos críticos",
+// "Cuatro módulos", "Acerca de Clear Tech" — all the same primitive).
+//
+// Why a leaf rather than a grid-cell extension: card is reusable
+// anywhere a leaf is allowed (top-level body, two_column children,
+// grid cells), and additive — no breaking change to existing IR.
 
 export const CardNodeSchema = z
   .object({
@@ -282,8 +351,12 @@ export const CardNodeSchema = z
   .strict();
 export type CardNode = z.infer<typeof CardNodeSchema>;
 
-// Leaf-only union — used inside two_column to prevent recursion.
+// Leaf-only union — used inside two_column / grid to prevent recursion.
 // Includes Card (v4.13) so cards can sit inside grid cells / two_column.
+// Includes Flow (v4.17) so a step pipeline can sit inside any container.
+// Decoration is deliberately NOT included — it's an absolutely-positioned
+// overlay that anchors against the slide root, so nesting it inside a
+// grid cell wouldn't move its bbox; agents place it at body level.
 export const LeafSlideNodeSchema = z.discriminatedUnion('type', [
   HeroNodeSchema,
   ProseNodeSchema,
@@ -296,6 +369,7 @@ export const LeafSlideNodeSchema = z.discriminatedUnion('type', [
   TableNodeSchema,
   ChartNodeSchema,
   CardNodeSchema,
+  FlowNodeSchema,
 ]);
 export type LeafSlideNode = z.infer<typeof LeafSlideNodeSchema>;
 
@@ -486,64 +560,6 @@ export const DecorationNodeSchema = z
   })
   .strict();
 export type DecorationNode = z.infer<typeof DecorationNodeSchema>;
-
-// ── v4.17 flow node ──────────────────────────────────────────────
-//
-// Sequential pipeline / process visualization (Galici slide 11
-// "Backlog Grooming → Sprint Planning → Development → Demo + retro").
-// Steps are arranged horizontally or vertically with a connector glyph
-// between them. Bimodal — works in slide AND document modes.
-//
-// Schema is a thin wrapper over `FlowStep[]`: each step carries a
-// label (RichText), optional accent token, optional curated icon,
-// optional short badge ("01", "Q1", "Done"). The connector is a single
-// kind that applies between every adjacent pair of steps; mixing
-// connectors mid-flow is intentionally not supported (would obscure the
-// visual rhythm that makes flows readable).
-//
-// `cycle` connector: emits a closing return-arrow after the last step
-// to communicate "this loops back to the start" without drawing a
-// physical curved wrap (deferred to v4.18+).
-
-export const FlowConnectorSchema = z.enum([
-  'arrow',          // solid arrow (→) — sequential default
-  'arrow_dashed',   // dashed arrow — soft / proposed step
-  'cycle',          // return arrow — recurring / iterative process
-  'plus',           // plus glyph — additive composition
-]);
-export type FlowConnector = z.infer<typeof FlowConnectorSchema>;
-
-export const FlowStepSchema = z
-  .object({
-    /** Primary step label. RichText so authors can color/bold individual
-     *  words via the existing TextRun color enum. */
-    label: RichTextSchema,
-    /** Soul accent — drives the step pill's top-border tint and the
-     *  icon color. Mirrors the v4.13 card pattern. */
-    accent: TextColorSchema.optional(),
-    /** Curated lucide icon glyph rendered above the label. Same
-     *  allowlist as CardNode.icon. */
-    icon: IconNameSchema.optional(),
-    /** Short corner badge — "01", "Done", "Q1". Plain string; no
-     *  rich-text formatting. Capped at 16 chars to keep the badge
-     *  visually compact. */
-    badge: z.string().max(16).optional(),
-  })
-  .strict();
-export type FlowStep = z.infer<typeof FlowStepSchema>;
-
-export const FlowNodeSchema = z
-  .object({
-    type: z.literal('flow'),
-    direction: z.enum(['horizontal', 'vertical']),
-    connector: FlowConnectorSchema,
-    /** Hard minimum 2 (a single step isn't a flow, it's just a card).
-     *  Soft maximum 7 enforced by the density warning lint — agents
-     *  can ship more, but the lint surfaces the visual-density risk. */
-    steps: z.array(FlowStepSchema).min(2),
-  })
-  .strict();
-export type FlowNode = z.infer<typeof FlowNodeSchema>;
 
 // ── Top-level union ──────────────────────────────────────────────
 

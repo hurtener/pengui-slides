@@ -134,7 +134,7 @@ export interface AssetItem {
   filename?: string;
   mime_type: string;
   scope: AssetScopeWire;
-  role: 'logo' | 'content';
+  role: 'logo' | 'illustration' | 'screenshot' | 'photo' | 'icon' | 'content';
   size_bytes: number;
   width?: number;
   height?: number;
@@ -430,7 +430,7 @@ export class McpDeckEditorBridge implements DeckEditorBridge {
       | { type: 'soul'; soul_ref: string }
       | { type: 'deck'; deck_ref: string }
       | { type: 'global' };
-    role: 'logo' | 'content';
+    role: 'logo' | 'illustration' | 'screenshot' | 'photo' | 'icon' | 'content';
     label?: string;
   }): Promise<UploadAssetResponse> {
     const r = await this.callTool<UploadAssetResponse>('upload_asset_from_app', args);

@@ -4,8 +4,9 @@
 
   Scope options are context-aware: deck/soul only appear when an
   active deck/soul is known, so the user never picks a scope that
-  the uploader can't satisfy. Role is a simple logo / content toggle
-  matching the server's `UploadRole`.
+  the uploader can't satisfy. Role mirrors the server's v4.16 widened
+  enum so users can categorise illustrations / screenshots / photos /
+  icons distinctly from the legacy "content" bucket.
 
   Enforces a 5 MB client-side cap mirroring the server validation.
 -->
@@ -14,8 +15,19 @@
   import type { McpDeckEditorBridge } from './bridge';
 
   type UploadScope = 'soul' | 'deck' | 'global';
-  type UploadRole = 'logo' | 'content';
+  // v4.16 — wider role enum. 'content' kept for backward compat with
+  // older agents / pre-v4.16 uploads; new uploads should pick the
+  // specific bucket.
+  type UploadRole = 'logo' | 'illustration' | 'screenshot' | 'photo' | 'icon' | 'content';
   type UploadMime = 'image/png' | 'image/jpeg' | 'image/svg+xml' | 'image/webp';
+
+  const ROLE_OPTIONS: ReadonlyArray<{ value: UploadRole; label: string; hint: string }> = [
+    { value: 'illustration', label: 'Illustration', hint: 'Hand-drawn / vector / decorative imagery' },
+    { value: 'screenshot',   label: 'Screenshot',   hint: 'UI capture — pair with image.frame' },
+    { value: 'photo',        label: 'Photo',        hint: 'Photographic content (people / places / products)' },
+    { value: 'logo',         label: 'Logo',         hint: 'Brand mark / corporate identity' },
+    { value: 'icon',         label: 'Icon',         hint: 'Small inline mark (distinct from curated lucide set)' },
+  ];
 
   interface Props {
     bridge: McpDeckEditorBridge;
@@ -47,7 +59,8 @@
   // Starts at 'global' until onMount picks a better default — avoids
   // capturing prop values outside a reactive scope.
   let scope = $state<UploadScope>('global');
-  let role = $state<UploadRole>('content');
+  // Default to illustration (the most common decoration / content use case).
+  let role = $state<UploadRole>('illustration');
   let uploading = $state(false);
   let error = $state('');
   let inputEl = $state<HTMLInputElement | null>(null);
@@ -198,14 +211,12 @@
     <fieldset class="seg">
       <legend class="seg-label">Use as</legend>
       <div class="seg-options">
-        <label class={`seg-opt ${role === 'content' ? 'active' : ''}`}>
-          <input type="radio" name="upload-role" value="content" bind:group={role} />
-          <span>Content</span>
-        </label>
-        <label class={`seg-opt ${role === 'logo' ? 'active' : ''}`}>
-          <input type="radio" name="upload-role" value="logo" bind:group={role} />
-          <span>Logo</span>
-        </label>
+        {#each ROLE_OPTIONS as opt (opt.value)}
+          <label class={`seg-opt ${role === opt.value ? 'active' : ''}`} title={opt.hint}>
+            <input type="radio" name="upload-role" value={opt.value} bind:group={role} />
+            <span>{opt.label}</span>
+          </label>
+        {/each}
       </div>
     </fieldset>
   </div>

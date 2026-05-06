@@ -12,7 +12,6 @@ import type { ServiceContainer } from '../../container.js';
 import { BooleanParamSchema } from '../_shared/schemas.js';
 import { textResponse } from '../_shared/responses.js';
 import { handleToolError } from '../_shared/error-handler.js';
-import { FormatNotExportableError } from '../../types/errors.js';
 import { validateSlidesForExport } from './export-validation.js';
 
 export function registerExportHtmlTool(server: McpServer, container: ServiceContainer): void {
@@ -21,13 +20,14 @@ export function registerExportHtmlTool(server: McpServer, container: ServiceCont
     {
       title: 'Export HTML',
       description:
-        'Export a slide-model deck as a self-contained HTML file with optional slide navigation. ' +
-        'ONLY applies to decks with authoringModel="slides" — document-model decks cannot be exported as HTML, ' +
-        'use export_pdf instead (a FormatNotExportableError names the correct tool). ' +
-        'Set include_data to true to also receive the HTML content in the response.',
+        'Export a deck as a self-contained HTML file. Slide-model decks render as a single ' +
+        'page with optional navigation; document-model decks (v4.18+) render as the ' +
+        'continuous A4/Letter HTML the PDF exporter consumes — same composer, same fonts, ' +
+        'same chrome, no Playwright needed. Set include_data to also receive the HTML content ' +
+        'in the response.',
       inputSchema: z.object({
         deck_id: z.string().describe('The deck to export.'),
-        include_navigation: BooleanParamSchema.describe('Whether to include slide navigation controls. Defaults to false.'),
+        include_navigation: BooleanParamSchema.describe('Whether to include slide navigation controls. Slide-model only — ignored for document-model decks. Defaults to false.'),
         include_data: BooleanParamSchema.describe('If true, include the full HTML content as an embedded resource in the response. Defaults to false.'),
       }),
     },
@@ -35,24 +35,40 @@ export function registerExportHtmlTool(server: McpServer, container: ServiceCont
       try {
         // Get deck info and all slides
         const summary = await container.deckService.getDeckSummary(deck_id);
+        let result;
         if (summary.authoringModel === 'document') {
-          throw new FormatNotExportableError(
+          // v4.18 — document-mode HTML export. Route through DocumentComposer
+          // (the same path used for PDF) so cards / flow / decoration / fonts /
+          // bg classes all flow through with full parity.
+          const deckId = await container.deckService.resolveRefOrThrow(deck_id);
+          const deck = (await container.deckStore.get(deckId))!;
+          const sectionIds = deck.sectionIds ?? [];
+          const sections = await Promise.all(
+            sectionIds.map((sid) => container.sectionStore.get(sid)),
+          );
+          const validSections = sections.filter((s): s is NonNullable<typeof s> => Boolean(s));
+          const { soul } = await container.soulService.get(deck.soulId);
+          const documentMeta = deck.documentMeta ?? {};
+          result = await container.renderService.exportDocumentHtml({
+            sections: validSections,
+            deck,
+            soul,
+            deckTitle: summary.title,
+            documentMeta,
+          });
+        } else {
+          const slides = await Promise.all(
+            summary.slides.map((s) => container.deckService.getSlide(s.id as string)),
+          );
+          await validateSlidesForExport(container, deck_id, summary.soulId as string, slides);
+
+          result = await container.renderService.exportHtml(
+            slides,
+            summary.title,
+            include_navigation ?? false,
             summary.format,
-            'export_html',
-            'export_pdf',
           );
         }
-        const slides = await Promise.all(
-          summary.slides.map((s) => container.deckService.getSlide(s.id as string)),
-        );
-        await validateSlidesForExport(container, deck_id, summary.soulId as string, slides);
-
-        const result = await container.renderService.exportHtml(
-          slides,
-          summary.title,
-          include_navigation ?? false,
-          summary.format,
-        );
 
         // Write to output directory
         const outputDir = container.config.outputDir;

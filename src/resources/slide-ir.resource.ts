@@ -2,11 +2,17 @@
  * MCP Resource: pengui://schema/slide-ir
  *
  * Exposes the SlideIR / SectionIR JSON Schema so agents can fetch the
- * authoritative node grammar (hero, prose, image, callout, heading,
- * list, divider, quote, table, two_column, grid) with field types and
- * enums, instead of inferring shape from tool descriptions alone. Both
- * slides (slide-model decks) and sections (document-model decks)
- * consume the same node union.
+ * authoritative node grammar with field types and enums, instead of
+ * inferring shape from tool descriptions alone. Both slides (slide-model
+ * decks) and sections (document-model decks) consume the same node union.
+ *
+ * v4.17 catalog (last revised 2026-05-06):
+ *   Leaves            : hero · prose · image · callout · heading · list ·
+ *                        divider · quote · table · chart
+ *   Compound          : card (v4.13) · two_column · grid
+ *   Doc-only          : toc · bibliography · page_break
+ *   Slide-only        : section_divider
+ *   Bimodal-positional: decoration (v4.16) · flow (v4.17)
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -26,15 +32,17 @@ export function registerSlideIRSchemaResource(server: McpServer): void {
     name: 'slide-ir-schema',
     mimeType: 'application/json',
     description:
-      'JSON Schema for the Slide / Section IR node tree. Lists every node type ' +
-      '(hero, prose, image, callout, heading, list, divider, quote, table, chart, card, two_column, grid), ' +
-      'their fields, the rich-text run shape, and the semantic token enums (background ' +
-      'roles, color roles). Fetch this once per session and use it to compose `slide_ir` / ' +
-      '`section_ir` arguments for add_slide, update_slide, add_section, update_section, ' +
-      'validate_slide_ir, and validate_section_ir.',
+      'JSON Schema for the Slide / Section IR node tree. v4.17 catalog: ' +
+      'hero · prose · image · callout · heading · list · divider · quote · table · chart · ' +
+      'card (v4.13) · two_column · grid · decoration (v4.16) · flow (v4.17) ' +
+      'plus the doc-only set (toc · bibliography · page_break) and slide-only section_divider. ' +
+      'Fields, rich-text run shape, and semantic token enums (background roles, color roles) ' +
+      'are all in the JSON Schema payload. Fetch this once per session and use it to compose ' +
+      '`slide_ir` / `section_ir` arguments for add_slide, update_slide, add_section, ' +
+      'update_section, validate_slide_ir, and validate_section_ir.',
     getText: () => {
       const payload = {
-        version: '4.14',
+        version: '4.17',
         node_types: SLIDE_NODE_TYPES,
         slide_ir: z.toJSONSchema(SlideIRSchema),
         section_ir: z.toJSONSchema(SectionIRSchema),
@@ -102,6 +110,46 @@ export function registerSlideIRSchemaResource(server: McpServer): void {
             'Authoring guidance: the agent does NOT set chrome on each slide — set it once on ' +
             'the deck. The agent CAN set `chrome_override: "hide"` on a specific slide when the ' +
             'deck-level chrome would clash with the content.',
+          'Decoration nodes (v4.16): TOP-LEVEL purely visual elements with no text content. ' +
+            'Use them sparingly to add ornament / atmosphere — bleed marks, glow rings around a ' +
+            'focal point, dotted grid texture in negative space. Two source kinds: `asset_ref` ' +
+            '(uploaded asset by id, typically role: "illustration") OR `preset` (one of 6 inline ' +
+            'SVG primitives: glow_ring · radial_glow · grid_dots · corner_bracket · ' +
+            'chevron_arrow · noise_overlay). Placement uses `anchor` (9 in-canvas anchors plus ' +
+            '8 bleed_* anchors that push past the canvas edge) + optional offset / size / ' +
+            'rotation / opacity. `layer: "background"` paints behind body content; ' +
+            '`layer: "foreground"` paints on top. `accent` tints preset ornaments via ' +
+            'currentColor. Decorations CANNOT nest inside cards / grid cells — they always ' +
+            'anchor against the slide / section root.',
+          'Image frame chrome (v4.16): set `image.frame: "browser" | "phone" | "desktop" | ' +
+            '"laptop"` to wrap the asset in a device-style chrome (browser titlebar + URL bar, ' +
+            'phone bezel + status bar, monitor bezel + stand, laptop lid + keyboard). Pair with ' +
+            'asset role "screenshot" for UI prototype visuals. Frame chrome ships as native ' +
+            'PPTX shapes, not raster — every chrome element survives editable export.',
+          'Flow nodes (v4.17): sequential pipeline visualisation (Galici slide 11 ' +
+            '"Backlog Grooming → Sprint Planning → Development → Demo + retro"). Schema: ' +
+            '`{ type: "flow", direction: "horizontal" | "vertical", connector: "arrow" | ' +
+            '"arrow_dashed" | "cycle" | "plus", steps: [{ label: RichText, accent?, icon?, ' +
+            'badge? }] }`. Min 2 steps; the validate_slide_ir tool emits a `flow-density-high` ' +
+            'warning at >7 steps (visual readability). Each step pill mirrors the v4.13 card ' +
+            'pattern (top-border accent + optional lucide icon + optional badge "01" / "Q1" / ' +
+            '"Done"). Connector glyphs render between adjacent steps; `cycle` adds a closing ' +
+            'return-arrow after the last step (visual loop cue, not a literal curved wrap). ' +
+            'Flow can NEST inside cards / grid cells / two_column children, so use it to ' +
+            'compose "process inside a card" patterns.',
+          'Asset roles (v4.16 widened): when uploading via upload_asset, pick the role that ' +
+            'matches the use: `logo` (brand marks for chrome.header.left/right slots), ' +
+            '`illustration` (decorations + hero accents), `screenshot` (pair with image.frame ' +
+            'for UI prototype slides), `photo` (photographic content), `icon` (small inline ' +
+            'marks distinct from the curated lucide set). `content` is a v4.15-and-earlier ' +
+            'alias — agents on v4.16+ should pick a more specific role.',
+          'Doc-only nodes: toc (auto table-of-contents resolved at print time from ' +
+            'chapter_header / heading sections), bibliography (numbered reference list), ' +
+            'page_break (forces flow onto a new page). All three are rejected at Stage 1 in ' +
+            'slide IR — slides are page-bound, no pagination flow exists.',
+          'Slide-only node: section_divider (full-bleed chapter break with optional label + ' +
+            'ornament). Document mode uses chapter_header sections instead — section_divider is ' +
+            'rejected at Stage 1 in section IR.',
         ],
       };
       return JSON.stringify(payload, null, 2);

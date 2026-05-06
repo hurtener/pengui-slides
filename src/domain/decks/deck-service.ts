@@ -53,6 +53,7 @@ import {
   compileSlideIRToHtml,
   duplicateNodeAtPath,
   insertNodeAtPath,
+  lintFlowDensity,
   lintNodesForMode,
   moveNodeAtPath,
   removeNodeAtPath,
@@ -291,6 +292,17 @@ export class DeckService {
       );
     }
 
+    // v4.17 — non-blocking flow density warnings (>7 steps). Surface via
+    // logger so the App / agent operator sees them; the canonical
+    // pre-flight gate is `validate_slide_ir`, which returns warnings
+    // explicitly. Hard schema-level constraints (e.g. min 2 steps) are
+    // already enforced by SlideIRSchema.parse before we ever reach here.
+    for (const w of lintFlowDensity(input.ir.body)) {
+      this.logger.warn('Flow density warning', {
+        deckId: deck.id, code: w.code, path: w.path, stepCount: w.stepCount,
+      });
+    }
+
     const soul = await this.soulStore.get(deck.soulId);
     if (!soul) {
       throw new SoulNotFoundError(deck.soulId as string);
@@ -440,6 +452,11 @@ export class DeckService {
             .map((m) => `${m.path} (${m.nodeType})`)
             .join(', ')}. ${modeIssues[0].message}`,
         );
+      }
+      for (const w of lintFlowDensity(input.ir.body)) {
+        this.logger.warn('Flow density warning', {
+          deckId: deck.id, slideId: slide.id, code: w.code, path: w.path, stepCount: w.stepCount,
+        });
       }
       const soul = await this.soulStore.get(deck.soulId);
       if (!soul) {

@@ -859,11 +859,51 @@ export const NODE_CSS = `
   transform: rotate(90deg);
 }
 
-/* Cycle's closing return-arrow rotates 180° to visually point back
- * toward the start — communicates the loop without literally drawing
- * the curved wrap (deferred to v4.18+). */
-.pengui-flow-connector-return > svg {
-  transform: rotate(180deg);
+/* Cycle's closing return-arrow inherits the cycle glyph (a U-bend
+ * already pointing back toward start). The closing connector sits
+ * AFTER the last step in horizontal flow — its left-pointing arrowhead
+ * naturally reads as "loop back". For VERTICAL cycle flows we also
+ * rotate the cycle glyph 90° so the U-bend opens upward (visual
+ * "loop back to top"); without this the U-bend stays sideways and
+ * looks wrong between vertically-stacked steps. */
+.pengui-flow-vertical > .pengui-flow-connector-glyph-cycle > svg {
+  transform: rotate(90deg);
+}
+
+/* ── v4.18 parity: document-mode section root ────────────────────
+ *
+ * Pre-v4.18 only the .slide root carried position:relative + bg/layout
+ * + decoration-overflow rules. The document composer wraps each
+ * SectionIR in a <section class="pengui-section ..."> that already
+ * carries pengui-bg-* and pengui-section-LAYOUT classes from
+ * compileSectionIRToHtml, but no CSS targeted them — so backgrounds,
+ * centered layout, and decoration positioning were no-ops in A4 PDF.
+ * These selectors close the slide/section parity gap for every
+ * bimodal node (decoration, flow, card, framed image). */
+.pengui-section {
+  position: relative;
+}
+.pengui-section.pengui-bg-canvas      { background: var(--color-canvas); }
+.pengui-section.pengui-bg-surface     { background: var(--color-surface); }
+.pengui-section.pengui-bg-surface-alt { background: var(--color-surface-alt); }
+.pengui-section.pengui-bg-accent {
+  background: var(--color-accent-primary);
+  --color-text-default: var(--color-text-inverse);
+  --color-text-muted: var(--color-text-inverse);
+}
+.pengui-section.pengui-section-centered {
+  text-align: center;
+}
+.pengui-section:has(.pengui-decoration-bleed) {
+  overflow: visible;
+}
+/* Body content inside a section gets the same z-stacking as in slides
+ * so foreground decorations layer above body and background ones
+ * paint behind. Without this, source order alone determines z-order
+ * and decoration layering breaks in document-mode. */
+.pengui-section > :not(.pengui-decoration) {
+  position: relative;
+  z-index: 10;
 }
 `;
 

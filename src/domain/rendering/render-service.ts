@@ -35,6 +35,8 @@ import { ImagePptxExporter } from './pptx-exporter.js';
 import { EditablePptxExporter } from './editable-pptx-exporter.js';
 import { PdfExporter } from './pdf-exporter.js';
 import { HtmlExporter } from './html-exporter.js';
+import { DocumentComposer } from './document-composer.js';
+import { FORMAT_REGISTRY } from '../formats/format-registry.js';
 
 // ── Render Service ───────────────────────────────────────────────
 
@@ -175,6 +177,59 @@ export class RenderService {
   ): Promise<ExportResult> {
     const exporter = this.ensureHtmlExporter();
     return exporter.export(slides, deckTitle, { includeNavigation, format });
+  }
+
+  /**
+   * v4.18 — Export a continuous-document deck (authoringModel:'document')
+   * as a self-contained HTML file. Wraps DocumentComposer's output (the
+   * same HTML Playwright pdf-renders) so consumers can ship the document
+   * in a roundtrippable form. Closes the slide/document HTML-export
+   * parity gap from the v4.17 audit.
+   */
+  async exportDocumentHtml(input: {
+    sections: Section[];
+    deck: Deck;
+    soul: DesignSoul;
+    deckTitle: string;
+    documentMeta: DocumentMeta;
+  }): Promise<ExportResult> {
+    const { sections, deck, soul, deckTitle, documentMeta } = input;
+    const geometry = deck.format
+      ? FORMAT_REGISTRY[deck.format].geometry
+      : FORMAT_REGISTRY.slides_16_9.geometry;
+    const composer = new DocumentComposer(this.logger.child('document-composer'));
+    const composed = await composer.compose({
+      sections,
+      deck,
+      soul,
+      geometry,
+      documentMeta,
+      assetService: this.assetService,
+    });
+    const data = Buffer.from(composed.html, 'utf-8');
+    // Same filename sanitisation rule as the slide HtmlExporter — keep
+    // ASCII alphanumerics + hyphens, collapse other runs to underscores,
+    // cap at 100 chars to keep filesystems happy.
+    const filename =
+      (deckTitle
+        .toLowerCase()
+        .replace(/[^a-z0-9-_]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 100) || 'document') + '.html';
+    this.logger.info('Document HTML export complete', {
+      filename,
+      sectionCount: sections.length,
+      bytes: data.length,
+    });
+    return {
+      format: 'html',
+      data,
+      mimeType: 'text/html',
+      filename,
+      slideCount: sections.length,
+      fileSizeBytes: data.length,
+      exportedAt: new Date().toISOString(),
+    };
   }
 
   async renderSlideHtml(
