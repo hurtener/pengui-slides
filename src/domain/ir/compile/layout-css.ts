@@ -217,6 +217,15 @@ export const NODE_CSS = `
      not the accent (which is reserved for the icon + accent flourishes). */
   color: var(--color-text-default);
 }
+
+/* v4.19.1 — horizontal body layout. Cards opt in via body_layout: 'row'
+ * for chip rows / horizontal pipelines (BRONZE/SILVER/GOLD chip strip,
+ * workspace dot row, bottom-legend mini-chips). */
+.pengui-card-body-row {
+  flex-direction: row !important;
+  flex-wrap: wrap;
+  align-items: center;
+}
 /* Per-accent overrides — each rule sets BOTH the border tint and the
    icon-anchor color so the card reads as one coherent semantic unit.
    The class names mirror the TextColor enum (underscore → hyphen). */
@@ -243,7 +252,13 @@ export const NODE_CSS = `
   background: currentColor;
   border-color: transparent;
 }
-.pengui-card-fill-solid > * {
+/* Cascade inverse text into ALL descendants (not just > * children) so
+ * the text inside .pengui-card-body — which resets color to default —
+ * also flips to inverse. Selector specificity beats .pengui-card-body
+ * which carries the same default-color reset. */
+.pengui-card-fill-solid,
+.pengui-card-fill-solid .pengui-card-body,
+.pengui-card-fill-solid .pengui-card-body * {
   color: var(--color-text-inverse);
 }
 

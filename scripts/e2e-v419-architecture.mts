@@ -122,14 +122,14 @@ function consolidatedSemanticLayer(): SlideIR {
 
       // Main canvas — three-column grid: Sources | Catalogs | Consumers.
       {
-        type: 'grid', columns: 3, gap: 'lg',
+        type: 'grid', columns: 3, gap: 'lg', align_items: 'stretch',
         cells: [
           // ── Left column: TPE Sources card ─────────────────────
           [
             {
               type: 'card', accent: 'accent', icon: 'database',
               body: [
-                { type: 'heading', level: 3, text: [{ text: 'TPE\nSources' }] },
+                { type: 'heading', level: 3, text: [{ text: 'TPE Sources' }] },
                 { type: 'prose', body: [{ text: 'Source systems & legacy warehouses', color: 'muted' }] },
               ],
             },
@@ -140,73 +140,61 @@ function consolidatedSemanticLayer(): SlideIR {
               type: 'card',
               accent: 'accent', border_style: 'dashed',
               body: [
+                // Header pill (solid navy chip across the top)
                 {
                   type: 'chip', accent: 'accent', tone: 'solid',
                   label: [{ text: 'Databricks · Unity Catalog' }],
                 },
                 {
                   type: 'heading', level: 6,
-                  text: [{ text: 'catalog: lakehouse', color: 'accent' }],
+                  text: [{ text: 'catalog: lakehouse — 3 schemas', color: 'accent' }],
                 },
-                // BRONZE / SILVER / GOLD trio inline — chips per
-                // schema with a tinted card background.
+                // BRONZE / SILVER / GOLD trio in a single row.
                 {
                   type: 'chip', accent: 'accent_warm', tone: 'tint', dot: true,
-                  label: [{ text: 'Bronze schema — raw, ingested as-is' }],
+                  label: [{ text: 'Bronze · raw, ingested as-is' }],
                 },
                 {
                   type: 'chip', accent: 'muted', tone: 'tint', dot: true,
-                  label: [{ text: 'Silver schema — cleansed, conformed, deduplicated' }],
+                  label: [{ text: 'Silver · cleansed, conformed, deduped' }],
                 },
                 {
                   type: 'chip', accent: 'warning', tone: 'tint', dot: true,
-                  label: [{ text: 'Gold schema — curated business marts & aggregates' }],
+                  label: [{ text: 'Gold · curated business marts' }],
                 },
                 { type: 'divider' },
                 {
                   type: 'heading', level: 6,
-                  text: [{ text: 'catalog: semantic', color: 'info' }],
+                  text: [{ text: 'catalog: semantic — 1 schema', color: 'info' }],
                 },
+                { type: 'heading', level: 5, text: [{ text: 'schema: metrics', color: 'info' }] },
+                { type: 'prose', body: [{ text: 'Governed metrics, KPIs & certified views (Delta).', color: 'muted' }] },
                 {
-                  type: 'card', accent: 'info', fill: 'tint',
-                  body: [
-                    { type: 'heading', level: 5, text: [{ text: 'Schema: metrics' }] },
-                    { type: 'prose', body: [{ text: 'Governed metrics, KPIs & certified views (Delta).', color: 'muted' }] },
-                    {
-                      type: 'chip', accent: 'success', tone: 'tint', dot: true,
-                      label: [{ text: 'Views — certified' }],
-                    },
-                    {
-                      type: 'chip', accent: 'info', tone: 'tint', dot: true,
-                      label: [{ text: 'Materialized views — precomputed' }],
-                    },
-                    {
-                      type: 'chip', accent: 'success', tone: 'tint', dot: true,
-                      label: [{ text: 'Metric views — KPIs & governed metrics' }],
-                    },
-                  ],
-                },
-                { type: 'divider' },
-                // Workspaces strip
-                {
-                  type: 'heading', level: 6,
-                  text: [{ text: 'Workspaces — isolated per environment, governed by Unity Catalog', color: 'muted' }],
-                },
-                {
-                  type: 'chip', accent: 'muted', tone: 'tint', dot: true,
-                  label: [{ text: 'dev' }],
+                  type: 'chip', accent: 'success', tone: 'tint', dot: true,
+                  label: [{ text: 'Views · certified' }],
                 },
                 {
                   type: 'chip', accent: 'info', tone: 'tint', dot: true,
-                  label: [{ text: 'qa' }],
-                },
-                {
-                  type: 'chip', accent: 'accent_warm', tone: 'tint', dot: true,
-                  label: [{ text: 'uat' }],
+                  label: [{ text: 'Materialized views · precomputed' }],
                 },
                 {
                   type: 'chip', accent: 'success', tone: 'tint', dot: true,
-                  label: [{ text: 'prod' }],
+                  label: [{ text: 'Metric views · KPIs & governed' }],
+                },
+                { type: 'divider' },
+                {
+                  type: 'heading', level: 6,
+                  text: [{ text: 'Workspaces — governed by Unity Catalog', color: 'muted' }],
+                },
+                // Workspaces — horizontal chip strip via a row-layout card.
+                {
+                  type: 'card', accent: 'muted', border_style: 'none', body_layout: 'row',
+                  body: [
+                    { type: 'chip', accent: 'muted',       tone: 'tint', dot: true, label: [{ text: 'dev'  }] },
+                    { type: 'chip', accent: 'info',        tone: 'tint', dot: true, label: [{ text: 'qa'   }] },
+                    { type: 'chip', accent: 'accent_warm', tone: 'tint', dot: true, label: [{ text: 'uat'  }] },
+                    { type: 'chip', accent: 'success',     tone: 'tint', dot: true, label: [{ text: 'prod' }] },
+                  ],
                 },
               ],
             },
@@ -217,7 +205,7 @@ function consolidatedSemanticLayer(): SlideIR {
               type: 'card', accent: 'accent', fill: 'solid', icon: 'sparkles',
               body: [
                 { type: 'heading', level: 4, text: [{ text: 'AI Platform' }] },
-                { type: 'prose', body: [{ text: 'Insights Agent — answers business questions in natural language.' }] },
+                { type: 'prose', body: [{ text: 'Insights Agent — natural-language business questions.' }] },
                 { type: 'prose', body: [{ text: 'Forecast Agent — projects KPIs from certified metric history.' }] },
                 { type: 'prose', body: [{ text: 'Ops Agent — monitors thresholds & triggers actions.' }] },
                 { type: 'prose', body: [{ text: '→ Reads from semantic.metrics' }] },
@@ -237,24 +225,20 @@ function consolidatedSemanticLayer(): SlideIR {
         ],
       },
 
-      // Bottom legend strip
+      // Bottom legend strip — single-row card with mixed chip set.
       {
-        type: 'two_column', ratio: '2:1', gap: 'md',
-        left: [
+        type: 'card', accent: 'muted', border_style: 'none', body_layout: 'row',
+        body: [
           {
             type: 'prose',
             body: [
               { text: 'One ' }, { text: 'Unity Catalog', bold: true, color: 'accent' },
-              { text: ' · ' }, { text: 'lakehouse', bold: true },
-              { text: ': bronze · silver · gold · ' }, { text: 'semantic', bold: true },
-              { text: ': metrics · consumed by reporting & AI agents.', color: 'muted' },
+              { text: ' · lakehouse: bronze · silver · gold · semantic: metrics · consumed by reporting & AI agents.', color: 'muted' },
             ],
           },
-        ],
-        right: [
           { type: 'chip', accent: 'success', tone: 'tint', dot: true, label: [{ text: 'Delta' }] },
-          { type: 'chip', accent: 'info', tone: 'tint', dot: true, label: [{ text: 'Unity Catalog' }] },
-          { type: 'chip', accent: 'accent', tone: 'tint', dot: true, label: [{ text: 'Agents' }] },
+          { type: 'chip', accent: 'info',    tone: 'tint', dot: true, label: [{ text: 'Unity Catalog' }] },
+          { type: 'chip', accent: 'accent',  tone: 'tint', dot: true, label: [{ text: 'Agents' }] },
         ],
       },
     ],

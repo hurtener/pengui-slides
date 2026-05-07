@@ -374,6 +374,11 @@ export const CardNodeSchema = z
     eyebrow: RichTextSchema.optional(),
     /** Inner content — leaves only, no nested cards. */
     body: z.array(LeafBlockNodeSchema),
+    /** v4.19.1 — body layout direction. `column` (default) stacks
+     *  children top-to-bottom; `row` lays them out left-to-right with
+     *  flex-wrap. Use `row` for chip rows / horizontal mini-card
+     *  pipelines. */
+    body_layout: z.enum(['column', 'row']).optional(),
     /** v4.19 — background fill variant. Defaults to `none` (transparent
      *  card with the v4.13 top accent stripe). `tint` paints a soft,
      *  low-opacity wash of the accent color (BRONZE/SILVER/GOLD-style

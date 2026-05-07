@@ -410,6 +410,11 @@ function renderCard(node: CardNode, path: IRPath, dataAttr: string): string {
     node.eyebrow && node.eyebrow.length > 0
       ? `<p class="pengui-card-eyebrow"${fieldAttr('eyebrow')}>${renderRichText(node.eyebrow)}</p>`
       : '';
+  // v4.19.1 — body layout direction. `row` lays children out
+  // horizontally with flex-wrap (chip rows, horizontal pipelines).
+  const bodyLayoutClass = node.body_layout === 'row'
+    ? ' pengui-card-body-row'
+    : '';
   const bodyHtml = node.body
     .map((n: LeafBlockNode, i) => renderNode(n, [...path, 'body', i]))
     .join('');
@@ -417,7 +422,7 @@ function renderCard(node: CardNode, path: IRPath, dataAttr: string): string {
     `<article class="pengui-card${accentClass}${fillClass}${borderClass}"${dataAttr}>` +
     iconHtml +
     eyebrowHtml +
-    `<div class="pengui-card-body">${bodyHtml}</div>` +
+    `<div class="pengui-card-body${bodyLayoutClass}">${bodyHtml}</div>` +
     `</article>`
   );
 }
