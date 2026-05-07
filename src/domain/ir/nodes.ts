@@ -303,6 +303,32 @@ export type FlowNode = z.infer<typeof FlowNodeSchema>;
 // excluded so cards can't nest inside cards (single level of wrapping).
 // Flow is included so a card can host a step pipeline (Galici "process
 // in a card" pattern).
+// ── v4.19 chip node ──────────────────────────────────────────────
+//
+// Small inline pill / badge with optional leading dot + label.
+// Architecture diagrams lean on these heavily for category labels
+// (CERTIFIED, PRECOMPUTED), workspace dots (dev / qa / uat / prod),
+// and section eyebrows (SOLUTION). Fits in any leaf slot — agents
+// can wrap them in a flow-row card or place inline in a heading.
+
+export const ChipNodeSchema = z
+  .object({
+    type: z.literal('chip'),
+    label: RichTextSchema,
+    /** Soul accent for both the dot and the chip background tint. */
+    accent: TextColorSchema.optional(),
+    /** `tint` (default) = light wash of the accent color; `solid` = full
+     *  accent fill with inverse text for max emphasis; `outline` = thin
+     *  border in the accent color with transparent background. */
+    tone: z.enum(['tint', 'solid', 'outline']).optional(),
+    /** When true, render a leading dot in the accent color before the
+     *  label. Used for workspace badges (● dev) and category labels
+     *  (● Delta). */
+    dot: z.boolean().optional(),
+  })
+  .strict();
+export type ChipNode = z.infer<typeof ChipNodeSchema>;
+
 export const LeafBlockNodeSchema = z.discriminatedUnion('type', [
   HeroNodeSchema,
   ProseNodeSchema,
@@ -315,6 +341,7 @@ export const LeafBlockNodeSchema = z.discriminatedUnion('type', [
   TableNodeSchema,
   ChartNodeSchema,
   FlowNodeSchema,
+  ChipNodeSchema,
 ]);
 export type LeafBlockNode = z.infer<typeof LeafBlockNodeSchema>;
 
@@ -347,6 +374,19 @@ export const CardNodeSchema = z
     eyebrow: RichTextSchema.optional(),
     /** Inner content — leaves only, no nested cards. */
     body: z.array(LeafBlockNodeSchema),
+    /** v4.19 — background fill variant. Defaults to `none` (transparent
+     *  card with the v4.13 top accent stripe). `tint` paints a soft,
+     *  low-opacity wash of the accent color (BRONZE/SILVER/GOLD-style
+     *  category cards). `solid` fills with the full accent color and
+     *  flips text to inverse for legibility (the SOLUTION pill on
+     *  architecture diagrams). */
+    fill: z.enum(['none', 'tint', 'solid']).optional(),
+    /** v4.19 — outline style. Defaults to `solid`. `dashed` draws the
+     *  border with a dashed stroke (the dashed container around the
+     *  Databricks · Unity Catalog region in architecture diagrams).
+     *  `none` removes the outline entirely (used when fill carries the
+     *  visual weight). */
+    border_style: z.enum(['solid', 'dashed', 'none']).optional(),
   })
   .strict();
 export type CardNode = z.infer<typeof CardNodeSchema>;
@@ -370,6 +410,7 @@ export const LeafSlideNodeSchema = z.discriminatedUnion('type', [
   ChartNodeSchema,
   CardNodeSchema,
   FlowNodeSchema,
+  ChipNodeSchema,
 ]);
 export type LeafSlideNode = z.infer<typeof LeafSlideNodeSchema>;
 
@@ -575,6 +616,7 @@ export const SlideNodeSchema = z.discriminatedUnion('type', [
   TableNodeSchema,
   ChartNodeSchema,
   CardNodeSchema,
+  ChipNodeSchema,
   TwoColumnNodeSchema,
   GridNodeSchema,
   TocNodeSchema,

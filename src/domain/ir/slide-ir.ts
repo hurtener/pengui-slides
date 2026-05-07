@@ -35,6 +35,14 @@ export const SlideIRSchema = z
   .object({
     layout: SlideLayoutSchema.optional(),
     background: BackgroundRoleSchema.optional(),
+    /** v4.19 — explicit CSS color override (e.g. `'#F0EDFF'`) for the
+     *  slide canvas. Wins over `background` (semantic role). Used by
+     *  architecture diagrams and section dividers that need a tint
+     *  outside the soul's role palette. */
+    background_color: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/u, 'background_color must be a 6-digit hex like #F0EDFF')
+      .optional(),
     body: z.array(SlideNodeSchema),
     /** v4.14: per-slide chrome decision. `'hide'` suppresses deck chrome
      *  on this slide (covers, full-bleed sections); omitted/`'inherit'`

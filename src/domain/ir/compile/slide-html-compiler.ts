@@ -68,6 +68,12 @@ export function compileSlideIRToHtml({
   const background = ir.background ?? 'canvas';
   const backgroundClass = `pengui-bg-${background.replace(/_/g, '-')}`;
   const layoutClass = `pengui-layout-${layout}`;
+  // v4.19 — explicit CSS color override wins over the semantic role.
+  // Inline-style on the slide root so the rasterized PNG and the
+  // editable PPTX walker both see the same canvas color.
+  const backgroundStyle = ir.background_color
+    ? ` style="background:${ir.background_color}"`
+    : '';
 
   // v4.14 chrome decision: per-slide override beats deck setting.
   const renderChrome =
@@ -115,7 +121,7 @@ export function compileSlideIRToHtml({
     `<style>\n${css}\n</style>`,
     '</head>',
     '<body>',
-    `<div class="slide ${backgroundClass} ${layoutClass}${chromeClass}">`,
+    `<div class="slide ${backgroundClass} ${layoutClass}${chromeClass}"${backgroundStyle}>`,
     headerHtml,
     wrappedBody,
     footerHtml,

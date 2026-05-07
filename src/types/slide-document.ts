@@ -278,6 +278,20 @@ export type SlideElement =
  *       card / decoration / flow step is one repositionable image with
  *       editable text overlays — best of both worlds. Rev-14 docs are
  *       missing the snapshots.
+ *  - 17: v4.19 — three additive primitives for architecture diagrams:
+ *       (a) `card.fill: 'tint' | 'solid'` — tinted (BRONZE/SILVER/GOLD)
+ *           and solid (SOLUTION pill) card backgrounds. The walker
+ *           captures the card via the existing snapshot pass; the new
+ *           variants only change paint, not the inventory shape.
+ *       (b) `card.border_style: 'dashed' | 'none'` — dashed for the
+ *           data-platform container outlines.
+ *       (c) New `chip` leaf node — small inline pill (CERTIFIED,
+ *           PRECOMPUTED, ● dev workspace badges). NOT a snapshot
+ *           candidate; the walker handles it via the generic
+ *           hasVisualShape branch (background + border). Also adds
+ *           `slide.background_color` (CSS hex string) for canvas
+ *           overrides outside the soul role palette. Rev-16 docs
+ *           don't carry the new card shape variants or chip elements.
  *  - 16: v4.18.2 — two correctness fixes on the snapshot pass:
  *       (a) Text in PNG snapshots is now hidden globally during the
  *           snapshot pass (`* { color: transparent }`) so painted text
@@ -296,7 +310,7 @@ export type SlideElement =
  *           groups them by paragraph, preserving per-run color/bold/
  *           italic within each line.
  */
-export const CURRENT_COMPILER_REVISION = 16;
+export const CURRENT_COMPILER_REVISION = 17;
 
 export interface SlideDocument {
   version: '1';

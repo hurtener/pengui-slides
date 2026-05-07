@@ -23,6 +23,7 @@ import type {
   CalloutNode,
   CardNode,
   ChartNode,
+  ChipNode,
   DecorationNode,
   DividerNode,
   FlowNode,
@@ -124,6 +125,8 @@ export function renderNode(node: SlideNode, path: IRPath = []): string {
       return renderDecoration(node, attr);
     case 'flow':
       return renderFlow(node, path, attr);
+    case 'chip':
+      return renderChip(node, attr);
   }
 }
 
@@ -392,6 +395,14 @@ function renderCard(node: CardNode, path: IRPath, dataAttr: string): string {
   const accentClass = node.accent
     ? ` pengui-card-accent-${node.accent.replace(/_/g, '-')}`
     : '';
+  // v4.19 — fill + border style modifiers. Defaults match the v4.13
+  // top-accent-only behaviour. See the matching CSS in layout-css.ts.
+  const fillClass = node.fill && node.fill !== 'none'
+    ? ` pengui-card-fill-${node.fill}`
+    : '';
+  const borderClass = node.border_style && node.border_style !== 'solid'
+    ? ` pengui-card-border-${node.border_style}`
+    : '';
   const iconHtml = node.icon
     ? `<span class="pengui-card-icon" aria-hidden="true">${getIconSvg(node.icon)}</span>`
     : '';
@@ -403,11 +414,31 @@ function renderCard(node: CardNode, path: IRPath, dataAttr: string): string {
     .map((n: LeafBlockNode, i) => renderNode(n, [...path, 'body', i]))
     .join('');
   return (
-    `<article class="pengui-card${accentClass}"${dataAttr}>` +
+    `<article class="pengui-card${accentClass}${fillClass}${borderClass}"${dataAttr}>` +
     iconHtml +
     eyebrowHtml +
     `<div class="pengui-card-body">${bodyHtml}</div>` +
     `</article>`
+  );
+}
+
+// v4.19 — chip / pill renderer. Inline visual primitive for category
+// labels (CERTIFIED, PRECOMPUTED), workspace badges (● dev), and
+// solution eyebrows. Tone variants drive background + text styling
+// via CSS in layout-css.ts.
+function renderChip(node: ChipNode, dataAttr: string): string {
+  const accent = node.accent ?? 'accent';
+  const tone = node.tone ?? 'tint';
+  const accentClass = ` pengui-chip-accent-${accent.replace(/_/g, '-')}`;
+  const toneClass = ` pengui-chip-tone-${tone}`;
+  const dotHtml = node.dot
+    ? '<span class="pengui-chip-dot" aria-hidden="true"></span>'
+    : '';
+  return (
+    `<span class="pengui-chip${accentClass}${toneClass}"${dataAttr}>` +
+    dotHtml +
+    `<span class="pengui-chip-label">${renderRichText(node.label)}</span>` +
+    `</span>`
   );
 }
 

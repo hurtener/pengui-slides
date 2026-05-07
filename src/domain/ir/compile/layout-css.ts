@@ -230,6 +230,94 @@ export const NODE_CSS = `
 .pengui-card-accent-muted       { border-top-color: var(--color-text-muted);       color: var(--color-text-muted); }
 .pengui-card-accent-inverse     { border-top-color: var(--color-text-inverse);     color: var(--color-text-inverse); }
 
+/* v4.19 — fill variants. tint = soft wash of the accent color (good
+ * for category cards: BRONZE/SILVER/GOLD); solid = full accent fill
+ * with inverse text (good for SOLUTION-style chips). The accent rules
+ * above set color: ACCENT — so the wash uses currentColor with low
+ * opacity via color-mix when supported, falling back to the accent. */
+.pengui-card-fill-tint {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  border-color: color-mix(in srgb, currentColor 24%, transparent);
+}
+.pengui-card-fill-solid {
+  background: currentColor;
+  border-color: transparent;
+}
+.pengui-card-fill-solid > * {
+  color: var(--color-text-inverse);
+}
+
+/* v4.19 — border-style variants. dashed for architecture-diagram
+ * containers; none removes the outline entirely (paired with a fill
+ * variant the visual still reads). */
+.pengui-card-border-dashed {
+  border-style: dashed;
+  border-width: 2px;
+  border-top-width: 2px;
+}
+.pengui-card-border-none {
+  border-color: transparent;
+  border-top-color: transparent;
+}
+
+/* v4.19 — chip / pill primitive. Inline-flex so it sits next to text
+ * in headings or chains horizontally inside a flow row. */
+.pengui-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  white-space: nowrap;
+  vertical-align: middle;
+  color: var(--color-accent-primary);
+}
+.pengui-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  display: inline-block;
+}
+.pengui-chip-label {
+  color: inherit;
+}
+
+/* Per-accent color cascade — same naming as pengui-card-accent-*. */
+.pengui-chip-accent-accent      { color: var(--color-accent-primary); }
+.pengui-chip-accent-accent-alt  { color: var(--color-accent-secondary); }
+.pengui-chip-accent-accent-warm { color: var(--color-accent-warm); }
+.pengui-chip-accent-success     { color: var(--color-success); }
+.pengui-chip-accent-warning     { color: var(--color-warning); }
+.pengui-chip-accent-error       { color: var(--color-error); }
+.pengui-chip-accent-info        { color: var(--color-info); }
+.pengui-chip-accent-muted       { color: var(--color-text-muted); }
+.pengui-chip-accent-inverse     { color: var(--color-text-inverse); }
+
+/* Tone variants — wash, solid, outline. */
+.pengui-chip-tone-tint {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.pengui-chip-tone-solid {
+  background: currentColor;
+}
+.pengui-chip-tone-solid .pengui-chip-label {
+  color: var(--color-text-inverse);
+}
+.pengui-chip-tone-solid .pengui-chip-dot {
+  background: var(--color-text-inverse);
+}
+.pengui-chip-tone-outline {
+  background: transparent;
+  border: 1px solid currentColor;
+}
+
 .pengui-heading {
   margin: 0;
   font-family: var(--font-display);
