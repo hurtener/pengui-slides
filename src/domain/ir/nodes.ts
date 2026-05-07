@@ -325,9 +325,38 @@ export const ChipNodeSchema = z
      *  label. Used for workspace badges (● dev) and category labels
      *  (● Delta). */
     dot: z.boolean().optional(),
+    /** v4.20 — chip scale. Defaults to `sm`. `xs` is for compact
+     *  workspace dots; `lg` for prominent brand pills (SOLUTION,
+     *  Databricks·Unity Catalog). */
+    size: z.enum(['xs', 'sm', 'md', 'lg']).optional(),
   })
   .strict();
 export type ChipNode = z.infer<typeof ChipNodeSchema>;
+
+// ── v4.20 arrow node ─────────────────────────────────────────────
+//
+// Inline directional connector with an optional caption. Architecture
+// diagrams use these between cells/cards to express data flow ("READS",
+// "→", "Reads from semantic.metrics"). Renders as a small inline SVG
+// (right-pointing arrow by default) with an optional one-line label.
+// Reuses the v4.17 connector glyph catalog at
+// `src/domain/ir/compile/connectors.ts` — no new SVG art.
+
+export const ArrowNodeSchema = z
+  .object({
+    type: z.literal('arrow'),
+    /** Default: `right`. Vertical flows rotate via CSS transform. */
+    direction: z.enum(['right', 'left', 'up', 'down']).optional(),
+    /** Default: `solid`. `dashed` for soft / proposed edges. */
+    style: z.enum(['solid', 'dashed']).optional(),
+    /** Optional caption rendered beneath the arrow glyph in mono caps. */
+    label: RichTextSchema.optional(),
+    /** Soul accent token. Drives both the glyph stroke and the label
+     *  text color. Defaults to `muted`. */
+    accent: TextColorSchema.optional(),
+  })
+  .strict();
+export type ArrowNode = z.infer<typeof ArrowNodeSchema>;
 
 export const LeafBlockNodeSchema = z.discriminatedUnion('type', [
   HeroNodeSchema,
@@ -342,6 +371,7 @@ export const LeafBlockNodeSchema = z.discriminatedUnion('type', [
   ChartNodeSchema,
   FlowNodeSchema,
   ChipNodeSchema,
+  ArrowNodeSchema,
 ]);
 export type LeafBlockNode = z.infer<typeof LeafBlockNodeSchema>;
 
@@ -358,6 +388,19 @@ export type LeafBlockNode = z.infer<typeof LeafBlockNodeSchema>;
 // anywhere a leaf is allowed (top-level body, two_column children,
 // grid cells), and additive — no breaking change to existing IR.
 
+// v4.20 — header pill anchored to the card's top edge (overlapping the
+// border for the Databricks·Unity Catalog architecture-diagram pattern).
+const CardHeaderPillSchema = z
+  .object({
+    label: RichTextSchema,
+    accent: TextColorSchema.optional(),
+    tone: z.enum(['solid', 'tint', 'outline']).optional(),
+    icon: IconNameSchema.optional(),
+    align: z.enum(['left', 'center', 'right']).optional(),
+  })
+  .strict();
+export type CardHeaderPill = z.infer<typeof CardHeaderPillSchema>;
+
 export const CardNodeSchema = z
   .object({
     type: z.literal('card'),
@@ -372,7 +415,13 @@ export const CardNodeSchema = z
      *  "01 · TRAZABILIDAD" style numbering). Plain RichText so agents
      *  can color a leading number with the accent if they want to. */
     eyebrow: RichTextSchema.optional(),
-    /** Inner content — leaves only, no nested cards. */
+    /** v4.20 — pill chip anchored to the card's top edge, overlapping
+     *  the border. Adds extra padding-top to the card so the pill stays
+     *  inside the snap bbox. Used for architecture-diagram container
+     *  headers (Databricks · Unity Catalog, AI Platform). */
+    header_pill: CardHeaderPillSchema.optional(),
+    /** Inner content — leaves only. For cards-of-cards composition, use
+     *  the v4.20 `card_section` top-level node. */
     body: z.array(LeafBlockNodeSchema),
     /** v4.19.1 — body layout direction. `column` (default) stacks
      *  children top-to-bottom; `row` lays them out left-to-right with
@@ -392,6 +441,14 @@ export const CardNodeSchema = z
      *  `none` removes the outline entirely (used when fill carries the
      *  visual weight). */
     border_style: z.enum(['solid', 'dashed', 'none']).optional(),
+    /** v4.20 — inner padding scale. `compact` halves the padding for
+     *  nested mini-cards; `large` doubles it for top-level callouts.
+     *  Default: medium (existing v4.13 padding). */
+    size: z.enum(['compact', 'default', 'large']).optional(),
+    /** v4.20 — drop shadow. `flat` (default) keeps the card flush with
+     *  the slide bg; `raised` applies the soul's elevated shadow token
+     *  (used for the outer canvas card on architecture diagrams). */
+    elevation: z.enum(['flat', 'raised']).optional(),
   })
   .strict();
 export type CardNode = z.infer<typeof CardNodeSchema>;
@@ -416,6 +473,7 @@ export const LeafSlideNodeSchema = z.discriminatedUnion('type', [
   CardNodeSchema,
   FlowNodeSchema,
   ChipNodeSchema,
+  ArrowNodeSchema,
 ]);
 export type LeafSlideNode = z.infer<typeof LeafSlideNodeSchema>;
 
@@ -454,6 +512,43 @@ export const GridNodeSchema = z
   })
   .strict();
 export type GridNode = z.infer<typeof GridNodeSchema>;
+
+// ── v4.20 card_section node ──────────────────────────────────────
+//
+// Top-level container with card-style chrome (border, fill, header pill,
+// padding, shadow) that accepts ANY slide-level node as a child —
+// including grids and two_columns — so architecture diagrams can
+// compose cards-of-cards (BRONZE/SILVER/GOLD inside a "lakehouse"
+// container, AI Platform with mini agent rows). Distinct from CardNode
+// to avoid recursive Zod schema cycles: CardNode body is leaf-only,
+// card_section body is slide-level. card_section is NOT itself a
+// LeafSlideNode — it can only appear at the slide root or inside a
+// grid cell / two_column child via the existing LeafSlide path; it
+// cannot nest inside CardNode.
+
+export const CardSectionNodeSchema = z
+  .object({
+    type: z.literal('card_section'),
+    accent: TextColorSchema.optional(),
+    icon: IconNameSchema.optional(),
+    eyebrow: RichTextSchema.optional(),
+    /** Pill chip anchored to the section's top edge, overlapping the
+     *  border. Adds extra padding-top so the pill stays inside the
+     *  snap bbox. */
+    header_pill: CardHeaderPillSchema.optional(),
+    /** Inner content — full slide-level node union (leaves + Grid +
+     *  TwoColumn + nested cards via LeafSlideNode in those containers).
+     *  Cannot include another CardSection (single level of section
+     *  wrapping). */
+    body: z.array(LeafSlideNodeSchema.or(GridNodeSchema).or(TwoColumnNodeSchema)),
+    body_layout: z.enum(['column', 'row']).optional(),
+    fill: z.enum(['none', 'tint', 'solid']).optional(),
+    border_style: z.enum(['solid', 'dashed', 'none']).optional(),
+    size: z.enum(['compact', 'default', 'large']).optional(),
+    elevation: z.enum(['flat', 'raised']).optional(),
+  })
+  .strict();
+export type CardSectionNode = z.infer<typeof CardSectionNodeSchema>;
 
 // ── v4.8 mode-specific top-level nodes ───────────────────────────
 
@@ -621,7 +716,9 @@ export const SlideNodeSchema = z.discriminatedUnion('type', [
   TableNodeSchema,
   ChartNodeSchema,
   CardNodeSchema,
+  CardSectionNodeSchema,
   ChipNodeSchema,
+  ArrowNodeSchema,
   TwoColumnNodeSchema,
   GridNodeSchema,
   TocNodeSchema,

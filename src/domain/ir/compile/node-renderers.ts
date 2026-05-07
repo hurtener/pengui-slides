@@ -19,9 +19,12 @@
  */
 
 import type {
+  ArrowNode,
   BibliographyNode,
   CalloutNode,
   CardNode,
+  CardSectionNode,
+  CardHeaderPill,
   ChartNode,
   ChipNode,
   DecorationNode,
@@ -127,6 +130,10 @@ export function renderNode(node: SlideNode, path: IRPath = []): string {
       return renderFlow(node, path, attr);
     case 'chip':
       return renderChip(node, attr);
+    case 'arrow':
+      return renderArrow(node, attr);
+    case 'card_section':
+      return renderCardSection(node, path, attr);
   }
 }
 
@@ -391,18 +398,47 @@ function renderChart(node: ChartNode, dataAttr: string): string {
  * card's text color on the icon container). Default (no accent) keeps
  * a neutral border in the soul's `--color-border`.
  */
+// v4.20 — shared chrome class builder for card + card_section.
+function buildCardChromeClasses(node: {
+  accent?: CardNode['accent'];
+  fill?: CardNode['fill'];
+  border_style?: CardNode['border_style'];
+  size?: CardNode['size'];
+  elevation?: CardNode['elevation'];
+  header_pill?: CardHeaderPill;
+}): string {
+  const parts: string[] = [];
+  if (node.accent) parts.push(`pengui-card-accent-${node.accent.replace(/_/g, '-')}`);
+  if (node.fill && node.fill !== 'none') parts.push(`pengui-card-fill-${node.fill}`);
+  if (node.border_style && node.border_style !== 'solid') parts.push(`pengui-card-border-${node.border_style}`);
+  if (node.size && node.size !== 'default') parts.push(`pengui-card-size-${node.size}`);
+  if (node.elevation && node.elevation !== 'flat') parts.push(`pengui-card-elevation-${node.elevation}`);
+  if (node.header_pill) parts.push('pengui-card-has-header-pill');
+  return parts.length > 0 ? ` ${parts.join(' ')}` : '';
+}
+
+// v4.20 — header pill renderer. Anchored absolute over the card's top
+// edge. Aligned left / center / right via CSS modifier class.
+function renderCardHeaderPill(pill: CardHeaderPill): string {
+  const accent = pill.accent ?? 'accent';
+  const tone = pill.tone ?? 'solid';
+  const align = pill.align ?? 'center';
+  const accentClass = ` pengui-card-header-pill-accent-${accent.replace(/_/g, '-')}`;
+  const toneClass = ` pengui-card-header-pill-tone-${tone}`;
+  const alignClass = ` pengui-card-header-pill-align-${align}`;
+  const iconHtml = pill.icon
+    ? `<span class="pengui-card-header-pill-icon" aria-hidden="true">${getIconSvg(pill.icon)}</span>`
+    : '';
+  return (
+    `<span class="pengui-card-header-pill${accentClass}${toneClass}${alignClass}" aria-hidden="true">` +
+    iconHtml +
+    `<span class="pengui-card-header-pill-label">${renderRichText(pill.label)}</span>` +
+    `</span>`
+  );
+}
+
 function renderCard(node: CardNode, path: IRPath, dataAttr: string): string {
-  const accentClass = node.accent
-    ? ` pengui-card-accent-${node.accent.replace(/_/g, '-')}`
-    : '';
-  // v4.19 — fill + border style modifiers. Defaults match the v4.13
-  // top-accent-only behaviour. See the matching CSS in layout-css.ts.
-  const fillClass = node.fill && node.fill !== 'none'
-    ? ` pengui-card-fill-${node.fill}`
-    : '';
-  const borderClass = node.border_style && node.border_style !== 'solid'
-    ? ` pengui-card-border-${node.border_style}`
-    : '';
+  const chromeClass = buildCardChromeClasses(node);
   const iconHtml = node.icon
     ? `<span class="pengui-card-icon" aria-hidden="true">${getIconSvg(node.icon)}</span>`
     : '';
@@ -410,20 +446,75 @@ function renderCard(node: CardNode, path: IRPath, dataAttr: string): string {
     node.eyebrow && node.eyebrow.length > 0
       ? `<p class="pengui-card-eyebrow"${fieldAttr('eyebrow')}>${renderRichText(node.eyebrow)}</p>`
       : '';
-  // v4.19.1 — body layout direction. `row` lays children out
-  // horizontally with flex-wrap (chip rows, horizontal pipelines).
-  const bodyLayoutClass = node.body_layout === 'row'
-    ? ' pengui-card-body-row'
-    : '';
+  const headerPillHtml = node.header_pill ? renderCardHeaderPill(node.header_pill) : '';
+  const bodyLayoutClass = node.body_layout === 'row' ? ' pengui-card-body-row' : '';
   const bodyHtml = node.body
     .map((n: LeafBlockNode, i) => renderNode(n, [...path, 'body', i]))
     .join('');
   return (
-    `<article class="pengui-card${accentClass}${fillClass}${borderClass}"${dataAttr}>` +
+    `<article class="pengui-card${chromeClass}"${dataAttr}>` +
+    headerPillHtml +
     iconHtml +
     eyebrowHtml +
     `<div class="pengui-card-body${bodyLayoutClass}">${bodyHtml}</div>` +
     `</article>`
+  );
+}
+
+// v4.20 — card_section: top-level container with card chrome that
+// accepts slide-level children (Grid, TwoColumn, Card, leaves). Used
+// for architecture-diagram containers (lakehouse-with-bronze-silver-
+// gold, AI Platform-with-agent-rows). Same DOM pattern as renderCard
+// but the body holds full SlideNode array.
+function renderCardSection(
+  node: CardSectionNode,
+  path: IRPath,
+  dataAttr: string,
+): string {
+  const chromeClass = buildCardChromeClasses(node);
+  const iconHtml = node.icon
+    ? `<span class="pengui-card-icon" aria-hidden="true">${getIconSvg(node.icon)}</span>`
+    : '';
+  const eyebrowHtml =
+    node.eyebrow && node.eyebrow.length > 0
+      ? `<p class="pengui-card-eyebrow"${fieldAttr('eyebrow')}>${renderRichText(node.eyebrow)}</p>`
+      : '';
+  const headerPillHtml = node.header_pill ? renderCardHeaderPill(node.header_pill) : '';
+  const bodyLayoutClass = node.body_layout === 'row' ? ' pengui-card-body-row' : '';
+  const bodyHtml = node.body
+    .map((n, i) => renderNode(n as SlideNode, [...path, 'body', i]))
+    .join('');
+  return (
+    `<section class="pengui-card pengui-card-section${chromeClass}"${dataAttr}>` +
+    headerPillHtml +
+    iconHtml +
+    eyebrowHtml +
+    `<div class="pengui-card-body${bodyLayoutClass}">${bodyHtml}</div>` +
+    `</section>`
+  );
+}
+
+// v4.20 — arrow renderer. Inline SVG glyph (right-pointing by default,
+// rotated for left/up/down via CSS) with optional caption beneath.
+// Reuses the v4.17 connector glyph catalog (no new SVG art).
+function renderArrow(node: ArrowNode, dataAttr: string): string {
+  const direction = node.direction ?? 'right';
+  const style = node.style ?? 'solid';
+  const accent = node.accent ?? 'muted';
+  const directionClass = ` pengui-arrow-direction-${direction}`;
+  const styleClass = ` pengui-arrow-style-${style}`;
+  const accentClass = ` pengui-arrow-accent-${accent.replace(/_/g, '-')}`;
+  const glyph = style === 'dashed'
+    ? getConnectorSvg('arrow_dashed')
+    : getConnectorSvg('arrow');
+  const labelHtml = node.label && node.label.length > 0
+    ? `<span class="pengui-arrow-label">${renderRichText(node.label)}</span>`
+    : '';
+  return (
+    `<span class="pengui-arrow${directionClass}${styleClass}${accentClass}"${dataAttr} aria-hidden="true">` +
+    `<span class="pengui-arrow-glyph">${glyph}</span>` +
+    labelHtml +
+    `</span>`
   );
 }
 
@@ -434,13 +525,15 @@ function renderCard(node: CardNode, path: IRPath, dataAttr: string): string {
 function renderChip(node: ChipNode, dataAttr: string): string {
   const accent = node.accent ?? 'accent';
   const tone = node.tone ?? 'tint';
+  const size = node.size ?? 'sm';
   const accentClass = ` pengui-chip-accent-${accent.replace(/_/g, '-')}`;
   const toneClass = ` pengui-chip-tone-${tone}`;
+  const sizeClass = ` pengui-chip-size-${size}`;
   const dotHtml = node.dot
     ? '<span class="pengui-chip-dot" aria-hidden="true"></span>'
     : '';
   return (
-    `<span class="pengui-chip${accentClass}${toneClass}"${dataAttr}>` +
+    `<span class="pengui-chip${accentClass}${toneClass}${sizeClass}"${dataAttr}>` +
     dotHtml +
     `<span class="pengui-chip-label">${renderRichText(node.label)}</span>` +
     `</span>`

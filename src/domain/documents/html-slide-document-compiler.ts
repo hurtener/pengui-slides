@@ -145,6 +145,10 @@ export class HtmlSlideDocumentCompiler {
         // bbox (32×32 within the LI's flex centering). Snapshotting
         // the LI captures the full row-height bounding box and shifts
         // the arrow to the visual bottom of the cell — visibly weird.
+        // v4.20 — `pengui-card-section` joins the snap candidates as
+        // it carries the same chrome (border, fill, header pill).
+        // `pengui-arrow` is NOT a snap candidate — like flow-connector,
+        // its inline SVG flows through the SVG-as-image branch.
         const SNAP_CLASSES = [
           'pengui-card',
           'pengui-decoration',
@@ -1403,6 +1407,15 @@ export class HtmlSlideDocumentCompiler {
             + 'caret-color: transparent !important; }',
         });
       }
+      // v4.20 — note on nested snap candidates: when a card_section
+      // contains inner cards (BRONZE/SILVER/GOLD inside a lakehouse
+      // section), each candidate produces its own snapshot. The outer
+      // snap captures the full chrome including the inner cards baked
+      // in; the inner snaps overlay perfectly on top because their
+      // bboxes match. Result is acceptable — no visible artifact —
+      // but file size grows since the same chrome is emitted twice.
+      // Optimization deferred: hide nested snaps via per-screenshot
+      // CSS toggle if it becomes a problem.
       for (const el of snapElements) {
         const snapId = el.src.slice('pengui-snap://'.length);
         try {

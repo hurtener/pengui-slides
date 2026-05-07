@@ -278,6 +278,36 @@ export type SlideElement =
  *       card / decoration / flow step is one repositionable image with
  *       editable text overlays — best of both worlds. Rev-14 docs are
  *       missing the snapshots.
+ *  - 18: v4.20 — architecture-diagram primitives suite:
+ *       (a) `card.size: 'compact' | 'large'` and `card.elevation:
+ *           'raised'` — padding scale + soft shadow toggles.
+ *       (b) `card.header_pill: { label, accent, tone, icon, align }`
+ *           — chip-style pill anchored absolutely to the card's top
+ *           edge (used for the "Databricks · Unity Catalog" navy pill
+ *           on the dashed lakehouse container). The card receives
+ *           extra padding-top so the pill stays inside the snap bbox.
+ *       (c) New `card_section` top-level node — same chrome as Card
+ *           but body accepts SlideNode (full union including Grid +
+ *           TwoColumn). Lets architecture diagrams compose cards-of-
+ *           cards (BRONZE/SILVER/GOLD inside a lakehouse container,
+ *           agent rows inside an AI Platform card). Distinct from
+ *           CardNode to avoid Zod recursive schema cycles.
+ *       (d) New `arrow` leaf node — inline SVG arrow with optional
+ *           caption beneath. Reuses the v4.17 connector glyph
+ *           catalog; flows through the existing inline-SVG-as-image
+ *           branch as a native PPTX picture. Direction (right/left/
+ *           up/down) rotates via CSS transform.
+ *       (e) `chip.size: 'xs' | 'sm' | 'md' | 'lg'` — workspace dots
+ *           are xs; brand pills are lg.
+ *       (f) `SlideIR.canvas: { background, padding, radius, shadow }`
+ *           — outer canvas card wrapping all body content. Used by
+ *           architecture diagrams that put 3 columns inside one big
+ *           white rounded card on a tinted slide bg.
+ *       Plus a tactical fix: chips inside flex columns now `align-
+ *       self: flex-start` + `max-width: max-content` so they stay
+ *       content-fit width (SOLUTION pill no longer stretches across
+ *       the column). Rev-17 docs are missing all the new node types
+ *       and chrome variants.
  *  - 17: v4.19 — three additive primitives for architecture diagrams:
  *       (a) `card.fill: 'tint' | 'solid'` — tinted (BRONZE/SILVER/GOLD)
  *           and solid (SOLUTION pill) card backgrounds. The walker
@@ -310,7 +340,7 @@ export type SlideElement =
  *           groups them by paragraph, preserving per-run color/bold/
  *           italic within each line.
  */
-export const CURRENT_COMPILER_REVISION = 17;
+export const CURRENT_COMPILER_REVISION = 18;
 
 export interface SlideDocument {
   version: '1';

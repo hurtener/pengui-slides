@@ -90,7 +90,24 @@ export function compileSlideIRToHtml({
     .filter((s) => s.length > 0)
     .join('\n\n');
 
-  const body = renderNodeList(ir.body);
+  const rawBody = renderNodeList(ir.body);
+
+  // v4.20 — outer canvas card wrapper. When SlideIR.canvas is set, wrap
+  // the body in a rounded card sitting on the slide bg. Used by
+  // architecture diagrams (Consolidated Semantic Layer reference).
+  let body = rawBody;
+  if (ir.canvas) {
+    const styleParts: string[] = [];
+    if (ir.canvas.background) styleParts.push(`background:${ir.canvas.background}`);
+    if (ir.canvas.padding) styleParts.push(`padding:${ir.canvas.padding}`);
+    else styleParts.push('padding:var(--space-xl)');
+    if (ir.canvas.radius) styleParts.push(`border-radius:${ir.canvas.radius}`);
+    else styleParts.push('border-radius:var(--radius-lg)');
+    const shadowClass = ir.canvas.shadow && ir.canvas.shadow !== 'none'
+      ? ` pengui-canvas-shadow-${ir.canvas.shadow}`
+      : '';
+    body = `<div class="pengui-canvas${shadowClass}" style="${styleParts.join(';')}">${rawBody}</div>`;
+  }
 
   // Wrap body in <main class="pengui-chrome-body"> when chrome is
   // active so the body gets its own flex container that justify-content:

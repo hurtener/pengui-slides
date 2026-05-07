@@ -31,6 +31,27 @@ export const BackgroundRoleSchema = z.enum([
 ]);
 export type BackgroundRole = z.infer<typeof BackgroundRoleSchema>;
 
+// v4.20 — outer "canvas" wrapper. When set, the body is wrapped in a
+// rounded card sitting on top of the slide background. Used by
+// architecture diagrams (Consolidated Semantic Layer reference) where
+// all the columns sit inside a single white card on a lavender bg.
+export const SlideCanvasSchema = z
+  .object({
+    /** Background color of the canvas card. Hex string (e.g. `'#FFFFFF'`). */
+    background: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/u, 'canvas.background must be a 6-digit hex')
+      .optional(),
+    /** Inner padding (CSS string, e.g. `'40px'`). Default: `var(--space-xl)`. */
+    padding: z.string().optional(),
+    /** Border radius (CSS string, e.g. `'20px'`). Default: `var(--radius-lg)`. */
+    radius: z.string().optional(),
+    /** Drop shadow scale. Maps to soul shadow tokens. Default: `none`. */
+    shadow: z.enum(['none', 'soft', 'medium', 'elevated']).optional(),
+  })
+  .strict();
+export type SlideCanvas = z.infer<typeof SlideCanvasSchema>;
+
 export const SlideIRSchema = z
   .object({
     layout: SlideLayoutSchema.optional(),
@@ -43,6 +64,8 @@ export const SlideIRSchema = z
       .string()
       .regex(/^#[0-9a-fA-F]{6}$/u, 'background_color must be a 6-digit hex like #F0EDFF')
       .optional(),
+    /** v4.20 — outer canvas card wrapping all body content. */
+    canvas: SlideCanvasSchema.optional(),
     body: z.array(SlideNodeSchema),
     /** v4.14: per-slide chrome decision. `'hide'` suppresses deck chrome
      *  on this slide (covers, full-bleed sections); omitted/`'inherit'`

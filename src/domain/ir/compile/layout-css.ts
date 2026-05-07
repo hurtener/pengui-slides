@@ -292,6 +292,10 @@ export const NODE_CSS = `
   white-space: nowrap;
   vertical-align: middle;
   color: var(--color-accent-primary);
+  /* v4.20 — chips inside a column flexbox would stretch to full width
+   * by default. align-self: flex-start keeps them content-fit. */
+  align-self: flex-start;
+  max-width: max-content;
 }
 .pengui-chip-dot {
   width: 6px;
@@ -332,6 +336,164 @@ export const NODE_CSS = `
   background: transparent;
   border: 1px solid currentColor;
 }
+
+/* v4.20 — chip size scale. xs for compact dots; lg for prominent
+ * brand pills (SOLUTION, Databricks·Unity Catalog header). Padding
+ * uses spacing tokens; non-token sizes (dot widths in px) escape the
+ * lint via the dot/glyph rule path which the lint exempts. */
+.pengui-chip-size-xs {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--text-caption);
+  letter-spacing: 0.08em;
+}
+.pengui-chip-size-sm {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--text-caption);
+}
+.pengui-chip-size-md {
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--text-label);
+}
+.pengui-chip-size-lg {
+  padding: var(--space-sm) var(--space-lg);
+  font-size: var(--text-body);
+  letter-spacing: 0.04em;
+}
+
+/* v4.20 — card size variants. compact halves the padding for nested
+ * mini-cards; large doubles it for top-level callouts. */
+.pengui-card-size-compact {
+  padding: var(--space-sm) var(--space-md);
+}
+.pengui-card-size-large {
+  padding: var(--space-xl);
+}
+
+/* v4.20 — card elevation. raised lifts the card off the slide bg with
+ * a soft drop shadow (the outer canvas card on architecture diagrams).
+ * Shadow color is derived from --color-text-default via color-mix so the
+ * lift adapts to dark souls without any literal color escaping the token
+ * lint. */
+.pengui-card-elevation-raised {
+  box-shadow:
+    0 6px 24px color-mix(in srgb, var(--color-text-default) 8%, transparent),
+    0 2px 6px color-mix(in srgb, var(--color-text-default) 6%, transparent);
+}
+
+/* v4.20 — card with header pill. Adds extra top padding so the
+ * absolutely-positioned pill sits inside the card's snap bbox. */
+.pengui-card-has-header-pill {
+  position: relative;
+  padding-top: calc(var(--space-lg) + var(--space-sm));
+}
+.pengui-card-header-pill {
+  position: absolute;
+  top: calc(var(--space-sm) * -1);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  white-space: nowrap;
+  z-index: 2;
+}
+.pengui-card-header-pill-align-left   { left: var(--space-md); }
+.pengui-card-header-pill-align-center { left: 50%; transform: translateX(-50%); }
+.pengui-card-header-pill-align-right  { right: var(--space-md); }
+.pengui-card-header-pill-icon { display: inline-flex; align-items: center; }
+.pengui-card-header-pill-icon > svg { width: 14px; height: 14px; }
+/* Header pill accent + tone — mirror chip rules. */
+.pengui-card-header-pill-accent-accent      { color: var(--color-accent-primary); }
+.pengui-card-header-pill-accent-accent-alt  { color: var(--color-accent-secondary); }
+.pengui-card-header-pill-accent-accent-warm { color: var(--color-accent-warm); }
+.pengui-card-header-pill-accent-success     { color: var(--color-success); }
+.pengui-card-header-pill-accent-warning     { color: var(--color-warning); }
+.pengui-card-header-pill-accent-info        { color: var(--color-info); }
+.pengui-card-header-pill-accent-muted       { color: var(--color-text-muted); }
+.pengui-card-header-pill-accent-inverse     { color: var(--color-text-inverse); }
+.pengui-card-header-pill-tone-solid {
+  background: currentColor;
+}
+.pengui-card-header-pill-tone-solid .pengui-card-header-pill-label,
+.pengui-card-header-pill-tone-solid .pengui-card-header-pill-icon {
+  color: var(--color-text-inverse);
+}
+.pengui-card-header-pill-tone-tint {
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+.pengui-card-header-pill-tone-outline {
+  background: var(--color-canvas);
+  border: 1px solid currentColor;
+}
+
+/* v4.20 — arrow leaf. Inline-flex, glyph + optional caption beneath. */
+.pengui-arrow {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+  align-self: center;
+}
+.pengui-arrow-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.pengui-arrow-glyph > svg {
+  width: 28px;
+  height: 28px;
+}
+.pengui-arrow-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: inherit;
+  white-space: nowrap;
+}
+.pengui-arrow-direction-left  > .pengui-arrow-glyph > svg { transform: rotate(180deg); }
+.pengui-arrow-direction-up    > .pengui-arrow-glyph > svg { transform: rotate(-90deg); }
+.pengui-arrow-direction-down  > .pengui-arrow-glyph > svg { transform: rotate(90deg); }
+/* Arrow accent cascade — same naming as chip. */
+.pengui-arrow-accent-accent      { color: var(--color-accent-primary); }
+.pengui-arrow-accent-accent-alt  { color: var(--color-accent-secondary); }
+.pengui-arrow-accent-accent-warm { color: var(--color-accent-warm); }
+.pengui-arrow-accent-success     { color: var(--color-success); }
+.pengui-arrow-accent-warning     { color: var(--color-warning); }
+.pengui-arrow-accent-error       { color: var(--color-error); }
+.pengui-arrow-accent-info        { color: var(--color-info); }
+.pengui-arrow-accent-muted       { color: var(--color-text-muted); }
+.pengui-arrow-accent-inverse     { color: var(--color-text-inverse); }
+
+/* v4.20 — outer canvas card wrapper. Wraps slide body in a rounded
+ * background container on top of the slide bg. Used for architecture
+ * diagrams where all 3 columns sit inside one white card. */
+.pengui-canvas {
+  width: 100%;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  box-sizing: border-box;
+}
+/* Note: shadow rules use border-color tinting instead of box-shadow.
+ * box-shadow on the .pengui-canvas div triggers the v4.7
+ * unsupported-shadow background fallback (entire slide flattens to a
+ * single image PNG, killing native editability). Border tinting gives
+ * a similar visual lift without breaking the editable export. */
+.pengui-canvas-shadow-soft     { border: 1px solid color-mix(in srgb, var(--color-text-default)  6%, transparent); }
+.pengui-canvas-shadow-medium   { border: 1px solid color-mix(in srgb, var(--color-text-default) 10%, transparent); }
+.pengui-canvas-shadow-elevated { border: 1px solid color-mix(in srgb, var(--color-text-default) 14%, transparent); }
 
 .pengui-heading {
   margin: 0;
