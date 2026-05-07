@@ -226,16 +226,20 @@ export type ChartNode = z.infer<typeof ChartNodeSchema>;
  *  small enough to reason about visually. */
 export const IconNameSchema = z.enum([
   // status
-  'shield', 'lock', 'check', 'x', 'alert-triangle', 'info-circle',
+  'shield', 'lock', 'check', 'x', 'alert-triangle', 'info-circle', 'bell',
   // motion / process
   'arrow-right', 'refresh', 'rocket', 'zap', 'play', 'workflow',
   // data / measure
   'bar-chart', 'trending-up', 'trending-down', 'target', 'gauge',
-  'eye', 'search',
+  'eye', 'search', 'database',
   // structure
-  'layers', 'grid', 'box', 'puzzle', 'network',
+  'layers', 'grid', 'box', 'puzzle', 'network', 'globe',
   // people / business
   'users', 'user', 'briefcase', 'building',
+  // documents
+  'file-text',
+  // brand / decoration
+  'gem',
   // misc
   'star', 'heart', 'sparkles', 'lightbulb',
 ]);
@@ -428,6 +432,13 @@ export const CardNodeSchema = z
      *  flex-wrap. Use `row` for chip rows / horizontal mini-card
      *  pipelines. */
     body_layout: z.enum(['column', 'row']).optional(),
+    /** v4.21 — overall card layout. `vertical` (default) stacks the
+     *  icon above the body (Galici feature cards). `horizontal` puts
+     *  the icon to the LEFT of the body, with body content still
+     *  stacked vertically — used for agent-list rows where each row
+     *  reads as "[icon] [title \n caption]" (architecture-diagram
+     *  AI Platform pattern). */
+    layout: z.enum(['vertical', 'horizontal']).optional(),
     /** v4.19 — background fill variant. Defaults to `none` (transparent
      *  card with the v4.13 top accent stripe). `tint` paints a soft,
      *  low-opacity wash of the accent color (BRONZE/SILVER/GOLD-style

@@ -226,6 +226,25 @@ export const NODE_CSS = `
   flex-wrap: wrap;
   align-items: center;
 }
+
+/* v4.21 — horizontal card layout. Icon goes to the LEFT of the body
+ * (instead of stacked above). Body retains its own flex direction
+ * (default column → title and caption stack vertically beside the icon).
+ * Used by AI Platform agent rows: '[icon] [title \n caption]'. */
+.pengui-card-layout-horizontal {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--space-md);
+}
+.pengui-card-layout-horizontal .pengui-card-icon {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+}
+.pengui-card-layout-horizontal .pengui-card-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 /* Per-accent overrides — each rule sets BOTH the border tint and the
    icon-anchor color so the card reads as one coherent semantic unit.
    The class names mirror the TextColor enum (underscore → hyphen). */
@@ -249,9 +268,21 @@ export const NODE_CSS = `
   border-color: color-mix(in srgb, currentColor 24%, transparent);
 }
 .pengui-card-fill-solid {
-  background: currentColor;
   border-color: transparent;
 }
+/* v4.21 — fill:solid background must bind to the accent token directly,
+ * NOT currentColor. The 'color: inverse' cascade rule below resets color
+ * to white before 'background: currentColor' would resolve, producing
+ * white-on-white. Compound selectors per accent fix this deterministically. */
+.pengui-card-accent-accent.pengui-card-fill-solid      { background: var(--color-accent-primary); }
+.pengui-card-accent-accent-alt.pengui-card-fill-solid  { background: var(--color-accent-secondary); }
+.pengui-card-accent-accent-warm.pengui-card-fill-solid { background: var(--color-accent-warm); }
+.pengui-card-accent-success.pengui-card-fill-solid     { background: var(--color-success); }
+.pengui-card-accent-warning.pengui-card-fill-solid     { background: var(--color-warning); }
+.pengui-card-accent-error.pengui-card-fill-solid       { background: var(--color-error); }
+.pengui-card-accent-info.pengui-card-fill-solid        { background: var(--color-info); }
+.pengui-card-accent-muted.pengui-card-fill-solid       { background: var(--color-text-muted); }
+.pengui-card-accent-inverse.pengui-card-fill-solid     { background: var(--color-text-inverse); }
 /* Cascade inverse text into ALL descendants (not just > * children) so
  * the text inside .pengui-card-body — which resets color to default —
  * also flips to inverse. Selector specificity beats .pengui-card-body

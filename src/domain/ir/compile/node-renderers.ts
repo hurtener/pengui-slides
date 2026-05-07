@@ -448,11 +448,12 @@ function renderCard(node: CardNode, path: IRPath, dataAttr: string): string {
       : '';
   const headerPillHtml = node.header_pill ? renderCardHeaderPill(node.header_pill) : '';
   const bodyLayoutClass = node.body_layout === 'row' ? ' pengui-card-body-row' : '';
+  const layoutClass = node.layout === 'horizontal' ? ' pengui-card-layout-horizontal' : '';
   const bodyHtml = node.body
     .map((n: LeafBlockNode, i) => renderNode(n, [...path, 'body', i]))
     .join('');
   return (
-    `<article class="pengui-card${chromeClass}"${dataAttr}>` +
+    `<article class="pengui-card${chromeClass}${layoutClass}"${dataAttr}>` +
     headerPillHtml +
     iconHtml +
     eyebrowHtml +

@@ -136,13 +136,17 @@ function consolidatedSemanticLayer(): SlideIR {
       },
 
       // Main 3-col canvas: TPE Sources | Databricks container | AI/Reporting.
+      // Ratio matches the target (TPE narrow, Databricks wide, right rail medium).
       {
-        type: 'grid', columns: 3, gap: 'lg', align_items: 'stretch',
+        type: 'grid', columns: 3, ratio: '2:7:5', gap: 'lg', align_items: 'stretch',
         cells: [
           // ── Left column ─────────────────────────────────────
+          // TPE Sources is chrome-less in the target — just icon + title +
+          // caption stacked, no border / no fill.
           [
             {
               type: 'card', accent: 'accent', icon: 'database', size: 'large',
+              border_style: 'none',
               body: [
                 { type: 'heading', level: 3, text: [{ text: 'TPE Sources' }] },
                 { type: 'prose', body: [{ text: 'Source systems & legacy warehouses', color: 'muted' }] },
@@ -160,64 +164,84 @@ function consolidatedSemanticLayer(): SlideIR {
               accent: 'accent', border_style: 'dashed', size: 'compact',
               header_pill: {
                 label: [{ text: 'Databricks · Unity Catalog' }],
-                accent: 'accent', tone: 'solid', align: 'center',
+                accent: 'accent', tone: 'solid', icon: 'gem', align: 'center',
               },
               body: [
-                // catalog: lakehouse — header + 3 schema cards.
+                // 3-col: lakehouse (wide) | arrow | semantic (narrow).
                 {
-                  type: 'card', accent: 'accent', icon: 'database', size: 'compact',
-                  eyebrow: [{ text: 'catalog: lakehouse — 3 schemas', color: 'accent' }],
-                  body: [
-                    {
-                      type: 'prose',
-                      body: [{ text: 'Medallion architecture: bronze raw → silver cleansed → gold curated.', color: 'muted' }],
-                    },
-                  ],
-                },
-                {
-                  type: 'grid', columns: 3, gap: 'sm', align_items: 'stretch',
+                  type: 'grid', columns: 3, ratio: '7:1:5', gap: 'sm', align_items: 'center',
                   cells: [
-                    [{
-                      type: 'card', accent: 'accent_warm', fill: 'tint', size: 'compact',
-                      body: [
-                        { type: 'heading', level: 5, text: [{ text: 'Bronze', color: 'accent_warm' }] },
-                        { type: 'prose', body: [{ text: 'schema: bronze', color: 'muted' }] },
-                        { type: 'prose', body: [{ text: 'Raw, ingested as-is from federated sources' }] },
-                      ],
-                    }],
-                    [{
-                      type: 'card', accent: 'muted', fill: 'tint', size: 'compact',
-                      body: [
-                        { type: 'heading', level: 5, text: [{ text: 'Silver', color: 'muted' }] },
-                        { type: 'prose', body: [{ text: 'schema: silver', color: 'muted' }] },
-                        { type: 'prose', body: [{ text: 'Cleansed, conformed, deduplicated tables' }] },
-                      ],
-                    }],
-                    [{
-                      type: 'card', accent: 'warning', fill: 'tint', size: 'compact',
-                      body: [
-                        { type: 'heading', level: 5, text: [{ text: 'Gold', color: 'warning' }] },
-                        { type: 'prose', body: [{ text: 'schema: gold', color: 'muted' }] },
-                        { type: 'prose', body: [{ text: 'Curated business marts & aggregates' }] },
-                      ],
-                    }],
+                    [
+                      {
+                        type: 'card', accent: 'accent', icon: 'database', size: 'compact',
+                        eyebrow: [{ text: 'catalog: lakehouse — 3 schemas', color: 'accent' }],
+                        body: [
+                          {
+                            type: 'prose',
+                            body: [{ text: 'Medallion architecture: bronze raw → silver cleansed → gold curated.', color: 'muted' }],
+                          },
+                        ],
+                      },
+                      {
+                        type: 'grid', columns: 3, gap: 'sm', align_items: 'stretch',
+                        cells: [
+                          [{
+                            type: 'card', accent: 'accent_warm', fill: 'tint', size: 'compact',
+                            body: [
+                              { type: 'heading', level: 5, text: [{ text: 'Bronze', color: 'accent_warm' }] },
+                              { type: 'prose', body: [{ text: 'schema: bronze', color: 'muted' }] },
+                              { type: 'prose', body: [{ text: 'Raw, ingested as-is from federated sources' }] },
+                            ],
+                          }],
+                          [{
+                            type: 'card', accent: 'muted', fill: 'tint', size: 'compact',
+                            body: [
+                              { type: 'heading', level: 5, text: [{ text: 'Silver', color: 'muted' }] },
+                              { type: 'prose', body: [{ text: 'schema: silver', color: 'muted' }] },
+                              { type: 'prose', body: [{ text: 'Cleansed, conformed, deduplicated tables' }] },
+                            ],
+                          }],
+                          [{
+                            type: 'card', accent: 'warning', fill: 'tint', size: 'compact',
+                            body: [
+                              { type: 'heading', level: 5, text: [{ text: 'Gold', color: 'warning' }] },
+                              { type: 'prose', body: [{ text: 'schema: gold', color: 'muted' }] },
+                              { type: 'prose', body: [{ text: 'Curated business marts & aggregates' }] },
+                            ],
+                          }],
+                        ],
+                      },
+                    ],
+                    [
+                      { type: 'arrow', direction: 'right', accent: 'accent' },
+                    ],
+                    [
+                      {
+                        type: 'card', accent: 'info', icon: 'globe', size: 'compact',
+                        eyebrow: [{ text: 'catalog: semantic — 1 schema', color: 'info' }],
+                        body: [
+                          { type: 'heading', level: 5, text: [{ text: 'Schema: metrics' }] },
+                          { type: 'prose', body: [{ text: 'Governed metrics, KPIs & certified views (Delta).', color: 'muted' }] },
+                          // Definition-table rows: bulleted label | annotation.
+                          {
+                            type: 'grid', columns: 2, ratio: '3:2', gap: 'sm', align_items: 'center',
+                            cells: [
+                              [{ type: 'chip', accent: 'success', tone: 'tint', dot: true, size: 'sm', label: [{ text: 'Views' }] }],
+                              [{ type: 'prose', align: 'right', body: [{ text: 'CERTIFIED', color: 'muted' }] }],
+                              [{ type: 'chip', accent: 'info', tone: 'tint', dot: true, size: 'sm', label: [{ text: 'Materialized Views' }] }],
+                              [{ type: 'prose', align: 'right', body: [{ text: 'PRECOMPUTED', color: 'muted' }] }],
+                              [{ type: 'chip', accent: 'success', tone: 'tint', dot: true, size: 'sm', label: [{ text: 'Metric Views' }] }],
+                              [{ type: 'prose', align: 'right', body: [{ text: 'KPIS & GOVERNED', color: 'muted' }] }],
+                            ],
+                          },
+                        ],
+                      },
+                    ],
                   ],
                 },
 
-                // catalog: semantic — semantic card with chip rows.
-                {
-                  type: 'card', accent: 'info', size: 'compact',
-                  eyebrow: [{ text: 'catalog: semantic — 1 schema', color: 'info' }],
-                  body: [
-                    { type: 'heading', level: 5, text: [{ text: 'Schema: metrics' }] },
-                    { type: 'prose', body: [{ text: 'Governed metrics, KPIs & certified views (Delta).', color: 'muted' }] },
-                    { type: 'chip', accent: 'success', tone: 'tint', dot: true, size: 'sm', label: [{ text: 'Views · certified' }] },
-                    { type: 'chip', accent: 'info',    tone: 'tint', dot: true, size: 'sm', label: [{ text: 'Materialized views · precomputed' }] },
-                    { type: 'chip', accent: 'success', tone: 'tint', dot: true, size: 'sm', label: [{ text: 'Metric views · KPIs & governed' }] },
-                  ],
-                },
-
-                // Workspaces strip — horizontal chip row.
+                // Workspaces strip — full-width horizontal chip row beneath,
+                // with a right-aligned italic governance annotation.
                 {
                   type: 'card', accent: 'muted', fill: 'tint', size: 'compact', body_layout: 'row',
                   body: [
@@ -226,6 +250,10 @@ function consolidatedSemanticLayer(): SlideIR {
                     { type: 'chip', accent: 'info',        tone: 'tint', dot: true, size: 'xs', label: [{ text: 'qa'   }] },
                     { type: 'chip', accent: 'accent_warm', tone: 'tint', dot: true, size: 'xs', label: [{ text: 'uat'  }] },
                     { type: 'chip', accent: 'success',     tone: 'tint', dot: true, size: 'xs', label: [{ text: 'prod' }] },
+                    {
+                      type: 'prose', align: 'right',
+                      body: [{ text: 'isolated per environment, governed by Unity Catalog', color: 'muted', italic: true }],
+                    },
                   ],
                 },
               ],
@@ -236,7 +264,7 @@ function consolidatedSemanticLayer(): SlideIR {
           [
             {
               type: 'card_section',
-              accent: 'accent', fill: 'solid', size: 'compact',
+              accent: 'accent', size: 'compact',
               header_pill: {
                 label: [{ text: 'AI Platform' }],
                 accent: 'accent', tone: 'solid', icon: 'sparkles', align: 'left',
@@ -244,30 +272,30 @@ function consolidatedSemanticLayer(): SlideIR {
               body: [
                 {
                   type: 'card', accent: 'accent', size: 'compact', border_style: 'none',
-                  icon: 'user',
+                  layout: 'horizontal', icon: 'user',
                   body: [
                     { type: 'heading', level: 5, text: [{ text: 'Insights Agent' }] },
-                    { type: 'prose', body: [{ text: 'Answers business questions in natural language.' }] },
+                    { type: 'prose', body: [{ text: 'Answers business questions in natural language.', color: 'muted' }] },
                   ],
                 },
                 {
                   type: 'card', accent: 'accent', size: 'compact', border_style: 'none',
-                  icon: 'trending-up',
+                  layout: 'horizontal', icon: 'trending-up',
                   body: [
                     { type: 'heading', level: 5, text: [{ text: 'Forecast Agent' }] },
-                    { type: 'prose', body: [{ text: 'Projects KPIs from certified metric history.' }] },
+                    { type: 'prose', body: [{ text: 'Projects KPIs from certified metric history.', color: 'muted' }] },
                   ],
                 },
                 {
                   type: 'card', accent: 'accent', size: 'compact', border_style: 'none',
-                  icon: 'bell',
+                  layout: 'horizontal', icon: 'bell',
                   body: [
                     { type: 'heading', level: 5, text: [{ text: 'Ops Agent' }] },
-                    { type: 'prose', body: [{ text: 'Monitors thresholds & triggers actions.' }] },
+                    { type: 'prose', body: [{ text: 'Monitors thresholds & triggers actions.', color: 'muted' }] },
                   ],
                 },
                 {
-                  type: 'arrow', direction: 'right', accent: 'inverse',
+                  type: 'arrow', direction: 'right', accent: 'accent',
                   label: [{ text: 'Reads from semantic.metrics' }],
                 },
               ],
@@ -316,10 +344,10 @@ function consolidatedSemanticLayer(): SlideIR {
         ],
       },
 
-      // Bottom legend strip — single-row card with mixed chips.
+      // Bottom legend — prose left, chip cluster right-aligned.
       {
-        type: 'card', size: 'compact', border_style: 'none', body_layout: 'row',
-        body: [
+        type: 'two_column', ratio: '2:1', gap: 'md',
+        left: [
           {
             type: 'prose',
             body: [
@@ -329,9 +357,16 @@ function consolidatedSemanticLayer(): SlideIR {
               { text: ': metrics · consumed by reporting & AI agents.', color: 'muted' },
             ],
           },
-          { type: 'chip', accent: 'success', tone: 'tint', dot: true, size: 'sm', label: [{ text: 'Delta' }] },
-          { type: 'chip', accent: 'info',    tone: 'tint', dot: true, size: 'sm', label: [{ text: 'Unity Catalog' }] },
-          { type: 'chip', accent: 'accent',  tone: 'tint', dot: true, size: 'sm', label: [{ text: 'Agents' }] },
+        ],
+        right: [
+          {
+            type: 'card', size: 'compact', border_style: 'none', body_layout: 'row',
+            body: [
+              { type: 'chip', accent: 'success', tone: 'tint', dot: true, size: 'sm', label: [{ text: 'Delta' }] },
+              { type: 'chip', accent: 'info',    tone: 'tint', dot: true, size: 'sm', label: [{ text: 'Unity Catalog' }] },
+              { type: 'chip', accent: 'accent',  tone: 'tint', dot: true, size: 'sm', label: [{ text: 'Agents' }] },
+            ],
+          },
         ],
       },
     ],

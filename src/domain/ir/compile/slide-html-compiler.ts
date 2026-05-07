@@ -135,6 +135,7 @@ export function compileSlideIRToHtml({
     '<!DOCTYPE html>',
     '<html>',
     '<head>',
+    '<meta charset="utf-8">',
     `<style>\n${css}\n</style>`,
     '</head>',
     '<body>',

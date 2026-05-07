@@ -16,3 +16,4 @@ output/
 files/
 # v4 agent worktree artefacts
 .claude/
+.playwright-mcp
