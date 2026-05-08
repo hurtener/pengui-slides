@@ -6,13 +6,16 @@
  * inferring shape from tool descriptions alone. Both slides (slide-model
  * decks) and sections (document-model decks) consume the same node union.
  *
- * v4.17 catalog (last revised 2026-05-06):
- *   Leaves            : hero · prose · image · callout · heading · list ·
- *                        divider · quote · table · chart
- *   Compound          : card (v4.13) · two_column · grid
- *   Doc-only          : toc · bibliography · page_break
- *   Slide-only        : section_divider
- *   Bimodal-positional: decoration (v4.16) · flow (v4.17)
+ * v4.20 catalog (last revised 2026-05-08):
+ *   Containers          : card (v4.13) · card_section (v4.20) · two_column · grid
+ *   Text leaves         : hero · heading · prose · list · quote
+ *   Visual leaves       : image · callout · table · chart · divider
+ *   Inline marks        : chip (v4.19) · arrow (v4.20)
+ *   Structure / chrome  : decoration (v4.16) · flow (v4.17)
+ *   Doc-only            : toc · bibliography · page_break
+ *   Slide-only          : section_divider
+ *   SlideIR canvas      : optional outer wrapper (v4.20) — { background,
+ *                         padding, radius, shadow }
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -32,17 +35,17 @@ export function registerSlideIRSchemaResource(server: McpServer): void {
     name: 'slide-ir-schema',
     mimeType: 'application/json',
     description:
-      'JSON Schema for the Slide / Section IR node tree. v4.17 catalog: ' +
-      'hero · prose · image · callout · heading · list · divider · quote · table · chart · ' +
-      'card (v4.13) · two_column · grid · decoration (v4.16) · flow (v4.17) ' +
-      'plus the doc-only set (toc · bibliography · page_break) and slide-only section_divider. ' +
-      'Fields, rich-text run shape, and semantic token enums (background roles, color roles) ' +
-      'are all in the JSON Schema payload. Fetch this once per session and use it to compose ' +
-      '`slide_ir` / `section_ir` arguments for add_slide, update_slide, add_section, ' +
-      'update_section, validate_slide_ir, and validate_section_ir.',
+      'JSON Schema for the Slide / Section IR node tree. v4.20 catalog: ' +
+      'hero · heading · prose · list · quote · image · callout · table · chart · divider · ' +
+      'card (v4.13) · card_section (v4.20) · chip (v4.19) · arrow (v4.20) · two_column · grid · ' +
+      'decoration (v4.16) · flow (v4.17) plus the doc-only set (toc · bibliography · page_break) ' +
+      'and slide-only section_divider. SlideIR also accepts an optional `canvas` wrapper ' +
+      '(v4.20). Fields, rich-text run shape, and semantic token enums (background roles, color ' +
+      'roles) are in the JSON Schema payload. Fetch this once per session and pair with ' +
+      'pengui://docs/ir-design-patterns for composition recipes (the "how to design" cookbook).',
     getText: () => {
       const payload = {
-        version: '4.17',
+        version: '4.20',
         node_types: SLIDE_NODE_TYPES,
         slide_ir: z.toJSONSchema(SlideIRSchema),
         section_ir: z.toJSONSchema(SectionIRSchema),
@@ -80,20 +83,54 @@ export function registerSlideIRSchemaResource(server: McpServer): void {
             'Native PPTX chart parts are NOT supported in v4.12 — charts export as flattened ' +
             'images in PPTX. Prefer the `compile_chart` tool to assemble chart payloads in one ' +
             'round-trip; agents iterate on chart_type / value_format with preview mode.',
-          'Card nodes (v4.13): presentational wrapper around a small group of leaves. Use INSIDE ' +
-            'grid cells (`grid.cells[i] = [{ type: "card", ... }]`) or two_column children to get ' +
-            'the "feature card with colored top-border + icon" pattern that proposal/pitch decks ' +
-            'rely on (Galici "Cinco desafíos críticos", "Cuatro módulos"). Optional `accent` ' +
-            '(same TextColor enum as inline color: accent | accent_alt | accent_warm | success | ' +
-            'warning | error | info | muted | inverse) drives the top-border tint AND the icon ' +
-            'color in one go. Optional `icon` is one of the curated lucide names (shield, lock, ' +
-            'check, alert-triangle, trending-up, target, eye, layers, rocket, zap, users, …). ' +
-            'Optional `eyebrow` is a small uppercase label rendered above the body (great for ' +
-            '"01 · TRAZABILIDAD" style numbering — color the leading number with the accent). ' +
-            '`body` is leaves only — no nested cards. Pair semantic accents with semantic ' +
-            'meaning: success/check for positive, warning for caution, error for risk, ' +
-            'accent/zap for primary value props, info for context. Don\'t use color for ' +
-            'decoration — every accent should mean something.',
+          'Card nodes (v4.13, extended through v4.20): presentational wrapper around a small ' +
+            'group of leaves. Use INSIDE grid cells (`grid.cells[i] = [{ type: "card", ... }]`) ' +
+            'or two_column children to get the "feature card with colored top-border + icon" ' +
+            'pattern that proposal/pitch decks rely on (Galici "Cinco desafíos críticos", ' +
+            '"Cuatro módulos"). Optional `accent` (TextColor enum: accent | accent_alt | ' +
+            'accent_warm | success | warning | error | info | muted | inverse) drives the ' +
+            'top-border tint AND the icon color in one go. Optional `icon` is one of the ' +
+            'curated lucide names (shield, lock, check, alert-triangle, trending-up, target, ' +
+            'eye, layers, rocket, zap, users, …). Optional `eyebrow` is a small uppercase ' +
+            'label rendered above the body. v4.19+: `fill` (none | tint | solid) tints the ' +
+            'card body with the accent role; `border_style` (solid | dashed | none) tunes the ' +
+            'card border; `body_layout: "row"` lays children horizontally (chip strips, ' +
+            'workspace dot rows). v4.20+: `size` (compact | default | large) controls inner ' +
+            'padding; `elevation` (flat | raised) toggles a soft drop shadow; `header_pill` ' +
+            '({ label, accent?, tone?, icon?, align? }) renders a chip-shaped pill anchored ' +
+            'to the card top edge (Databricks · Unity Catalog header). `body` accepts LEAF ' +
+            'nodes only — for nesting Cards inside Cards, use a `grid` cell whose contents ' +
+            'are Cards, OR use the `card_section` container (next note). Pair semantic ' +
+            'accents with semantic meaning: success/check for positive, warning for caution, ' +
+            'error for risk, accent/zap for primary value props, info for context.',
+          'card_section nodes (v4.20): top-level container that ACCEPTS arbitrary children ' +
+            '(LeafSlideNode | grid | two_column) — this is the "card around a composition" ' +
+            'pattern that lets you put 3 mini-cards inside an outer card, or an arrow row ' +
+            'between two cards inside one outer container. Same chrome fields as card ' +
+            '(accent, fill, border_style, size, elevation, header_pill). Use card_section ' +
+            'when you need the "outer container with internal layout" — e.g. the dashed ' +
+            'Databricks lakehouse box that wraps BRONZE/SILVER/GOLD + SEMANTIC + WORKSPACES ' +
+            'in the architecture diagram.',
+          'chip nodes (v4.19, sized v4.20): inline pill — `{ type: "chip", label: RichText, ' +
+            'accent?, tone?: solid | tint | outline, icon?, size?: xs | sm | md | lg }`. ' +
+            'tone:solid fills with the accent color (white text); tone:tint uses ~18% accent ' +
+            'tint with currentColor text; tone:outline is bordered. size:xs is for compact ' +
+            'workspace dots; size:lg is for prominent brand pills (SOLUTION, Databricks · ' +
+            'Unity Catalog header). Chips are inline-flex and content-fit; inside a flex ' +
+            'column they stay narrow (do not stretch).',
+          'arrow nodes (v4.20): inline directional glyph — `{ type: "arrow", direction?: ' +
+            'right | left | up | down, style?: solid | dashed | cycle | plus, label?: RichText, ' +
+            'accent? }`. Reuses the existing connector glyph catalog (the same one Flow uses). ' +
+            'Place inline between cards / inside grid cells to indicate flow ' +
+            '(TPE → lakehouse → READS). Optional `label` renders below the glyph in mono caps ' +
+            '("READS", "WRITES").',
+          'SlideIR.canvas (v4.20): optional outer wrapper — `{ background?, padding?, radius?, ' +
+            'shadow?: soft | medium | elevated }`. When set, the body is wrapped in a rounded ' +
+            'container card on top of the slide background. Use for architecture diagrams ' +
+            'where all body content sits inside a single rounded white card on a colored slide ' +
+            'background. background accepts a hex string or a soul role; padding/radius accept ' +
+            'soul space/radius tokens or a px literal; shadow uses a token-driven border tint ' +
+            '(does not break editable PPTX export).',
           'Inline color emphasis (RichText `color` field) — use it sparingly to draw the eye to ' +
             'ONE keyword per heading (e.g. `[{text: "Una plataforma única para gestionar fondos ' +
             'judiciales de forma "}, {text: "integral", color: "success", bold: true}, {text: "."}]`). ' +
@@ -137,7 +174,9 @@ export function registerSlideIRSchemaResource(server: McpServer): void {
             '"Done"). Connector glyphs render between adjacent steps; `cycle` adds a closing ' +
             'return-arrow after the last step (visual loop cue, not a literal curved wrap). ' +
             'Flow can NEST inside cards / grid cells / two_column children, so use it to ' +
-            'compose "process inside a card" patterns.',
+            'compose "process inside a card" patterns. v4.20 alternative: when steps need more ' +
+            'than a label+icon (e.g. embedded chip rows or sub-cards), reach for grid + arrow ' +
+            'leaves instead of flow.',
           'Asset roles (v4.16 widened): when uploading via upload_asset, pick the role that ' +
             'matches the use: `logo` (brand marks for chrome.header.left/right slots), ' +
             '`illustration` (decorations + hero accents), `screenshot` (pair with image.frame ' +

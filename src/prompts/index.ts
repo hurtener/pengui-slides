@@ -15,7 +15,7 @@ export function registerAllPrompts(server: McpServer): void {
   server.registerPrompt('onboarding', {
     title: 'Pengui Slides Onboarding',
     description:
-      'Start here. Teaches you the two authoring models (slides vs. document), the key rules for each, and points you at the right docs and workflows.',
+      'Start here. Teaches you IR-first authoring, the two authoring models (slides vs. document), and points you at the design-patterns cookbook and JSON Schema.',
   }, () => ({
     messages: [
       {
@@ -24,61 +24,82 @@ export function registerAllPrompts(server: McpServer): void {
           type: 'text',
           text: `You are about to use Pengui Slides, an MCP server for creating branded decks and print documents.
 
-IMPORTANT: Pengui Slides has TWO authoring models. Pick the right one first.
+CORE PRINCIPLE — Pengui is **IR-first**. You author **SlideIR / SectionIR** (typed
+node trees), and the server compiles to soul-themed HTML deterministically. You
+NEVER write HTML, CSS, or hex colors. The IR uses semantic token roles
+("background: \\"accent\\"") and a curated node catalog (hero, card, grid, chip,
+arrow, card_section, …).
 
-  authoringModel "slides"   — default for slides_16_9 decks (1920×1080 presentations).
-                              Also the legacy mode for per-page print, opt-in only.
-                              You author full HTML documents per slide.
-                              Verbs: add_slide, update_slide, render_preview.
+TWO AUTHORING MODELS — pick the right one first:
+
+  authoringModel "slides"   — default for slides_16_9 (1920×1080 presentations).
+                              Verbs: add_slide, update_slide, apply_slide_node_edit,
+                                     render_preview.
                               Exports: pptx, pdf, html, google_slides.
 
-  authoringModel "document" — DEFAULT for print_a4_portrait / print_letter_portrait (v3).
-                              You author HTML FRAGMENTS per Section; the composer
-                              paginates on export. NO DOCTYPE, NO :root tokens,
-                              NO <style> blocks inside a section — the composer
-                              injects soul tokens once.
+  authoringModel "document" — default for print_a4_portrait / print_letter_portrait.
+                              You author **sections** (content blocks); the composer
+                              paginates on export.
                               Verbs: add_section, update_section, list_sections,
                                      update_document_meta.
                               Exports: pdf only.
 
-Before you begin, read these documentation resources:
+\`get_deck_summary\` returns \`authoringModel\` for any existing deck — call it first
+on a deck you haven't touched.
 
-1. pengui://docs/overview — core concepts, the two models, workflow maps
-2. pengui://docs/design-souls — the 7-layer visual identity schema
-3. pengui://docs/validation — checks and scoring for BOTH pipelines
+REQUIRED READING (in order, before authoring):
 
-Then read EITHER (not both):
-   - pengui://docs/slide-format — canonical slide HTML (slide-model)
-   - pengui://docs/document-mode — section fragments & composer (document-model)
+  1. pengui://docs/overview          — concepts, the two models, the v4.20 catalog
+  2. pengui://schema/slide-ir         — JSON Schema (the contract for every node)
+  3. pengui://docs/ir-design-patterns — the composition cookbook (cover · 3 cards ·
+                                         two-column · process flow · architecture
+                                         diagram). **Read this before authoring slides
+                                         — it teaches design quality with concrete
+                                         IR snippets.**
+  4. pengui://docs/design-souls       — the 7 soul layers + tokens they emit
+  5. pengui://docs/validation         — lints, scoring, tips for score 1.0
 
-KEY RULES (apply to both models):
-- Never use literal colors (#hex, rgb()) — always var(--color-*).
-- Never use literal spacing (24px) for padding/margin/gap — always var(--space-*).
-- Never reference external URLs (no Google Fonts, no CDN links).
-- Use asset://UUID refs for images, never raw base64.
-- Call get_deck_summary first on an existing deck — it returns authoringModel.
+Then EITHER:
+  - pengui://docs/document-mode       — section fragments & composer (document-model)
+  - pengui://docs/workflows           — slide-model step-by-step
 
-KEY RULES specific to slide-model:
-- Every slide is a STANDALONE HTML document with its own <style> block containing ALL soul CSS tokens.
-- The slide frame dimensions come from the deck format
-  (slides_16_9 = 1920×1080, print_a4_portrait = 1240×1754, print_letter_portrait = 1275×1650).
-- .slide must have position: relative AND padding: var(--space-safe-area).
-- Declare html, body { margin: 0; padding: 0 } EXPLICITLY.
+KEY RULES — apply to both models:
 
-KEY RULES specific to document-model:
-- Sections are FRAGMENTS: a single <section class="pengui-section pengui-{kind}"> root.
-  No DOCTYPE, no <html>/<head>/<body>, no <style>, no :root, no fixed page dimensions.
-- Wrap keep-together content (figure/chart/diagram/callout/quote/image) in its
-  canonical .pengui-{kind} class so universal break rules apply.
-- Do NOT copy soul tokens into each section — the composer injects them once.
+  - Author IR, never HTML. \`add_slide\` / \`update_slide\` take \`slide_ir\`; section
+    verbs mirror.
+  - Token references are SEMANTIC roles, not literals. Use \`accent\`, \`success\`,
+    \`warning\`, \`info\`, etc. — never hex.
+    Hex escape hatch: only \`SlideIR.background_color\` and \`canvas.background\` accept
+    hex strings (typed for tints outside the soul palette).
+  - Images flow by id. \`upload_asset\` returns an id; reference it from
+    \`{ type: "image", asset_id: "..." }\`. The LLM never handles base64.
+  - Pre-flight with \`validate_slide_ir\` / \`validate_section_ir\` — Zod-level shape
+    check, no storage side effects.
+  - For surgical edits, use \`apply_slide_node_edit\` / \`apply_section_node_edit\`
+    (replace one node by structural path).
 
-Confirm you understand by stating which model the user's task needs and why.
+DESIGN QUALITY — three habits to keep:
 
-COLLABORATIVE EDITING — comment workflow (v4):
-- At the start of each turn on a deck you haven't touched this turn, call \`list_comments\` to pick up user feedback left since your last turn.
-- When you address a comment in the same turn, call \`resolve_comment\` with a brief resolution note.
-- When you need a decision from the user that can wait, call \`add_comment\` (kind: "question") to pin the question on the relevant slide/section rather than interrupting the conversation with prose. The user sees pins in the app.
-- Call \`get_session\` early — it returns the user's currently active deck + soul so you don't need to ask.`,
+  1. Start from a pattern in pengui://docs/ir-design-patterns; don't draft from
+     scratch.
+  2. One eye-catch per slide (a colored hero word OR a fill:solid card OR a chip
+     with tone:solid — not all three).
+  3. Every accent role carries meaning. Use \`success\` for positive, \`warning\` for
+     caution, \`error\` for risk, \`info\` for context. Don't pick colors decoratively.
+
+COLLABORATIVE EDITING — comment workflow:
+
+  - Start each turn on a deck you haven't touched this turn with \`list_comments\` to
+    pick up feedback left since your last turn.
+  - When you address a comment, call \`resolve_comment\` with a brief resolution note.
+  - When you need a decision the user can answer at leisure, call \`add_comment\`
+    (kind: "question") to pin the question on the slide rather than interrupting
+    with prose. The user sees pins in the app.
+  - Call \`get_session\` early — it returns the user's currently active deck + soul so
+    you don't need to ask.
+
+Confirm you understand by stating which authoring model the user's task needs and
+why, and naming the first design pattern you'd reach for.`,
         },
       },
     ],
@@ -106,43 +127,67 @@ COLLABORATIVE EDITING — comment workflow (v4):
 ${args.slide_count ? `Number of slides: ${args.slide_count}` : 'Number of slides: 5'}
 ${args.style_description ? `Visual style: ${args.style_description}` : ''}
 
-This prompt is for the SLIDE model (authoringModel="slides", deck format slides_16_9).
+This prompt is for the SLIDE model (authoringModel="slides", format slides_16_9).
 For printable PDFs (handouts / whitepapers / study summaries), abort and invoke the
-\`create-document\` prompt instead — the v3 continuous-document flow produces much
+\`create-document\` prompt instead — the continuous-document flow produces much
 better print output than stacking page-sized slides.
+
+You will author **SlideIR** — typed node trees. The server compiles IR to
+soul-themed HTML; you NEVER write HTML, CSS, or hex colors.
 
 Follow this exact workflow:
 
 STEP 1 — Design Soul
-Read resource pengui://docs/design-souls to understand the 7 layers.
-Register a Design Soul that matches the requested style. Be thorough with all 7 layers.
-Then approve it to generate CSS tokens and recipes.
+Read pengui://docs/design-souls. Register a Design Soul matching the requested style
+(thorough across all 7 layers). Approve it to generate ~73 CSS tokens.
 
-STEP 2 — Review Generated Assets
-Use get_design_soul with include_recipes: true and include_style_guide: true.
-Study the CSS tokens, utility classes, and recipe templates.
+STEP 2 — Review the soul
+Call get_design_soul { include_style_guide: true } and skim the token catalogue —
+especially the color roles (canvas/surface/textPrimary/accentPrimary/success/warning/
+error/info), font scale (hero/h1–h6/body/label/caption), and spacing scale (xs–xxxl).
 
-STEP 3 — Create the Deck
-Use create_deck with the soul ID and presentation title.
+STEP 3 — Create the deck
+\`create_deck { soul_id, title, format: "slides_16_9" }\`. Confirm authoringModel="slides"
+on the response.
 
-STEP 4 — Build Each Slide
-Read resource pengui://docs/slide-format for the exact HTML structure.
-Read resource pengui://docs/css-utilities for available utility classes.
-Read resource pengui://docs/recipes for layout inspiration.
+STEP 4 — Read the IR contract + cookbook
+Read in this order:
+  1. pengui://schema/slide-ir         — JSON Schema (every field, every enum)
+  2. pengui://docs/ir-design-patterns — composition cookbook (cover · 3 cards ·
+                                         two-column · flow · architecture diagram)
 
-For each slide:
-- Use the FULL canonical HTML structure (DOCTYPE, <style> with ALL tokens, <div class="slide">)
-- Use only var(--token) references — no literal colors or spacing
-- Include the @slide-meta comment with layout type and title
-- Do not introduce new blocking validation issues while iterating
-- Fix pre-existing issues when explicitly requested or before export
+The cookbook has copy-pastable IR snippets for every common slide shape. **Start
+from a pattern; don't draft IR from scratch.** It also defines the accent vocabulary
+(which role means "positive", "caution", "risk", "context", etc.) so accent choices
+read as designed, not decorative.
 
-STEP 5 — Export
-Export to the desired format(s): export_pptx, export_pdf, or export_html.
+STEP 5 — Build each slide
+For each slide, pick the closest pattern from the cookbook and edit content. Then:
+- Submit via \`add_slide { deck_id, slide_ir, metadata }\`.
+- For tweaks to an existing slide, prefer \`apply_slide_node_edit\` (single-node patch
+  by structural path) over re-submitting a full \`update_slide\`.
+- Pre-flight with \`validate_slide_ir\` for a fast Zod-level shape check.
+- Don't introduce new blocking validation issues while iterating. Fix pre-existing
+  issues when requested or before export.
 
-IMPORTANT: Collaborative editing does not require every intermediate slide revision to reach score 1.0 immediately.
-Final exported decks still require slides to pass full validation.
-Read resource pengui://docs/validation for scoring details.
+Design quality habits:
+- One eye-catch per slide (colored hero word OR fill:solid card OR chip with
+  tone:solid — not all three).
+- Every accent carries meaning: success/check for positive, warning for caution,
+  error for risk, accent/zap for primary value props, info for context.
+- For architecture / system diagrams, reach for SlideIR.canvas + grid + card_section
+  + arrow leaves (the Pattern 5 recipe).
+- For sequential processes (≤7 steps), use \`flow\`. For parallel ideas, use \`grid\`
+  of \`card\` cells.
+
+STEP 6 — Export
+\`export_pptx\` (editable PowerPoint) is the default for design-quality output.
+\`export_pdf\` for print-ready PDFs. \`export_html\` for a self-contained web preview.
+\`export_google_slides\` for Google.
+
+Collaborative editing does not require every intermediate revision to reach score
+1.0 immediately. Final exported decks still require slides to pass full validation.
+Read pengui://docs/validation for scoring.
 
 Check \`list_comments\` between turns for user feedback on this deck.`,
         },
@@ -369,72 +414,94 @@ Check \`list_comments\` between turns for user feedback on this deck.
   }));
 
   /* ---------------------------------------------------------------- */
-  /*  slide-html-quickref — copy-paste ready template                 */
+  /*  slide-ir-quickref — copy-paste-ready IR snippet                 */
   /* ---------------------------------------------------------------- */
-  server.registerPrompt('slide-html-quickref', {
-    title: 'Slide HTML Quick Reference',
+  server.registerPrompt('slide-ir-quickref', {
+    title: 'Slide IR Quick Reference',
     description:
-      'Shows the exact HTML template to use when creating slides. Copy, fill in tokens, and customize.',
+      'A minimal SlideIR skeleton plus pointers to the JSON Schema and the design-patterns cookbook.',
   }, () => ({
     messages: [
       {
         role: 'user',
         content: {
           type: 'text',
-          text: `Read resource pengui://docs/slide-format for the complete slide HTML reference.
+          text: `Read these two resources before authoring:
+  1. pengui://schema/slide-ir         — JSON Schema (every field, every enum)
+  2. pengui://docs/ir-design-patterns — composition cookbook with copy-pastable IR
 
-Quick template — every slide must follow this structure:
+Minimal SlideIR skeleton — pass as \`slide_ir\` to \`add_slide\`:
 
-\`\`\`html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <style>
-    :root {
-      /* PASTE ALL ~73 CSS TOKENS FROM THE SOUL HERE */
+\\\`\\\`\\\`json
+{
+  "body": [
+    {
+      "type": "hero",
+      "eyebrow": [{ "text": "SECTION LABEL" }],
+      "title":   [{ "text": "Your headline goes here." }],
+      "subtitle":[{ "text": "Optional supporting subtitle." }]
+    },
+    {
+      "type": "grid",
+      "columns": 3,
+      "gap": "lg",
+      "cells": [
+        [{
+          "type": "card",
+          "accent": "info",
+          "icon": "layers",
+          "eyebrow": [{ "text": "ONE" }],
+          "body": [
+            { "type": "heading", "level": 3, "text": [{ "text": "Card title." }] },
+            { "type": "prose", "body": [{ "text": "Supporting body text." }] }
+          ]
+        }],
+        [{
+          "type": "card",
+          "accent": "success",
+          "icon": "check",
+          "eyebrow": [{ "text": "TWO" }],
+          "body": [
+            { "type": "heading", "level": 3, "text": [{ "text": "Card title." }] },
+            { "type": "prose", "body": [{ "text": "Supporting body text." }] }
+          ]
+        }],
+        [{
+          "type": "card",
+          "accent": "warning",
+          "icon": "alert-triangle",
+          "eyebrow": [{ "text": "THREE" }],
+          "body": [
+            { "type": "heading", "level": 3, "text": [{ "text": "Card title." }] },
+            { "type": "prose", "body": [{ "text": "Supporting body text." }] }
+          ]
+        }]
+      ]
     }
-    /* html/body reset must be explicit — the universal "*" selector has
-       specificity 0 and does NOT override the UA stylesheet's 8px body
-       margin. Declaring html and body explicitly wins. */
-    html, body { margin: 0; padding: 0; }
-    * { box-sizing: border-box; }
-    .slide {
-      width: 1920px;
-      height: 1080px;
-      padding: var(--space-safe-area);
-      background: var(--color-canvas);
-      color: var(--color-text-primary);
-      font-family: var(--font-body);
-      font-size: var(--text-body);
-      overflow: hidden;
-      position: relative;
-    }
-    /* Add utility classes and custom styles using var() only */
-  </style>
-</head>
-<body>
-  <!-- @slide-meta {"layout":"title-slide","title":"Your Title"} -->
-  <div class="slide">
-    <!-- Your content here -->
-  </div>
-</body>
-</html>
-\`\`\`
+  ]
+}
+\\\`\\\`\\\`
 
 CHECKLIST before submitting:
-[ ] DOCTYPE is the very first thing
-[ ] :root block has ALL soul tokens (get them from get_design_soul)
-[ ] html, body { margin: 0; padding: 0 } — declared EXPLICITLY (the * selector won't override UA body margin)
-[ ] .slide has width/height matching the deck's format (1920×1080 for slides_16_9, 1240×1754 for print_a4_portrait, 1275×1650 for print_letter_portrait)
-[ ] .slide has padding: var(--space-safe-area)
-[ ] .slide has position: relative — REQUIRED so any absolutely-positioned descendants resolve against the slide's box (without it they escape up to <html> and your layout silently breaks)
-[ ] All colors use var(--color-*) — no #hex, no rgb()
-[ ] All padding/margin/gap use var(--space-*) — no literal px
-[ ] All fonts are from the soul's allowedFonts list
-[ ] No external URLs (no <link>, no http://)
-[ ] Images use asset://UUID refs
-[ ] @slide-meta comment has valid JSON`,
+[ ] You're authoring IR (a node tree), NOT HTML.
+[ ] Every \`accent\` is a semantic role (accent · accent_alt · accent_warm · success ·
+    warning · error · info · muted · inverse) — no hex.
+[ ] RichText runs are arrays of \`{ text, bold?, italic?, code?, strike?, sup?, sub?,
+    link?, color? }\` objects. INCLUDE spaces inside text rather than relying on
+    inter-run whitespace.
+[ ] Containers nest correctly: \`card.body\` accepts LEAVES only; for nested cards
+    use \`card_section\` (v4.20) which accepts grids/two_columns/inner cards.
+[ ] \`grid.cells.length\` is a multiple of \`columns\`; cells are arrays of leaf nodes
+    (no nested grid/two_column).
+[ ] Images reference uploaded assets by id (\`asset_id: "..."\`); don't pass base64.
+[ ] For architecture diagrams: SlideIR.canvas wraps the body in a rounded outer
+    card; \`card_section\` containers hold cards-in-cards; \`arrow\` leaves anchor data
+    flow. See pengui://docs/ir-design-patterns Pattern 5.
+[ ] Doc-only nodes (\`toc\`, \`bibliography\`, \`page_break\`) are rejected in slide IR.
+    Use heading + list instead.
+
+For a tweak to an existing slide, prefer \`apply_slide_node_edit\` (single-node patch
+by structural path) over a full \`update_slide\`.`,
         },
       },
     ],
