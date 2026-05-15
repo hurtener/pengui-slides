@@ -33,13 +33,18 @@ async function createPptx(): Promise<PptxInstance> {
 const WIDE_WIDTH = 13.333;
 const WIDE_HEIGHT = 7.5;
 
-// v4.22 — minimum point size for ANY emitted text shape. The natural
-// CSS-px-to-PPTX-pt conversion compresses by ~0.5x on a widescreen
-// canvas, so legacy souls authoring sizeBody=11–13 produced 5.5–6.5pt
-// text. 10pt is the legibility threshold for body text projected on
-// a screen at ~3m viewing distance. Headings naturally land above
-// this floor and aren't affected.
-const MIN_FONT_PT = 10;
+// v4.22.2 — sub-readable text gets a multiplicative boost rather than
+// a hard floor. The hard floor (everything < 10pt clamps to 10pt)
+// flattened body / label / caption to the same size and killed the
+// typographic hierarchy a soul carefully laid out (sizeBody=18,
+// sizeLabel=14, sizeCaption=12 all collapsed to 10pt on widescreen).
+//
+// New approach: anything BELOW READABLE_FONT_PT gets multiplied by
+// FONT_BOOST so the spread is preserved. Body/label/caption from the
+// LG soul land at ~12.6 / 9.8 / 8.4 pt — readable AND distinct.
+// Headings (≥ READABLE_FONT_PT naturally) pass through unchanged.
+const READABLE_FONT_PT = 11;
+const FONT_BOOST = 1.4;
 const SOUL_MASTER_NAME = 'PENGUI_SOUL';
 
 export class EditablePptxExporter {
@@ -246,26 +251,27 @@ export class EditablePptxExporter {
   }
 
   /**
-   * v4.22 — font-size variant of scaledPt that clamps the result to a
-   * readable floor. The natural conversion ((CSS px) × textScale →
-   * pt) compresses 1920×1080-canvas pixel sizes by ~0.5×, so a
-   * legacy soul authored with sizeBody=13 lands at 6.5pt in PPTX —
-   * unreadable at presentation distance.
+   * v4.22.2 — font-size variant of scaledPt with a hierarchy-preserving
+   * proportional boost. The natural CSS-px-to-PPTX-pt conversion
+   * compresses 1920×1080-canvas pixel sizes by ~0.5×, so legacy souls
+   * authored with sizeBody=13 land at 6.5pt in PPTX — unreadable.
    *
-   * MIN_FONT_PT is a hard floor (no body / label / caption below it),
-   * regardless of the input soul. Heading sizes naturally fall above
-   * the floor and pass through unchanged. The clamp is one-way (only
-   * raises) so legitimately large headings keep their scale.
+   * v4.22 used a hard floor (clamp to 10pt). That kept text legible
+   * but collapsed body / label / caption all to 10pt — typographic
+   * hierarchy was lost. v4.22.2 multiplies any sub-readable value by
+   * FONT_BOOST instead, so 9 / 7 / 6 pt becomes 12.6 / 9.8 / 8.4 pt
+   * — readable AND distinct. Headings already above READABLE_FONT_PT
+   * pass through untouched so legitimately big text keeps its scale.
    *
-   * Why per-element clamp instead of fixing the formula globally:
-   * the position math already encodes the 0.5× compression in EMU
-   * units, so doubling the formula would also double layout sizes
-   * and break bounds. The floor only intervenes when the natural
-   * mapping would produce illegible text.
+   * Why per-element boost instead of fixing the formula globally:
+   * the position math encodes the 0.5× compression in EMU units, so
+   * doubling the formula would also double layout sizes and break
+   * bounding boxes. The boost only intervenes for sub-readable text.
    */
   private scaledFontPt(value: number, document: NonNullable<Slide['document']>): number {
     const natural = this.scaledPt(value, document);
-    return natural < MIN_FONT_PT ? MIN_FONT_PT : natural;
+    if (natural >= READABLE_FONT_PT) return natural;
+    return Math.round(natural * FONT_BOOST * 1000) / 1000;
   }
 
   private basePosition(
