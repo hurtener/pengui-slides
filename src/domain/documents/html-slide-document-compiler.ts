@@ -154,6 +154,13 @@ export class HtmlSlideDocumentCompiler {
           'pengui-decoration',
           'pengui-flow-step',
           'pengui-frame',
+          // v4.22 — code_block snaps as a composite. The figure ships a
+          // PNG-rasterized version of the formatted code (whitespace,
+          // mono, language badge); native text overlays still emit on
+          // top so the user can edit the code in the editable PPTX. The
+          // overlay won't keep visible whitespace alignment — accepted
+          // trade-off, the raster carries the visual.
+          'pengui-code-block',
         ];
         function isInlineFormattingTag(tag: string, el: Element): boolean {
           const t = tag.toUpperCase();

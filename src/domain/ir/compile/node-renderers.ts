@@ -27,6 +27,7 @@ import type {
   CardHeaderPill,
   ChartNode,
   ChipNode,
+  CodeBlockNode,
   DecorationNode,
   DividerNode,
   FlowNode,
@@ -50,7 +51,7 @@ import type {
 import type { IRPath } from '../operations/replace-node.js';
 import { irPathToString } from '../path-encoding.js';
 import { ErrorCode, PenguiError } from '../../../types/errors.js';
-import { escapeAttr } from './escape.js';
+import { escapeAttr, escapeHtml } from './escape.js';
 import { getIconSvg } from './icons.js';
 import { getOrnamentDef } from './ornaments.js';
 import { getConnectorSvg } from './connectors.js';
@@ -132,6 +133,8 @@ export function renderNode(node: SlideNode, path: IRPath = []): string {
       return renderChip(node, attr);
     case 'arrow':
       return renderArrow(node, attr);
+    case 'code_block':
+      return renderCodeBlock(node, attr);
     case 'card_section':
       return renderCardSection(node, path, attr);
   }
@@ -516,6 +519,29 @@ function renderArrow(node: ArrowNode, dataAttr: string): string {
     `<span class="pengui-arrow-glyph">${glyph}</span>` +
     labelHtml +
     `</span>`
+  );
+}
+
+// v4.22 — code_block renderer. Block-level code primitive — preserves
+// whitespace verbatim, mono font, scrollable horizontal overflow.
+// Renders the language hint as a small badge in the top-right corner
+// when present. The escapeHtml call on `code` is critical: code is the
+// raw source string, so &/</> need entity-escaping or the browser will
+// parse them as HTML.
+function renderCodeBlock(node: CodeBlockNode, dataAttr: string): string {
+  const langAttr = node.language ? ` data-language="${escapeAttr(node.language)}"` : '';
+  const langBadge = node.language
+    ? `<span class="pengui-code-block-language">${escapeAttr(node.language).toUpperCase()}</span>`
+    : '';
+  const captionHtml = node.caption && node.caption.length > 0
+    ? `<figcaption class="pengui-code-block-caption"${fieldAttr('caption')}>${renderRichText(node.caption)}</figcaption>`
+    : '';
+  return (
+    `<figure class="pengui-code-block"${dataAttr}${langAttr}>` +
+    langBadge +
+    `<pre><code${fieldAttr('code')}>${escapeHtml(node.code)}</code></pre>` +
+    captionHtml +
+    `</figure>`
   );
 }
 

@@ -362,6 +362,45 @@ export const ArrowNodeSchema = z
   .strict();
 export type ArrowNode = z.infer<typeof ArrowNodeSchema>;
 
+// ── v4.22 code_block node ────────────────────────────────────────
+//
+// Block-level code primitive — the proper home for SQL queries, code
+// snippets, JSON payloads, log excerpts. Distinct from RichText.code
+// (which stays inline, for `like.this` mid-sentence). Whitespace is
+// preserved verbatim, font is mono, horizontal overflow scrolls within
+// the block instead of pushing past the slide bounds.
+//
+// `language` is a display hint only — no runtime tokenization (would
+// need a parser per language). Lowercase identifier; the renderer
+// upper-cases it for the badge.
+//
+// Length cap: 4000 chars. A code block longer than that almost always
+// means "split across slides" or "link to a gist"; the cap keeps decks
+// from becoming code-dump documents. The cap is a soft guideline that
+// hard-stops abuse — agents can split content across slides if they
+// genuinely need to show more.
+//
+// SlideDocument disposition: the editable-pptx walker emits this node
+// as a BACKGROUND-disposition raster (the slide PNG carries the code
+// pixels) rather than as native PPTX text shapes. Native shapes would
+// either lose whitespace OR fragment one shape per line; both are
+// worse than a clean raster for code content.
+
+export const CodeBlockNodeSchema = z
+  .object({
+    type: z.literal('code_block'),
+    code: z.string().min(1).max(4000),
+    /** Optional language hint. Lowercase identifier like `sql`, `ts`,
+     *  `py`, `bash`. No syntax highlighting yet — drives the corner
+     *  badge label and a `data-language` attr only. */
+    language: z.string().regex(/^[a-z][a-z0-9+#-]*$/).max(16).optional(),
+    /** Optional one-line caption rendered beneath the block (file
+     *  name, source link, etc). Plain RichText. */
+    caption: RichTextSchema.optional(),
+  })
+  .strict();
+export type CodeBlockNode = z.infer<typeof CodeBlockNodeSchema>;
+
 export const LeafBlockNodeSchema = z.discriminatedUnion('type', [
   HeroNodeSchema,
   ProseNodeSchema,
@@ -376,6 +415,7 @@ export const LeafBlockNodeSchema = z.discriminatedUnion('type', [
   FlowNodeSchema,
   ChipNodeSchema,
   ArrowNodeSchema,
+  CodeBlockNodeSchema,
 ]);
 export type LeafBlockNode = z.infer<typeof LeafBlockNodeSchema>;
 
@@ -485,6 +525,7 @@ export const LeafSlideNodeSchema = z.discriminatedUnion('type', [
   FlowNodeSchema,
   ChipNodeSchema,
   ArrowNodeSchema,
+  CodeBlockNodeSchema,
 ]);
 export type LeafSlideNode = z.infer<typeof LeafSlideNodeSchema>;
 
@@ -730,6 +771,7 @@ export const SlideNodeSchema = z.discriminatedUnion('type', [
   CardSectionNodeSchema,
   ChipNodeSchema,
   ArrowNodeSchema,
+  CodeBlockNodeSchema,
   TwoColumnNodeSchema,
   GridNodeSchema,
   TocNodeSchema,
@@ -758,6 +800,7 @@ export const SLIDE_NODE_TYPES = [
   'card_section',
   'chip',
   'arrow',
+  'code_block',
   'two_column',
   'grid',
   'toc',

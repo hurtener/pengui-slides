@@ -142,7 +142,12 @@ export { insertNodeAtPath } from './operations/insert-node.js';
 export { removeNodeAtPath } from './operations/remove-node.js';
 export { duplicateNodeAtPath } from './operations/duplicate-node.js';
 export { moveNodeAtPath, type MoveResult } from './operations/move-node.js';
-export { setNodeFieldAtPath, parseFieldName } from './operations/set-field.js';
+export {
+  setNodeFieldAtPath,
+  parseFieldName,
+  parseDottedFieldName,
+  applyTextPatchAtPath,
+} from './operations/set-field.js';
 export {
   migratePathAfterInsert,
   migratePathAfterRemove,

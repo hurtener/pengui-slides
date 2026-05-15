@@ -30,6 +30,23 @@ export const NODE_CSS = `
 .pengui-text-muted { color: var(--color-text-muted); }
 .pengui-text-inverse { color: var(--color-text-inverse); }
 
+/* v4.22 — inline <code> emitted by RichText (run.code === true). Mono
+ * font + preserve whitespace so embedded newlines survive instead of
+ * collapsing to spaces. Standalone code spans get a subtle chip-y
+ * surface so they read as code; code inside a <pre> (Phase B
+ * code_block) inherits the block's styling and skips the chip. */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+:not(pre) > code {
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
 .pengui-hero {
   display: flex;
   flex-direction: column;
@@ -168,6 +185,61 @@ export const NODE_CSS = `
 .pengui-callout-warning { border-left-color: var(--color-warning); }
 .pengui-callout-tip { border-left-color: var(--color-success); }
 .pengui-callout-important { border-left-color: var(--color-error); }
+
+/* v4.22 — pengui-code-block. Block-level code primitive (SQL, TS,
+ * JSON, log excerpts). Whitespace preserved verbatim, mono font,
+ * horizontal overflow scrolls inside the block instead of pushing past
+ * the slide bounds. Optional language badge anchors top-right. */
+.pengui-code-block {
+  position: relative;
+  display: block;
+  margin: 0;
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  border: 1px solid color-mix(in srgb, var(--color-text-default) 8%, transparent);
+  overflow: hidden;
+}
+.pengui-code-block > pre {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  line-height: 1.5;
+  color: var(--color-text-default);
+  white-space: pre;
+  overflow-x: auto;
+  /* Inline <code> inside the <pre> gets the parent's whitespace +
+   * font; the inline rule above adds a chip background which we don't
+   * want here. The :not(pre) > code selector above already excludes
+   * this case, so nothing more is needed. */
+}
+.pengui-code-block > pre > code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+}
+.pengui-code-block-language {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-md);
+  padding: 0.15em 0.5em;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-accent-primary) 14%, transparent);
+  color: var(--color-accent-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.08em;
+  line-height: 1;
+  pointer-events: none;
+}
+.pengui-code-block-caption {
+  margin: var(--space-sm) 0 0 0;
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
 
 /* v4.13: pengui-card — presentational wrapper around inner leaves with
    optional accent (top-border tint + icon color). The accent class drives

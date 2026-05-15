@@ -59,6 +59,7 @@ import {
   removeNodeAtPath,
   replaceNodeAtPath,
   setNodeFieldAtPath,
+  applyTextPatchAtPath,
   type IRPath,
 } from '../ir/index.js';
 import { resolveChartRefs } from '../rendering/chart-resolver.js';
@@ -704,6 +705,40 @@ export class DeckService {
   }): Promise<Slide> {
     const existing = await this.requireAuthoredIRSlide(input.slideId);
     const nextIR = setNodeFieldAtPath(existing.ir!, input.path, input.field, input.value);
+    return this.updateSlide({
+      deckId: input.deckId,
+      slideId: input.slideId,
+      ir: nextIR,
+    });
+  }
+
+  /**
+   * v4.22 — surgical text patch (find/replace) on a string-typed field
+   * of an IR node. Use case: an agent wants to change a column name
+   * inside a `code_block.code` field that's 1.5 KB long — re-emitting
+   * the whole string through `applySlideFieldEdit` is fragile + token-
+   * heavy. This helper does one in-place splice; `find` must occur
+   * exactly once or the call fails (NOT_FOUND or ambiguous).
+   *
+   * Field grammar accepts the dotted form: `code` (top-level field),
+   * `body[0].text` (text of a specific RichText run).
+   */
+  async applySlideTextPatch(input: {
+    deckId: string;
+    slideId: string;
+    path: IRPath;
+    field: string;
+    find: string;
+    replace: string;
+  }): Promise<Slide> {
+    const existing = await this.requireAuthoredIRSlide(input.slideId);
+    const nextIR = applyTextPatchAtPath(
+      existing.ir!,
+      input.path,
+      input.field,
+      input.find,
+      input.replace,
+    );
     return this.updateSlide({
       deckId: input.deckId,
       slideId: input.slideId,

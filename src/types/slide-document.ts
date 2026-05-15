@@ -339,8 +339,17 @@ export type SlideElement =
  *           color: 'accent' }, '.'`. The new splitter walks runs and
  *           groups them by paragraph, preserving per-run color/bold/
  *           italic within each line.
+ *  - 19: v4.22 — `code_block` IR leaf joins the SNAP_CLASSES anchors.
+ *           Pre-rev-19 cached docs have no shape inventory entry for
+ *           `pengui-code-block` figures and would re-walk them as
+ *           generic shapes with text leaves — losing the composite
+ *           raster + native-overlay disposition. Also covers the inline
+ *           `<code>` CSS change (mono + pre-wrap), which doesn't alter
+ *           the SlideDocument shape directly but DOES change the
+ *           rasterized appearance, so a recompile is required for
+ *           cached PNG snapshots to match.
  */
-export const CURRENT_COMPILER_REVISION = 18;
+export const CURRENT_COMPILER_REVISION = 19;
 
 export interface SlideDocument {
   version: '1';

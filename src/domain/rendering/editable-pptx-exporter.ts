@@ -32,6 +32,14 @@ async function createPptx(): Promise<PptxInstance> {
 
 const WIDE_WIDTH = 13.333;
 const WIDE_HEIGHT = 7.5;
+
+// v4.22 — minimum point size for ANY emitted text shape. The natural
+// CSS-px-to-PPTX-pt conversion compresses by ~0.5x on a widescreen
+// canvas, so legacy souls authoring sizeBody=11–13 produced 5.5–6.5pt
+// text. 10pt is the legibility threshold for body text projected on
+// a screen at ~3m viewing distance. Headings naturally land above
+// this floor and aren't affected.
+const MIN_FONT_PT = 10;
 const SOUL_MASTER_NAME = 'PENGUI_SOUL';
 
 export class EditablePptxExporter {
@@ -237,6 +245,29 @@ export class EditablePptxExporter {
     return pxToPt(value * this.slideScale(document).textScale);
   }
 
+  /**
+   * v4.22 — font-size variant of scaledPt that clamps the result to a
+   * readable floor. The natural conversion ((CSS px) × textScale →
+   * pt) compresses 1920×1080-canvas pixel sizes by ~0.5×, so a
+   * legacy soul authored with sizeBody=13 lands at 6.5pt in PPTX —
+   * unreadable at presentation distance.
+   *
+   * MIN_FONT_PT is a hard floor (no body / label / caption below it),
+   * regardless of the input soul. Heading sizes naturally fall above
+   * the floor and pass through unchanged. The clamp is one-way (only
+   * raises) so legitimately large headings keep their scale.
+   *
+   * Why per-element clamp instead of fixing the formula globally:
+   * the position math already encodes the 0.5× compression in EMU
+   * units, so doubling the formula would also double layout sizes
+   * and break bounds. The floor only intervenes when the natural
+   * mapping would produce illegible text.
+   */
+  private scaledFontPt(value: number, document: NonNullable<Slide['document']>): number {
+    const natural = this.scaledPt(value, document);
+    return natural < MIN_FONT_PT ? MIN_FONT_PT : natural;
+  }
+
   private basePosition(
     element: PlannedNativeElement,
     document: NonNullable<Slide['document']>,
@@ -347,7 +378,7 @@ export class EditablePptxExporter {
       ...(element.lineSpacingPercent !== undefined ? { lineSpacingMultiple: element.lineSpacingPercent / 100 } : {}),
       ...(color ? { color } : {}),
       ...(isEmojiOnlyText(element.text) ? {} : sanitizeFontFamily(element.style.fontFamily) ? { fontFace: sanitizeFontFamily(element.style.fontFamily) } : {}),
-      ...(element.style.fontSize !== undefined ? { fontSize: this.scaledPt(element.style.fontSize, document) } : {}),
+      ...(element.style.fontSize !== undefined ? { fontSize: this.scaledFontPt(element.style.fontSize, document) } : {}),
       ...(element.style.fontWeight !== undefined ? { bold: element.style.fontWeight >= 600 } : {}),
       ...(element.style.fontStyle ? { italic: element.style.fontStyle === 'italic' } : {}),
     };
@@ -408,9 +439,9 @@ export class EditablePptxExporter {
             ...(runColor ? { color: runColor } : {}),
             ...(isEmojiOnlyText(run.text) ? {} : sanitizeFontFamily(run.fontFamily ?? element.style.fontFamily) ? { fontFace: sanitizeFontFamily(run.fontFamily ?? element.style.fontFamily) } : {}),
             ...(run.fontSize !== undefined
-              ? { fontSize: this.scaledPt(run.fontSize, document) }
+              ? { fontSize: this.scaledFontPt(run.fontSize, document) }
               : element.style.fontSize !== undefined
-                ? { fontSize: this.scaledPt(element.style.fontSize, document) }
+                ? { fontSize: this.scaledFontPt(element.style.fontSize, document) }
                 : {}),
             ...(run.bold !== undefined ? { bold: run.bold } : {}),
             ...(run.italic !== undefined ? { italic: run.italic } : {}),
