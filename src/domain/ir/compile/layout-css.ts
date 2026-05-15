@@ -42,7 +42,7 @@ code {
   word-break: break-word;
 }
 :not(pre) > code {
-  padding: 0.1em 0.35em;
+  padding: 0 var(--space-xs);
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, currentColor 6%, transparent);
 }
@@ -196,8 +196,12 @@ code {
   margin: 0;
   padding: var(--space-md) var(--space-lg);
   border-radius: var(--radius-md);
-  background: var(--color-surface-alt);
-  border: 1px solid color-mix(in srgb, var(--color-text-default) 8%, transparent);
+  /* Theme-agnostic background: a subtle wash of the text color over
+   * canvas. On dark souls (white-on-near-black text) this yields a
+   * faint lighter panel; on light souls (dark-on-white text) it
+   * yields a faint darker panel. Either way the inner text reads. */
+  background: color-mix(in srgb, var(--color-text-default) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-text-default) 12%, transparent);
   overflow: hidden;
 }
 .pengui-code-block > pre {
@@ -223,7 +227,7 @@ code {
   position: absolute;
   top: var(--space-sm);
   right: var(--space-md);
-  padding: 0.15em 0.5em;
+  padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--color-accent-primary) 14%, transparent);
   color: var(--color-accent-primary);
