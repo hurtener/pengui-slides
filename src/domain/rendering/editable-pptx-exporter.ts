@@ -43,8 +43,15 @@ const WIDE_HEIGHT = 7.5;
 // FONT_BOOST so the spread is preserved. Body/label/caption from the
 // LG soul land at ~12.6 / 9.8 / 8.4 pt — readable AND distinct.
 // Headings (≥ READABLE_FONT_PT naturally) pass through unchanged.
+//
+// v4.22.3 — ABS_MIN_FONT_PT (8pt) is an absolute floor applied AFTER
+// the boost. Catches the very smallest text (chip xs / size 10px ≈
+// 5pt natural × 1.4 = 7pt) which the boost alone leaves under the
+// legibility threshold for a projected slide. 8pt is the smallest
+// size that survives 1920×1080 → projector at presentation distance.
 const READABLE_FONT_PT = 11;
 const FONT_BOOST = 1.4;
+const ABS_MIN_FONT_PT = 8;
 const SOUL_MASTER_NAME = 'PENGUI_SOUL';
 
 export class EditablePptxExporter {
@@ -217,7 +224,7 @@ export class EditablePptxExporter {
         slide.addImage(await this.toImageProps(element, document));
         break;
       case 'table':
-        slide.addTable(this.toTableRows(element), this.toTableProps(element, document, backdrop));
+        slide.addTable(this.toTableRows(element, document), this.toTableProps(element, document, backdrop));
         break;
     }
   }
@@ -271,7 +278,8 @@ export class EditablePptxExporter {
   private scaledFontPt(value: number, document: NonNullable<Slide['document']>): number {
     const natural = this.scaledPt(value, document);
     if (natural >= READABLE_FONT_PT) return natural;
-    return Math.round(natural * FONT_BOOST * 1000) / 1000;
+    const boosted = natural * FONT_BOOST;
+    return Math.round(Math.max(ABS_MIN_FONT_PT, boosted) * 1000) / 1000;
   }
 
   private basePosition(
@@ -474,7 +482,10 @@ export class EditablePptxExporter {
     };
   }
 
-  private toTableRows(element: SlideTableElement): Array<Array<Record<string, unknown>>> {
+  private toTableRows(
+    element: SlideTableElement,
+    document: NonNullable<Slide['document']>,
+  ): Array<Array<Record<string, unknown>>> {
     return Array.from({ length: element.rows }, (_, rowIndex) => (
       Array.from({ length: element.columns }, (_, columnIndex) => {
         const cell = element.cells.find((c) => c.row === rowIndex && c.column === columnIndex);
@@ -492,10 +503,19 @@ export class EditablePptxExporter {
         const align = !rawAlign || rawAlign === 'start' || rawAlign === 'justify'
           ? rawAlign === 'justify' ? 'left' : undefined
           : rawAlign;
+        // v4.22.3 — route table cell fontSize through scaledFontPt so cells
+        // get the same readability boost as floating text. Without this,
+        // tables alone render at the raw ~0.5× compressed pt size while
+        // every other text shape on the slide is boosted, making tables
+        // look noticeably smaller than the rest.
+        const cellFontPt = cell.style?.fontSize !== undefined
+          ? this.scaledFontPt(cell.style.fontSize, document)
+          : undefined;
         const cellOptions: Record<string, unknown> = {
           ...(cellFillHex && !cellFillTransparent ? { fill: { color: cellFillHex } } : {}),
           ...(cellColorHex && (!cell.runs || cell.runs.length === 0) ? { color: cellColorHex } : {}),
           ...(cell.style?.fontFamily ? { fontFace: sanitizeFontFamily(cell.style.fontFamily) } : {}),
+          ...(cellFontPt !== undefined ? { fontSize: cellFontPt } : {}),
           ...(cell.style?.fontWeight !== undefined ? { bold: cell.style.fontWeight >= 600 } : {}),
           ...(align ? { align } : {}),
           valign: 'mid',
@@ -510,6 +530,9 @@ export class EditablePptxExporter {
               options: {
                 ...(run.color ? { color: cssColorToHex(run.color) ?? run.color } : {}),
                 ...(run.fontFamily ? { fontFace: sanitizeFontFamily(run.fontFamily) } : {}),
+                ...(run.fontSize !== undefined
+                  ? { fontSize: this.scaledFontPt(run.fontSize, document) }
+                  : {}),
                 ...(run.bold ? { bold: true } : {}),
                 ...(run.italic ? { italic: true } : {}),
                 ...(run.underline ? { underline: { style: 'sng' } } : {}),
@@ -546,10 +569,12 @@ export class EditablePptxExporter {
       // rows under a header row that has its own surface bg).
       color: cssColorToHex(defaultCell?.style?.color ?? element.style.color, backdrop),
       fontFace: sanitizeFontFamily(defaultCell?.style?.fontFamily ?? element.style.fontFamily),
+      // v4.22.3 — same scaledFontPt boost as floating text; the table-level
+      // default propagates to any cell that didn't carry its own fontSize.
       fontSize: defaultCell?.style?.fontSize !== undefined
-        ? this.scaledPt(defaultCell.style.fontSize, document)
+        ? this.scaledFontPt(defaultCell.style.fontSize, document)
         : element.style.fontSize !== undefined
-          ? this.scaledPt(element.style.fontSize, document)
+          ? this.scaledFontPt(element.style.fontSize, document)
           : undefined,
       valign: 'mid',
       colW: Array.from({ length: element.columns }, () => (
@@ -660,10 +685,29 @@ export class EditablePptxExporter {
       const entry = zip.file(path);
       if (!entry) continue;
       const original = await entry.async('string');
-      const patched = fixZeroWidthCellLines(fixEmptyTblPr(renumberCNvPrIds(stripLineShapeFill(stripDuplicateParagraphProps(original)))));
+      const patched = fixZeroWidthCellLines(
+        fixEmptyTblPr(
+          renumberCNvPrIds(
+            stripLineShapeFill(
+              stripDuplicateParagraphProps(
+                stripEmptyLangAttrs(original),
+              ),
+            ),
+          ),
+        ),
+      );
       if (patched !== original) {
         zip.file(path, patched);
         modified = true;
+      }
+      // v4.22.3 — scan for repair-prompt triggers AFTER post-processing.
+      // Anything still present is a regression a post-processor missed.
+      const remaining = scanForRepairTriggers(patched);
+      if (remaining.length > 0) {
+        this.logger.warn('Editable PPTX repair-prompt triggers remain after post-processing', {
+          path,
+          triggers: remaining,
+        });
       }
     }
 
@@ -975,4 +1019,75 @@ function fixZeroWidthCellLines(xml: string): string {
     /(<a:ln[LRTB]\s+)w="0"/g,
     '$1w="6350"',
   );
+}
+
+/**
+ * v4.22.3 — strip `lang=""` (empty value) on `<a:rPr>` and `<a:endParaRPr>`.
+ * pptxgenjs occasionally emits an empty `lang` when the consumer passes
+ * `lang: ''` or omits it altogether and the library's coalesce yields ''.
+ * PowerPoint's strict validator rejects an empty `xml:lang` token — it
+ * expects a BCP-47 tag or no attribute at all. Drop the attr entirely;
+ * PowerPoint will fall back to the slide-master language.
+ */
+function stripEmptyLangAttrs(xml: string): string {
+  return xml.replace(/\s+lang=""/g, '');
+}
+
+/**
+ * v4.22.3 — scan for known PowerPoint repair-prompt triggers. Returns an
+ * array of trigger names found in the XML. Used as defense-in-depth
+ * AFTER the post-processing pipeline: anything still present here is
+ * either (a) a regression a post-processor missed, or (b) a new
+ * trigger we haven't built a fix for yet. Either case warrants a log
+ * line on every export so silent shipping of broken decks is caught.
+ *
+ * Triggers checked:
+ * - `empty_tblPr`: `<a:tblPr/>` or `<a:tblPr></a:tblPr>` without
+ *   `<a:tableStyleId>` child — Mac PowerPoint flags as inconsistent.
+ * - `zero_width_cell_line`: `<a:lnL/lnR/lnT/lnB w="0">` paired with
+ *   populated decorator children — Mac PowerPoint flags as ambiguous.
+ * - `empty_lang_attr`: `lang=""` on any run-properties element.
+ * - `duplicate_cnvpr_id`: same `id="N"` on two `<p:cNvPr>` in the slide.
+ * - `cnvpr_id_zero`: `<p:cNvPr id="0">` — id 0 is reserved by OOXML.
+ * - `line_shape_outer_fill`: a `<p:sp>` containing `prst="line"` with
+ *   `<a:solidFill>` outside `<a:ln>` (closed-shape fill on a line is
+ *   meaningless and triggers repair).
+ */
+function scanForRepairTriggers(xml: string): string[] {
+  const found: string[] = [];
+  if (/<a:tblPr\s*\/>/.test(xml) || /<a:tblPr>\s*<\/a:tblPr>/.test(xml)) {
+    found.push('empty_tblPr');
+  }
+  if (/<a:ln[LRTB]\s+w="0"/.test(xml)) {
+    found.push('zero_width_cell_line');
+  }
+  if (/\slang=""/.test(xml)) {
+    found.push('empty_lang_attr');
+  }
+  if (/<p:cNvPr\s+id="0"/.test(xml)) {
+    found.push('cnvpr_id_zero');
+  }
+  const ids = new Set<string>();
+  let m: RegExpExecArray | null;
+  const re = /<p:cNvPr\s+id="(\d+)"/g;
+  while ((m = re.exec(xml)) !== null) {
+    if (ids.has(m[1])) {
+      found.push('duplicate_cnvpr_id');
+      break;
+    }
+    ids.add(m[1]);
+  }
+  // Line shape with outer solidFill: scan each <p:sp>.
+  const spRe = /<p:sp>[\s\S]*?<\/p:sp>/g;
+  let s: RegExpExecArray | null;
+  while ((s = spRe.exec(xml)) !== null) {
+    const sp = s[0];
+    if (!/prst="line"/.test(sp)) continue;
+    const outsideLn = sp.replace(/<a:ln\b[\s\S]*?<\/a:ln>/g, '');
+    if (/<a:solidFill\b/.test(outsideLn)) {
+      found.push('line_shape_outer_fill');
+      break;
+    }
+  }
+  return found;
 }

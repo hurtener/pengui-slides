@@ -34,6 +34,7 @@ export const SECTION_MUTATING_TOOL_NAMES = [
   'reorder_sections',
   'apply_section_node_edit',
   'apply_section_field_edit',
+  'apply_section_text_patch',
   'insert_section_node',
   'remove_section_node',
   'duplicate_section_node',

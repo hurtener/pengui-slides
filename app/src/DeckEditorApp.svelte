@@ -1,14 +1,15 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import type { Component } from 'svelte';
   import Sidebar from './lib/primitives/Sidebar.svelte';
   import Toast from './lib/primitives/Toast.svelte';
-  import Editor from './routes/Editor.svelte';
-  import DocumentEditor from './routes/DocumentEditor.svelte';
-  import Decks from './routes/Decks.svelte';
-  import Export from './routes/Export.svelte';
-  import Workspace from './routes/Workspace.svelte';
-  import Souls from './routes/Souls.svelte';
-  import Assets from './routes/Assets.svelte';
+  // v4.23 — route bodies lazy-loaded so initial boot parses only the
+  // shell + sidebar. Each route's chunk is fetched on first navigation.
+  // With vite-plugin-singlefile in effect chunks are still inlined into
+  // the HTML, but the dynamic-import pattern still defers their parse
+  // + execution cost from the boot path, which is where the "feeling
+  // slow" complaint lives. The savings compound when we eventually
+  // drop singlefile + serve chunks as separate ui:// resources.
   import { createDeckStore } from './stores/deck.svelte';
   import type { DeckEditorBridge } from './lib/types';
   import type { McpDeckEditorBridge } from './lib/bridge';
@@ -180,6 +181,57 @@
 
   const isLoading = $derived(deck.loading && !deck.editorState);
   const hasError = $derived(!!errorMessage && !deck.editorState);
+
+  // v4.23 — lazy route components. `$state` so the template reacts to
+  // each one becoming defined; `Promise<Component>` so we never re-await
+  // the same chunk twice. The `loadRoute()` helper kicks off the import
+  // the first time a route is reached and stores the resolved default
+  // export.
+  let WorkspaceCmp = $state<Component | null>(null);
+  let DecksCmp = $state<Component | null>(null);
+  let EditorCmp = $state<Component | null>(null);
+  let DocumentEditorCmp = $state<Component | null>(null);
+  let ExportCmp = $state<Component | null>(null);
+  let SoulsCmp = $state<Component | null>(null);
+  let AssetsCmp = $state<Component | null>(null);
+
+  async function ensureRouteLoaded(target: typeof route): Promise<void> {
+    // Document mode is a SECOND chunk lazy-loaded from inside the
+    // editor branch; we ensure both when we know the authoring model.
+    if (target === 'workspace' && !WorkspaceCmp) {
+      WorkspaceCmp = (await import('./routes/Workspace.svelte')).default as Component;
+    } else if (target === 'decks' && !DecksCmp) {
+      DecksCmp = (await import('./routes/Decks.svelte')).default as Component;
+    } else if (target === 'editor') {
+      if (activeAuthoringModel === 'document') {
+        if (!DocumentEditorCmp) {
+          DocumentEditorCmp = (await import('./routes/DocumentEditor.svelte')).default as Component;
+        }
+      } else if (!EditorCmp) {
+        EditorCmp = (await import('./routes/Editor.svelte')).default as Component;
+      }
+    } else if (target === 'export' && !ExportCmp) {
+      ExportCmp = (await import('./routes/Export.svelte')).default as Component;
+    } else if (target === 'souls' && !SoulsCmp) {
+      SoulsCmp = (await import('./routes/Souls.svelte')).default as Component;
+    } else if (target === 'assets' && !AssetsCmp) {
+      AssetsCmp = (await import('./routes/Assets.svelte')).default as Component;
+    }
+  }
+
+  // Eager-load the route the user lands on (initial route is 'workspace').
+  // Subsequent navigations are handled by the $effect below.
+  $effect(() => {
+    void ensureRouteLoaded(route);
+  });
+
+  // When the authoring model resolves while we're already on `editor`,
+  // load the matching chunk (Editor vs DocumentEditor).
+  $effect(() => {
+    if (route === 'editor' && activeAuthoringModel) {
+      void ensureRouteLoaded('editor');
+    }
+  });
 </script>
 
 <svelte:head>
@@ -214,25 +266,51 @@
 
     <main class="main-area">
       {#if route === 'workspace'}
-        <Workspace bridge={mcpBridge} onOpenDeck={handleOpenDeck} onNavigate={handleNav} />
+        {#if WorkspaceCmp}
+          <WorkspaceCmp bridge={mcpBridge} onOpenDeck={handleOpenDeck} onNavigate={handleNav} />
+        {:else}
+          <div class="route-loading">Loading…</div>
+        {/if}
       {:else if route === 'decks'}
-        <Decks {deck} onOpenDeck={handleOpenDeck} />
+        {#if DecksCmp}
+          <DecksCmp {deck} onOpenDeck={handleOpenDeck} />
+        {:else}
+          <div class="route-loading">Loading…</div>
+        {/if}
       {:else if route === 'editor'}
         {#if activeAuthoringModel === 'document' && activeDeckRef}
-          <DocumentEditor bridge={mcpBridge} deckRef={activeDeckRef} />
+          {#if DocumentEditorCmp}
+            <DocumentEditorCmp bridge={mcpBridge} deckRef={activeDeckRef} />
+          {:else}
+            <div class="route-loading">Loading document editor…</div>
+          {/if}
+        {:else if EditorCmp}
+          <EditorCmp {deck} bridge={mcpBridge} />
         {:else}
-          <Editor {deck} bridge={mcpBridge} />
+          <div class="route-loading">Loading editor…</div>
         {/if}
       {:else if route === 'export'}
-        <Export {deck} {bridge} onSwitchDeck={handleRetargetDeck} />
+        {#if ExportCmp}
+          <ExportCmp {deck} {bridge} onSwitchDeck={handleRetargetDeck} />
+        {:else}
+          <div class="route-loading">Loading…</div>
+        {/if}
       {:else if route === 'souls'}
-        <Souls bridge={mcpBridge} onOpenSoul={handleOpenSoul} />
+        {#if SoulsCmp}
+          <SoulsCmp bridge={mcpBridge} onOpenSoul={handleOpenSoul} />
+        {:else}
+          <div class="route-loading">Loading…</div>
+        {/if}
       {:else if route === 'assets'}
-        <Assets
-          bridge={mcpBridge}
-          activeDeckRef={activeDeckRef}
-          activeSoulRef={activeSoulRef}
-        />
+        {#if AssetsCmp}
+          <AssetsCmp
+            bridge={mcpBridge}
+            activeDeckRef={activeDeckRef}
+            activeSoulRef={activeSoulRef}
+          />
+        {:else}
+          <div class="route-loading">Loading…</div>
+        {/if}
       {/if}
     </main>
   </div>
@@ -304,6 +382,17 @@
   .main-area > :global(*) {
     flex: 1;
     min-height: 0;
+  }
+
+  /* v4.23 — placeholder while a lazy route chunk imports. Subtle so
+   * the sidebar stays visible and navigation doesn't feel broken. */
+  .route-loading {
+    flex: 1;
+    display: grid;
+    place-items: center;
+    color: var(--text-muted, #6b7280);
+    font-size: 14px;
+    opacity: 0.6;
   }
 
   @keyframes spin {

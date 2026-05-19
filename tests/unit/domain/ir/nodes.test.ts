@@ -159,7 +159,7 @@ describe('SlideNodeSchema (top-level union)', () => {
     expect(() => SlideNodeSchema.parse({ type: 'metric_grid', items: [] })).toThrow();
   });
 
-  it('SLIDE_NODE_TYPES enumerates the v4.20 catalog (card_section + chip + arrow added)', () => {
+  it('SLIDE_NODE_TYPES enumerates the v4.22 catalog (code_block added)', () => {
     expect([...SLIDE_NODE_TYPES].sort()).toEqual(
       [
         'arrow',
@@ -169,6 +169,7 @@ describe('SlideNodeSchema (top-level union)', () => {
         'card_section',
         'chart',
         'chip',
+        'code_block',
         'decoration',
         'divider',
         'flow',

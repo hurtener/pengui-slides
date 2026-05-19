@@ -39,6 +39,7 @@ import { registerApplySectionNodeEditTool } from './decks/apply-section-node-edi
 import { registerApplySlideFieldEditTool } from './decks/apply-slide-field-edit.tool.js';
 import { registerApplySectionFieldEditTool } from './decks/apply-section-field-edit.tool.js';
 import { registerApplySlideTextPatchTool } from './decks/apply-slide-text-patch.tool.js';
+import { registerApplySectionTextPatchTool } from './decks/apply-section-text-patch.tool.js';
 import { registerApplyRecipeTool } from './decks/apply-recipe.tool.js';
 import { registerCompileMarkdownTool } from './decks/compile-markdown.tool.js';
 import { registerCompileChartTool } from './decks/compile-chart.tool.js';
@@ -141,6 +142,7 @@ export function registerAllTools(server: McpServer, container: ServiceContainer)
   registerSetDeckChromeTool(server, container);
   registerApplySectionNodeEditTool(server, container);
   registerApplySectionFieldEditTool(server, container);
+  registerApplySectionTextPatchTool(server, container);
   registerInsertSectionNodeTool(server, container);
   registerRemoveSectionNodeTool(server, container);
   registerDuplicateSectionNodeTool(server, container);

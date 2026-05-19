@@ -1,10 +1,16 @@
+// v4.23 — switched off `@modelcontextprotocol/ext-apps` to cut ~150 KB
+// of bundle weight (the SDK pulled in the full MCP Protocol class
+// + Zod schemas). The slim client below implements the subset we
+// actually call: ui/initialize handshake, tools/call requests,
+// tool-input + tool-result notifications, ui/message,
+// auto-resize, and the host-context handlers. See app/src/lib/slim-mcp-app.ts.
 import {
-  App,
-  PostMessageTransport,
+  SlimMcpApp,
   applyDocumentTheme,
   applyHostFonts,
   applyHostStyleVariables,
-} from '@modelcontextprotocol/ext-apps';
+  type HostContext,
+} from './slim-mcp-app';
 import type { DeckEditorBridge, DeckChromeConfig, ToolCallResult } from './types';
 
 // ── v4 Wave 2 typed responses ───────────────────────────────────────────────
@@ -242,7 +248,7 @@ type ToolHandler = (payload: Record<string, unknown>) => void;
 type ToolResultHandler = (result: ToolCallResult<Record<string, unknown>>) => void;
 
 export class McpDeckEditorBridge implements DeckEditorBridge {
-  private readonly app = new App(
+  private readonly app = new SlimMcpApp(
     { name: 'pengui-slides-deck-editor', version: '0.1.0' },
     {},
     { autoResize: true },
@@ -261,13 +267,13 @@ export class McpDeckEditorBridge implements DeckEditorBridge {
       });
     };
 
-    this.app.onhostcontextchanged = (context) => {
-      this.applyHostContext(context);
+    this.app.onhostcontextchanged = (partial) => {
+      this.applyHostContext(partial as HostContext);
     };
   }
 
   async connect(): Promise<void> {
-    await this.app.connect(new PostMessageTransport(window.parent, window.parent));
+    await this.app.connect();
     this.applyHostContext(this.app.getHostContext());
   }
 
@@ -618,7 +624,7 @@ export class McpDeckEditorBridge implements DeckEditorBridge {
     return r.structuredContent;
   }
 
-  private applyHostContext(context: ReturnType<App['getHostContext']>): void {
+  private applyHostContext(context: HostContext | Partial<HostContext> | undefined): void {
     if (!context) {
       return;
     }

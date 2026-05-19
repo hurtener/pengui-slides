@@ -34,6 +34,7 @@ import { DeckService } from '../decks/deck-service.js';
 import { RevisionTracker } from '../decks/revision-tracker.js';
 import { embedSectionMeta } from './section-meta-embedder.js';
 import {
+  applyTextPatchAtPath,
   compileSectionIRToHtml,
   duplicateNodeAtPath,
   insertNodeAtPath,
@@ -538,6 +539,43 @@ export class DocumentService {
       );
     }
     const nextIR = setNodeFieldAtPath(existing.ir, input.path, input.field, input.value);
+    const result = await this.updateSection({
+      deckId: input.deckId,
+      sectionId: input.sectionId,
+      ir: nextIR,
+    });
+    return result.section;
+  }
+
+  /**
+   * v4.23 — surgical find/replace inside a section IR string-typed field.
+   * Section mirror of `DeckService.applySlideTextPatch`. Used when a
+   * long body / quote / table cell needs a small surgical edit and
+   * re-emitting the entire field via `applySectionFieldEdit` would be
+   * token-heavy + escape-fragile.
+   */
+  async applySectionTextPatch(input: {
+    deckId: string;
+    sectionId: string;
+    path: IRPath;
+    field: string;
+    find: string;
+    replace: string;
+  }): Promise<Section> {
+    const existing = await this.requireSection(input.sectionId);
+    if (!existing.ir) {
+      throw new PenguiError(
+        ErrorCode.SECTION_INVALID_FRAGMENT,
+        `Section "${input.sectionId}" has no IR; text patches require IR-authored sections.`,
+      );
+    }
+    const nextIR = applyTextPatchAtPath(
+      existing.ir,
+      input.path,
+      input.field,
+      input.find,
+      input.replace,
+    );
     const result = await this.updateSection({
       deckId: input.deckId,
       sectionId: input.sectionId,
